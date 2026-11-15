@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: orvyn
+      POSTGRES_PASSWORD: ${ORVYN_DB_PASSWORD:?Set ORVYN_DB_PASSWORD}
+      POSTGRES_DB: orvyn
+    ports: ["127.0.0.1:5432:5432"]
+    volumes: ["postgres:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U orvyn"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+volumes:
+  postgres:
