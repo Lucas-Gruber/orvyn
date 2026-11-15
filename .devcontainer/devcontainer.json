@@ -1,0 +1,18 @@
+{
+  "name": "Orvyn browser preview",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:24-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:4": {}
+  },
+  "remoteUser": "node",
+  "forwardPorts": [5000],
+  "portsAttributes": {
+    "5000": {
+      "label": "Orvyn preview",
+      "onAutoForward": "openBrowser",
+      "protocol": "http"
+    }
+  },
+  "postCreateCommand": "npm install --global pnpm@11.25.0 && pnpm install --frozen-lockfile",
+  "postStartCommand": "bash .devcontainer/start-preview.sh"
+}

@@ -19,6 +19,32 @@ for (let i = 0; i < args.length; i++) {
   }
   if (args[i] !== "--skip-setup") throw Error("Unknown option: " + args[i]);
 }
+const inCodespaces = process.env.CODESPACES === "true";
+let browserOrigin = process.env.ORVYN_PREVIEW_ORIGIN;
+if (!browserOrigin && inCodespaces) {
+  const name = process.env.CODESPACE_NAME;
+  const domain =
+    process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN || "app.github.dev";
+  if (!name || !/^[a-z0-9-]+$/i.test(name) || !/^[a-z0-9.-]+$/i.test(domain))
+    throw Error("Missing or invalid Codespaces forwarding configuration");
+  browserOrigin = `https://${name}-${webPort}.${domain}`;
+}
+const origin = new URL(browserOrigin || "http://localhost:" + webPort);
+if (
+  origin.username ||
+  origin.password ||
+  origin.pathname !== "/" ||
+  origin.search ||
+  origin.hash ||
+  (origin.protocol !== "https:" &&
+    !(
+      origin.protocol === "http:" &&
+      ["localhost", "127.0.0.1", "[::1]"].includes(origin.hostname)
+    ))
+)
+  throw Error(
+    "Preview origin must be an HTTPS origin or a local HTTP origin without a path, credentials or query",
+  );
 async function freePort() {
   const server = createServer();
   server.listen(0, "127.0.0.1");
@@ -96,8 +122,8 @@ try {
     collaborationPort = await freePort();
   const env = {
     ...process.env,
-    NODE_ENV: "development",
-    ORVYN_ORIGIN: "http://localhost:" + webPort,
+    NODE_ENV: origin.protocol === "https:" ? "production" : "development",
+    ORVYN_ORIGIN: origin.origin,
     NUXT_PUBLIC_COLLABORATION_URL: "",
     COLLABORATION_NAMESPACE: "orvyn:local-preview:" + randomUUID(),
   };
@@ -115,7 +141,7 @@ try {
   );
   const web = run("apps/web/.output/server/index.mjs", {
     NITRO_PORT: String(webPort),
-    NITRO_HOST: "127.0.0.1",
+    NITRO_HOST: inCodespaces ? "0.0.0.0" : "127.0.0.1",
     NUXT_API_URL: "http://127.0.0.1:" + apiPort,
     NUXT_COLLABORATION_UPSTREAM: "ws://127.0.0.1:" + collaborationPort,
   });
@@ -127,9 +153,11 @@ try {
   )
     throw Error("A preview service failed during startup");
   console.log(
-    "\nORVYN_LOCAL_PREVIEW_READY http://localhost:" +
-      webPort +
-      "\nOpen this address on the same computer running this command. Press Ctrl+C to stop the application.\n",
+    "\nORVYN_LOCAL_PREVIEW_READY " +
+      origin.origin +
+      (inCodespaces
+        ? `\nOpen forwarded port ${webPort} from the Codespaces Ports tab. Keep its visibility private.\n`
+        : "\nOpen this address on the same computer running this command. Press Ctrl+C to stop the application.\n"),
   );
   for (const child of [api, worker, collaboration, web])
     child.once("exit", (code) => {
