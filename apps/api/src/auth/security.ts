@@ -1,5 +1,6 @@
+import { parseSessionCookie } from "@orvyn/auth";
 import { randomBytes, createCipheriv, createDecipheriv } from "node:crypto";
-import { db, hash, fail } from "../runtime";
+import { db, hash, fail } from "../runtime.js";
 import type { PoolClient } from "pg";
 export const origin = () => process.env.ORVYN_ORIGIN || "http://localhost:3000";
 export function encryptionKey() {
@@ -37,9 +38,7 @@ export function passwordInput(value: unknown) {
   return value;
 }
 export function sessionToken(req: any) {
-  return /(?:^|;\s*)orvyn_session=([a-f0-9]{64})(?:;|$)/.exec(
-    req.headers.cookie || "",
-  )?.[1];
+  return parseSessionCookie(req.headers.cookie || "");
 }
 export function cookie(
   name: string,

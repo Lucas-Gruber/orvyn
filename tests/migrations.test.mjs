@@ -3,8 +3,7 @@ import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { createRequire } from "node:module";
 import { Pool } from "./helpers.mjs";
-const require = createRequire(import.meta.url),
-  { migrate, migrations } = require("../apps/api/dist/migrations.js");
+import { migrate, migrations } from "../apps/api/dist/migrations.js";
 test("migrations install, upgrade existing records, serialize and roll back failed schema changes", async () => {
   const root = new Pool({ connectionString: process.env.DATABASE_URL });
   const name = "orvyn_test_" + randomBytes(8).toString("hex");

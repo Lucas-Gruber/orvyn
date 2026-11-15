@@ -1,5 +1,5 @@
 import type { Pool, PoolClient } from "pg";
-import { fail } from "../runtime";
+import { fail } from "../runtime.js";
 export const roleRanks = {
   Owner: 50,
   Admin: 40,

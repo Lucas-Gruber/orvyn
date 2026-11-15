@@ -1,3 +1,4 @@
+import { authenticateCookie } from "@orvyn/auth";
 import { Pool } from "pg";
 import { HttpException } from "@nestjs/common";
 import { scrypt, createHash } from "node:crypto";
@@ -25,15 +26,7 @@ export function mutation(req: any) {
   if (!req.is("application/json")) fail(415, "JSON required");
 }
 export async function user(req: any) {
-  const token = /(?:^|;\s*)orvyn_session=([a-f0-9]{64})(?:;|$)/.exec(
-    req.headers.cookie || "",
-  )?.[1];
-  if (!token) return fail(401, "Sign in required");
-  const result = await db.query(
-    "SELECT user_id FROM sessions WHERE token_hash=$1 AND expires_at>now()",
-    [hash(token)],
-  );
-  if (!result.rowCount) return fail(401, "Session expired");
-  return result.rows[0].user_id as string;
+  const identity = await authenticateCookie(db, req.headers.cookie || "");
+  return identity?.userId || fail(401, "Sign in required");
 }
-export { migrate } from "./migrations";
+export { migrate } from "./migrations.js";

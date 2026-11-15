@@ -11,7 +11,7 @@ import {
 } from "@nestjs/common";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import type { PoolClient } from "pg";
-import { db, derive, hash, fail, text, mutation, user } from "./runtime";
+import { db, derive, hash, fail, text, mutation, user } from "./runtime.js";
 import {
   transaction,
   audit,
@@ -20,8 +20,8 @@ import {
   passwordInput,
   cookie,
   rateLimit,
-} from "./auth/security";
-import { accountLink } from "./auth/mail";
+} from "./auth/security.js";
+import { accountLink } from "./auth/mail.js";
 
 function emailInput(value: unknown) {
   const email = text(value, 254).toLowerCase();
@@ -51,7 +51,7 @@ async function consumeToken(c: PoolClient, token: string, purpose: string) {
   );
   if (!found.rowCount) return fail(400, "Invalid or expired link");
   // Always lock the user before token rows, matching token issuance and login.
-  await c.query("SELECT id FROM users WHERE id=$1 FOR UPDATE", [
+  await c.query("SELECT id FROM users WHERE id=$1 FOR NO KEY UPDATE", [
     found.rows[0].user_id,
   ]);
   const r = await c.query(
@@ -98,7 +98,7 @@ class AuthController {
       password = passwordInput(body?.password);
     return transaction(async (c) => {
       const r = await c.query(
-        "SELECT id,password_hash,email_verified FROM users WHERE email=$1 FOR UPDATE",
+        "SELECT id,password_hash,email_verified FROM users WHERE email=$1 FOR NO KEY UPDATE",
         [email],
       );
       if (!(await validPassword(password, r.rows[0]?.password_hash))) {
@@ -184,7 +184,7 @@ class AuthController {
     await rateLimit("verify:" + uid, 5);
     await transaction(async (c) => {
       const r = await c.query(
-        "SELECT email,email_verified FROM users WHERE id=$1 FOR UPDATE",
+        "SELECT email,email_verified FROM users WHERE id=$1 FOR NO KEY UPDATE",
         [uid],
       );
       if (!r.rows[0].email_verified)
@@ -212,7 +212,7 @@ class AuthController {
     const email = emailInput(body?.email);
     await transaction(async (c) => {
       const r = await c.query(
-        "SELECT id FROM users WHERE email=$1 AND password_hash IS NOT NULL FOR UPDATE",
+        "SELECT id FROM users WHERE email=$1 AND password_hash IS NOT NULL FOR NO KEY UPDATE",
         [email],
       );
       if (r.rowCount)

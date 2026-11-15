@@ -11,7 +11,7 @@ import {
 } from "@nestjs/common";
 import { randomBytes } from "node:crypto";
 import * as client from "openid-client";
-import { db, user, fail, text, hash, mutation } from "./runtime";
+import { db, user, fail, text, hash, mutation } from "./runtime.js";
 import {
   encrypt,
   decrypt,
@@ -21,8 +21,8 @@ import {
   transaction,
   audit,
   rateLimit,
-} from "./auth/security";
-import { configuration, redirectUri, validateIssuer } from "./auth/oidc";
+} from "./auth/security.js";
+import { configuration, redirectUri, validateIssuer } from "./auth/oidc.js";
 const safeFields =
   'id,name,issuer,client_id AS "clientId",scopes,enabled,auto_provision AS "autoProvision",encrypted_secret IS NOT NULL AS "hasClientSecret"';
 async function admin(req: any) {

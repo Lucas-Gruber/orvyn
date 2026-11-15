@@ -1,6 +1,6 @@
-import { db } from "./runtime";
-import { deliverMailBatch, cleanupAuth } from "./auth/mail";
-import { encryptionKey } from "./auth/security";
+import { db } from "./runtime.js";
+import { deliverMailBatch, cleanupAuth } from "./auth/mail.js";
+import { encryptionKey } from "./auth/security.js";
 let stopping = false;
 const stop = () => {
   stopping = true;

@@ -1,13 +1,13 @@
 import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
 import { Module } from "@nestjs/common";
-import { migrate, db } from "./runtime";
-import { encryptionKey } from "./auth/security";
-import { OidcModule } from "./oidc.module";
-import { AuthModule } from "./auth.module";
-import { SpacesModule } from "./spaces.module";
-import { PagesModule } from "./pages.module";
-import { HealthModule } from "./health.module";
+import { migrate, db } from "./runtime.js";
+import { encryptionKey } from "./auth/security.js";
+import { OidcModule } from "./oidc.module.js";
+import { AuthModule } from "./auth.module.js";
+import { SpacesModule } from "./spaces.module.js";
+import { PagesModule } from "./pages.module.js";
+import { HealthModule } from "./health.module.js";
 @Module({
   imports: [OidcModule, AuthModule, SpacesModule, PagesModule, HealthModule],
 })

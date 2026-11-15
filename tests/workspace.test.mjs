@@ -67,7 +67,12 @@ test("private workspace persists documents, enforces isolation, CSRF, conflicts 
     document: {
       type: "doc",
       content: [
-        { type: "paragraph", text: "Persisted content <script> is text" },
+        {
+          type: "paragraph",
+          content: [
+            { type: "text", text: "Persisted content <script> is text" },
+          ],
+        },
       ],
     },
   };

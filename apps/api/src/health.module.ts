@@ -10,7 +10,7 @@ import {
   Param,
 } from "@nestjs/common";
 import { randomBytes, timingSafeEqual } from "node:crypto";
-import { db, derive, hash, fail, text, mutation, user } from "./runtime";
+import { db, derive, hash, fail, text, mutation, user } from "./runtime.js";
 @Controller("api/v1")
 class HealthController {
   @Get("health") async health() {

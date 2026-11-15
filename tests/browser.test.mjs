@@ -39,20 +39,20 @@ test("Chromium: account, persisted page, verification, session settings and OIDC
       .getByRole("button", { name: "Create page", exact: true })
       .click();
     await page
-      .getByLabel("Document", { exact: true })
+      .getByRole("textbox", { name: "Document", exact: true })
       .fill("Written through the browser.");
-    await page
-      .getByRole("button", { name: "Save changes", exact: true })
-      .click();
-    await expect(page.getByText("Revision 2", { exact: false })).toBeVisible();
+    await page.getByRole("button", { name: "Save title", exact: true }).click();
+    await expect(
+      page.getByText("All changes saved", { exact: true }),
+    ).toBeVisible();
     await page.reload();
     await page.getByRole("button", { name: space, exact: true }).click();
     await page
       .getByRole("button", { name: "A real persisted page", exact: true })
       .click();
-    await expect(page.getByLabel("Document", { exact: true })).toHaveValue(
-      "Written through the browser.",
-    );
+    await expect(
+      page.getByRole("textbox", { name: "Document", exact: true }),
+    ).toHaveText("Written through the browser.");
     await page
       .getByRole("button", { name: "Space settings", exact: true })
       .click();

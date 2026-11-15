@@ -3,7 +3,7 @@ const require = createRequire(
   new URL("../apps/api/package.json", import.meta.url),
 );
 const { Pool } = require("pg");
-const { migrate } = require("../apps/api/dist/migrations.js");
+import { migrate } from "../apps/api/dist/migrations.js";
 const db = new Pool({ connectionString: process.env.DATABASE_URL });
 try {
   await migrate(db);

@@ -26,3 +26,8 @@ if (!/^SMTP_URL=/m.test(current))
     ".env",
     "\nSMTP_URL=smtp://127.0.0.1:1025\nMAIL_FROM=orvyn@localhost.test\n",
   );
+
+if (!/^REDIS_URL=/m.test(current))
+  appendFileSync(".env", "\nREDIS_URL=redis://127.0.0.1:6379\n");
+if (!/^NUXT_PUBLIC_COLLABORATION_URL=/m.test(current))
+  appendFileSync(".env", "NUXT_PUBLIC_COLLABORATION_URL=ws://localhost:3002\n");

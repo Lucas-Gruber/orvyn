@@ -9,7 +9,13 @@
   "dependencies": {
     "nuxt": "4.6.4",
     "vue": "3.5.45",
-    "vue-router": "^4.6.4"
+    "vue-router": "^4.6.4",
+    "@orvyn/editor": "workspace:*",
+    "@tiptap/vue-3": "3.34.0",
+    "@tiptap/extension-collaboration": "3.34.0",
+    "@tiptap/extension-collaboration-caret": "3.34.0",
+    "@hocuspocus/provider": "4.8.0",
+    "yjs": "13.6.33"
   },
   "type": "module",
   "devDependencies": {

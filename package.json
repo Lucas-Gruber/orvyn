@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev:api": "node --env-file=.env apps/api/node_modules/tsx/dist/cli.mjs --tsconfig apps/api/tsconfig.json apps/api/src/main.ts",
-    "dev:web": "pnpm --filter @orvyn/web dev",
+    "dev:web": "node --env-file=.env apps/web/node_modules/nuxt/bin/nuxt.mjs dev apps/web --host 0.0.0.0",
     "build": "pnpm -r build",
     "test": "pnpm build && node --env-file=.env scripts/test.mjs",
     "infra:up": "docker compose --env-file .env -f infrastructure/compose/compose.yaml up -d --wait",
@@ -15,11 +15,15 @@
     "dev:worker": "node --env-file=.env apps/api/node_modules/tsx/dist/cli.mjs --tsconfig apps/api/tsconfig.json apps/api/src/worker.ts",
     "db:migrate": "node --env-file=.env scripts/migrate.mjs",
     "admin:grant": "node --env-file=.env scripts/admin.mjs",
-    "typecheck": "pnpm --filter @orvyn/api build && pnpm --filter @orvyn/web typecheck",
-    "format": "prettier --write apps scripts tests package.json pnpm-workspace.yaml infrastructure"
+    "typecheck": "pnpm --filter @orvyn/auth build && pnpm --filter @orvyn/editor build && pnpm --filter @orvyn/api build && pnpm --filter @orvyn/collaboration build && pnpm --filter @orvyn/web typecheck",
+    "format": "prettier --write apps packages scripts tests package.json pnpm-workspace.yaml infrastructure",
+    "dev:collaboration": "node --env-file=.env apps/collaboration/node_modules/tsx/dist/cli.mjs --tsconfig apps/collaboration/tsconfig.json apps/collaboration/src/main.ts"
   },
   "devDependencies": {
+    "@hocuspocus/provider": "4.8.0",
     "@playwright/test": "1.65.1",
-    "prettier": "^3.10.1"
+    "prettier": "^3.10.1",
+    "ws": "^8.23.0",
+    "yjs": "13.6.33"
   }
 }

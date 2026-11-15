@@ -1,8 +1,8 @@
 import nodemailer from "nodemailer";
 import { PoolClient } from "pg";
 import { randomBytes } from "node:crypto";
-import { hash, db } from "../runtime";
-import { encrypt, decrypt, origin, transaction } from "./security";
+import { hash, db } from "../runtime.js";
+import { encrypt, decrypt, origin, transaction } from "./security.js";
 export async function queueMail(
   c: PoolClient,
   to: string,

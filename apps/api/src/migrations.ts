@@ -131,6 +131,35 @@ $$;
 CREATE TRIGGER pages_touch_space AFTER INSERT OR UPDATE OR DELETE ON pages FOR EACH ROW EXECUTE FUNCTION orvyn_touch_space();
 `,
   },
+  {
+    version: 6,
+    sql: `
+CREATE FUNCTION orvyn_upgrade_document(input jsonb) RETURNS jsonb LANGUAGE sql IMMUTABLE AS $$
+ SELECT jsonb_build_object('type','doc','content',CASE WHEN jsonb_array_length(input->'content')=0 THEN '[{"type":"paragraph"}]'::jsonb ELSE
+ (SELECT jsonb_agg(CASE WHEN n->>'type'='paragraph' AND n ? 'text' THEN CASE WHEN n->>'text'='' THEN '{"type":"paragraph"}'::jsonb ELSE jsonb_build_object('type','paragraph','content',jsonb_build_array(jsonb_build_object('type','text','text',n->>'text'))) END ELSE n END) FROM jsonb_array_elements(input->'content') AS n) END)
+$$;
+UPDATE pages SET document=orvyn_upgrade_document(document);
+UPDATE page_revisions SET document=orvyn_upgrade_document(document);
+ALTER TABLE pages ALTER COLUMN document SET DEFAULT '{"type":"doc","content":[{"type":"paragraph"}]}';
+ALTER TABLE pages ADD COLUMN document_schema_version integer NOT NULL DEFAULT 1;
+ALTER TABLE pages ADD COLUMN title_version integer NOT NULL DEFAULT 1;
+CREATE TABLE editor_documents (
+ page_id uuid PRIMARY KEY REFERENCES pages(id) ON DELETE CASCADE,
+ state bytea NOT NULL,updated_at timestamptz NOT NULL DEFAULT now()
+);
+`,
+  },
+  {
+    version: 7,
+    sql: `
+CREATE OR REPLACE FUNCTION orvyn_touch_space() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF TG_OP='UPDATE' AND ROW(NEW.parent_id,NEW.visibility,NEW.deleted_at,NEW.sort_order,NEW.title) IS NOT DISTINCT FROM ROW(OLD.parent_id,OLD.visibility,OLD.deleted_at,OLD.sort_order,OLD.title) THEN RETURN NULL; END IF;
+ UPDATE spaces SET version=version+1 WHERE id=coalesce(NEW.space_id,OLD.space_id); RETURN NULL;
+END
+$$;
+`,
+  },
 ] as const;
 
 export async function migrate(pool: Pool, target = migrations.at(-1)!.version) {

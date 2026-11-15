@@ -10,10 +10,10 @@ import {
   Param,
 } from "@nestjs/common";
 import { randomBytes } from "node:crypto";
-import { db, hash, fail, text, mutation, user } from "./runtime";
-import { transaction, audit, origin, rateLimit } from "./auth/security";
-import { queueMail } from "./auth/mail";
-import { spaceAccess, memberRole, roleRanks } from "./permissions/access";
+import { db, hash, fail, text, mutation, user } from "./runtime.js";
+import { transaction, audit, origin, rateLimit } from "./auth/security.js";
+import { queueMail } from "./auth/mail.js";
+import { spaceAccess, memberRole, roleRanks } from "./permissions/access.js";
 @Controller("api/v1")
 class SpacesController {
   @Get("spaces") async spaces(@Req() req: any) {

@@ -15,3 +15,8 @@
 | CHROMIUM_PATH | Browser test executable; default /usr/bin/chromium. |
 | TEST_URL / TEST_ORIGIN | Isolated runner's frontend URL and expected Origin. |
 | TEST_MAIL_URL | Local test mailbox; default http://127.0.0.1:8025. |
+
+| REDIS_URL | Redis coordination URL; may include credentials; required by collaboration. |
+| COLLABORATION_PORT | Collaboration service port, default 3002. |
+| COLLABORATION_NAMESPACE | Shared Redis key namespace; use one value per deployment. |
+| NUXT_PUBLIC_COLLABORATION_URL | Browser WebSocket endpoint; local setup supplies ws://localhost:3002; use wss in production. |

@@ -66,6 +66,19 @@ try {
   });
   await ready(`http://127.0.0.1:${apiPort}/api/v1/health`, api);
   const worker = start(["apps/api/dist/worker.js"], common);
+  const collaborationUrls = [];
+  for (let i = 0; i < 2; i++) {
+    const p = await port();
+    const service = start(["apps/collaboration/dist/main.js"], {
+      ...common,
+      COLLABORATION_PORT: String(p),
+      COLLABORATION_NAMESPACE: name,
+    });
+    await ready(`http://127.0.0.1:${p}/health`, service);
+    collaborationUrls.push(`ws://127.0.0.1:${p}`);
+  }
+  common.COLLABORATION_TEST_URLS = JSON.stringify(collaborationUrls);
+  common.NUXT_PUBLIC_COLLABORATION_URL = collaborationUrls[0];
   const web = start(["apps/web/.output/server/index.mjs"], {
     ...common,
     NITRO_PORT: String(webPort),
@@ -82,6 +95,8 @@ try {
           "tests/oidc.test.mjs",
           "tests/workspace.test.mjs",
           "tests/permissions.test.mjs",
+          "tests/collaboration.test.mjs",
+          "tests/editor.test.mjs",
         ];
   const tests = spawn(
     process.execPath,

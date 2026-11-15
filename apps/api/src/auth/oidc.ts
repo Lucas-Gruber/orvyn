@@ -1,6 +1,6 @@
 import * as client from "openid-client";
-import { fail } from "../runtime";
-import { decrypt, origin } from "./security";
+import { fail } from "../runtime.js";
+import { decrypt, origin } from "./security.js";
 export function validateIssuer(input: string) {
   let url: URL;
   try {

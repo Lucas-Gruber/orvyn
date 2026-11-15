@@ -79,18 +79,16 @@ function edit(p: any) {
 }
 async function save() {
   await run(async () => {
-    const p = await api("pages/" + page.value.id, "PUT", {
+    const result = await api("pages/" + page.value.id + "/title", "PATCH", {
       title: page.value.title,
-      version: page.value.version,
-      document: {
-        type: "doc",
-        content: content.value
-          .split("\n")
-          .map((text) => ({ type: "paragraph", text })),
-      },
+      titleVersion: page.value.title_version,
     });
-    Object.assign(page.value, p);
+    Object.assign(page.value, result);
+    notice.value = "Title saved.";
   });
+}
+function documentText(node: any): string {
+  return node.text || (node.content || []).map(documentText).join(" ");
 }
 const createParent = ref(""),
   moveParent = ref(""),
@@ -164,8 +162,9 @@ async function refreshPage() {
 }
 async function movePage() {
   await run(async () => {
+    const current = await api("pages/" + page.value.id);
     await api("pages/" + page.value.id + "/move", "POST", {
-      version: page.value.version,
+      version: current.version,
       parentId: moveParent.value || null,
       sortOrder: 0,
     });
@@ -549,18 +548,15 @@ onMounted(async () => {
               v-model="page.title"
               maxlength="300"
               :readonly="page.access_rank < 30"
-            /><label for="document">Document</label
-            ><textarea
-              id="document"
-              v-model="content"
-              placeholder="Start writing…"
-              :readonly="page.access_rank < 30"
-            /><button v-if="page.access_rank >= 30" @click="save">
-              Save changes
+            /><LazyBlockEditor
+              v-if="me"
+              :key="page.id"
+              :page-id="page.id"
+              :user="me"
+            />
+            <button v-if="page.access_rank >= 30" @click="save">
+              Save title
             </button>
-            <p class="hint">
-              Revision {{ page.version }} · Explicit save · Plain paragraphs
-            </p>
             <div class="actions">
               <button @click="openHistory">Version history</button
               ><button
@@ -594,7 +590,7 @@ onMounted(async () => {
                 Revision {{ h.version }} · {{ h.title }}
               </button>
               <pre v-if="revision" class="revision">{{
-                revision.document.content.map((n: any) => n.text).join("\n")
+                documentText(revision.document)
               }}</pre>
             </div>
             <form v-if="page.access_rank >= 30" @submit.prevent="movePage">

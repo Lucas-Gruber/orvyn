@@ -1,3 +1,4 @@
+import { normalizeDocument } from "@orvyn/editor";
 import {
   Module,
   Controller,
@@ -5,14 +6,15 @@ import {
   Post,
   Put,
   Delete,
+  Patch,
   Req,
   Res,
   Body,
   Param,
   Query,
 } from "@nestjs/common";
-import { db, fail, text, mutation, user } from "./runtime";
-import { transaction, audit } from "./auth/security";
+import { db, fail, text, mutation, user } from "./runtime.js";
+import { transaction, audit } from "./auth/security.js";
 import {
   spaceAccess,
   pageAccess,
@@ -20,23 +22,17 @@ import {
   subtree,
   memberRole,
   roleRanks,
-} from "./permissions/access";
+} from "./permissions/access.js";
 function documentInput(body: any) {
-  if (
-    !Number.isSafeInteger(body?.version) ||
-    body?.document?.type !== "doc" ||
-    !Array.isArray(body.document.content) ||
-    body.document.content.some(
-      (n: any) => n?.type !== "paragraph" || typeof n.text !== "string",
-    ) ||
-    JSON.stringify(body.document).length > 100000
-  )
-    fail(400, "Invalid document");
-  return {
-    title: text(body.title, 300),
-    document: body.document,
-    version: body.version,
-  };
+  if (!Number.isSafeInteger(body?.version))
+    fail(400, "Invalid document version");
+  let document;
+  try {
+    document = normalizeDocument(body?.document);
+  } catch {
+    return fail(400, "Invalid document");
+  }
+  return { title: text(body.title, 300), document, version: body.version };
 }
 @Controller("api/v1")
 class PagesController {
@@ -116,6 +112,12 @@ class PagesController {
       input = documentInput(body);
     return transaction(async (c) => {
       const p = await pageWrite(c, uid, id);
+      const editor = await c.query(
+        "SELECT 1 FROM editor_documents WHERE page_id=$1",
+        [p.id],
+      );
+      if (editor.rowCount)
+        fail(409, "Edit this document through the collaboration connection");
       if (p.version !== input.version)
         fail(409, "Page changed; reload before saving");
       const r = await c.query(
@@ -129,6 +131,28 @@ class PagesController {
       );
       await audit(c, uid, "page.updated");
       return { ...saved, access_rank: p.access_rank };
+    });
+  }
+  @Patch("pages/:id/title") async title(
+    @Req() req: any,
+    @Param("id") id: string,
+    @Body() body: any,
+  ) {
+    mutation(req);
+    const uid = await user(req),
+      title = text(body?.title, 300);
+    if (!Number.isSafeInteger(body?.titleVersion))
+      fail(400, "Title version required");
+    return transaction(async (c) => {
+      const p = await pageWrite(c, uid, id);
+      if (p.title_version !== body.titleVersion)
+        fail(409, "Title changed; reload first");
+      const r = await c.query(
+        "UPDATE pages SET title=$1,title_version=title_version+1,version=version+1 WHERE id=$2 RETURNING title,title_version",
+        [title, p.id],
+      );
+      await audit(c, uid, "page.title_updated");
+      return r.rows[0];
     });
   }
   @Get("pages/:id/permissions") async permissions(
@@ -196,6 +220,9 @@ class PagesController {
         "UPDATE pages SET visibility=$1,version=version+1 WHERE id=$2",
         [body.visibility, p.id],
       );
+      await c.query("UPDATE spaces SET version=version+1 WHERE id=$1", [
+        p.space_id,
+      ]);
       await audit(c, uid, "page.permissions_changed");
       return { ok: true };
     });

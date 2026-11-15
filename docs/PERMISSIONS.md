@@ -10,9 +10,9 @@ All resource reads, search, history, writes, page permission changes, trash and 
 
 ## Team conversion and invitations
 
-Only the space owner may convert a personal space. The UI first shows which root pages will remain restricted and requires explicit confirmation with a current space revision. Structural/content changes invalidate that preview. Conversion restricts existing roots, thereby preserving privacy of their descendants. New shared pages inherit team membership; existing pages require a separate explicit permission change to share them.
+Only the space owner may convert a personal space. The UI first shows which root pages will remain restricted and requires explicit confirmation with a current space revision. Structural, title and permission changes invalidate that preview. Document-only edits do not change its permission scope. Conversion restricts existing roots, thereby preserving privacy of their descendants. New shared pages inherit team membership; existing pages require a separate explicit permission change to share them.
 
-Verified owners/admins can email invitations. The recipient must sign in with the invited verified email and accept the one-use seven-day token. Wrong-account attempts do not consume invitations. Existing member roles are never silently changed by acceptance. Only the owner may invite/change administrators; admin removal is also reserved to the owner. Removing membership clears that user's page grants and their pending invitations, and resource access stops on subsequent requests. WebSocket revocation is not implemented until the collaboration service exists.
+Verified owners/admins can email invitations. The recipient must sign in with the invited verified email and accept the one-use seven-day token. Wrong-account attempts do not consume invitations. Existing member roles are never silently changed by acceptance. Only the owner may invite/change administrators; admin removal is also reserved to the owner. Removing membership clears that user's page grants and their pending invitations, and resource access stops on subsequent requests. The collaboration service rechecks writes and outgoing frames against this same policy, and closes revoked connections.
 
 ## Moves, deletion and history
 
@@ -20,8 +20,8 @@ Moving a root freezes its previous audience as an explicit restricted grant set.
 
 Deletion is soft deletion. Descendants of a trashed page become inaccessible. Restore respects permissions and requires a live accessible parent. Independently trashed descendants stay in trash. Permanent deletion/retention policies are not implemented. Content saves create immutable page_revisions records; access to history is checked against the current page policy.
 
-Space writes lock the space row before authorization-sensitive changes. Page writes, permission updates and membership changes serialize on that lock, so a concurrent revocation cannot commit in the middle of an authorized write. Further high-volume/performance tests are needed before large-workspace readiness is claimed.
+Space writes lock the space row before authorization-sensitive changes. REST page writes, permission updates and membership changes serialize on that lock. Collaborative content-only writes use a shared space lock plus a document advisory lock, so a concurrent revocation cannot commit in the middle of an authorized write. Further high-volume/performance tests are needed before large-workspace readiness is claimed.
 
 ## Remaining work
 
-Organizations, ownership transfer, reusable groups, external sharing, database-record permissions, whiteboard/file permissions, administrative invitation revocation UI, comments, drag-and-drop and collaboration authorization remain open. The role model does not imply these resource types already exist.
+Organizations, ownership transfer, reusable groups, external sharing, database-record permissions, whiteboard/file permissions, administrative invitation revocation UI, comments, drag-and-drop and production permission stress tests remain open. The role model does not imply these resource types already exist.
