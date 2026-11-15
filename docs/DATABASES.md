@@ -8,7 +8,7 @@ Database properties and views have their own tables. Record values use validated
 
 Working property types: Title (managed by the page), Text, Number, Select, MultiSelect, Status, Date, Checkbox, URL, Email, Phone, CreatedTime, CreatedBy, LastEditedTime and LastEditedBy. Metadata is read-only. Date values are canonical ISO dates; metadata timestamps are UTC ISO instants. Legacy page timestamps/actors are backfilled from the first/last known content revisions, falling back to the space owner and migration time where older evidence is absent.
 
-Person, Files as a structured property, Relation, Formula and Rollup are reserved in the model but not implemented or offered as working properties. Option editing/deletion, property deletion/restore, templates and import/export are not implemented yet. Reserved property types return a validation error; no placeholder computation is returned.
+Person, Files as a structured property, Relation, Formula and Rollup are reserved in the model but not implemented or offered as working properties. Option editing/deletion, property deletion/restore, templates and portable JSON restore are not implemented yet. Reserved property types return a validation error; no placeholder computation is returned.
 
 ## Views and editing
 
@@ -18,7 +18,7 @@ Queries filter each record through orvyn_page_role before ordering or pagination
 
 Results paginate at 100 records by default, maximum 200, with explicit offsets and nextOffset. Board counts refer to the current loaded page. Deep-offset performance, very large datasets and field-specific index tuning have not been benchmarked.
 
-Property cells save through optimistic record revisions. Page titles use a separate title revision. Kanban supports drag handles and keyboard-accessible status selectors; updates persist on the server and invalidate the other views. The UI supports record creation, optional private records, page opening, property creation, view settings and database permission management. Existing/private parent restrictions still apply to every record.
+Property cells save through optimistic record revisions. Active text/number input keeps its local draft while live query results refresh, so background updates do not overwrite typing before blur. Page titles use a separate title revision. Kanban supports drag handles and keyboard-accessible status selectors; updates persist on the server and invalidate the other views. The UI supports record creation, optional private records, page opening, property creation, view settings and database permission management. Existing/private parent restrictions still apply to every record.
 
 ## Live updates and privacy
 
@@ -29,3 +29,21 @@ The server checks whether a changed record is readable before announcing its act
 ## Validation
 
 API tests cover real record-pages, types, invalid dates, metadata write rejection, saved filters/sorts, selected-property projection, pagination, calendar ranges, private records, move constraints, trash/restore and cross-user isolation. Two-replica tests cover live invalidation, hidden activity suppression and membership revocation. Chromium covers all five views, actual drag-and-drop, a second window's live update, record document persistence, property creation and saved filtering.
+
+## Linked database blocks
+
+The editor's Link database command inserts an `orvynDatabase` atom containing the source database UUID and saved view UUID, rather than copying records. Users may select an existing view, create an independent saved view, or create a database beneath the current document. New documents use schema version 2; version 1 remains readable. Servers reject future document schemas instead of silently dropping unknown nodes.
+
+The linked workspace queries the source with the current user's session. A link grants no access. An unavailable source displays a generic message without its title, records or schema. Source permission changes apply to embeds and live subscriptions. Opening an embedded record navigates to its original page and notes. Each workspace has distinct form IDs, including repeated references to the same source.
+
+## CSV transfer and JSON export
+
+CSV import accepts UTF-8 with quoted multiline fields, up to 1 MiB, 1,000 nonblank records and 50 columns. Preview proposes existing-property matches and new Text properties, with explicit remapping/skip/type controls. A title mapping is mandatory. Computed metadata cannot be imported. Select labels may create new options only when allowed; multiselect uses a JSON array or semicolon-separated labels. Numbers use canonical decimal/exponent syntax, dates use ISO dates, and checkbox values accept true/false, yes/no or 1/0. Invalid typed values show row/column errors and disable confirmation.
+
+Preview stores only a short-lived actor-scoped plan and file digest; it does not create database properties or records. Confirmation requires the same file, current write access and the same schema revision. Properties, options, record pages, typed values and initial history commit together. Confirmation retries return the stored outcome for 24 hours instead of duplicating records. Imports create new records; they never overwrite matching titles. CSV previews expire after 15 minutes. One committed database notification refreshes clients after the batch.
+
+CSV and JSON exports evaluate per-record access inside a repeatable-read transaction. An explicit view uses its saved filters and selected columns, including the title/group/date columns required for rendering. Without a view, all accessible records and properties are exported. Search text, loaded pagination and the displayed calendar month do not limit exports. Exports fail explicitly beyond 10,000 records or 10 MiB of serialized records; they never silently truncate.
+
+CSV uses readable select labels and JSON arrays for multiselect. By default text starting with spreadsheet formula control characters is prefixed with an apostrophe; numeric cells remain numeric. The API supports `spreadsheetSafe=false` for exact CSV text when required. JSON always preserves exact values and includes schema, saved views, page document projections and ready attachment metadata. It does not package attachment bytes or constitute a full application backup; use the backup/recovery workflow for that.
+
+Transfer tests cover preview isolation, typed failures, file/schema changes, idempotency, private-record filtering, saved-view projection, spreadsheet safety, and the real browser mapping/confirm/download flow. Embedded browser tests cover independent views, persistence, original record navigation, denied source privacy and re-granted access.

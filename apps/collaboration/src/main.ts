@@ -8,7 +8,11 @@ import { Redis as RedisExtension } from "@hocuspocus/extension-redis";
 import { Redis as RedisClient } from "ioredis";
 import { Pool, type PoolClient } from "pg";
 import { authenticateCookie } from "@orvyn/auth";
-import { documentToYDoc, yDocToDocument } from "@orvyn/editor";
+import {
+  documentToYDoc,
+  yDocToDocument,
+  documentSchemaVersion,
+} from "@orvyn/editor";
 import * as Y from "yjs";
 import { createHash } from "node:crypto";
 
@@ -219,6 +223,12 @@ const server = new Server<Identity>({
       await c.query("SELECT pg_advisory_xact_lock(hashtextextended($1,3829))", [
         documentName,
       ]);
+      const schema = (
+        await c.query("SELECT document_schema_version FROM pages WHERE id=$1", [
+          documentName,
+        ])
+      ).rows[0];
+      if (schema.document_schema_version > documentSchemaVersion) deny();
       const row = await c.query(
         "SELECT state FROM editor_documents WHERE page_id=$1 FOR UPDATE",
         [documentName],
@@ -281,8 +291,13 @@ const server = new Server<Identity>({
         );
         const p = (
           await c.query(
-            "UPDATE pages SET document=$2,version=version+1,last_edited_by=$3 WHERE id=$1 RETURNING id,version,title,document",
-            [documentName, json, connection.context.userId],
+            "UPDATE pages SET document=$2,document_schema_version=$4,version=version+1,last_edited_by=$3 WHERE id=$1 RETURNING id,version,title,document",
+            [
+              documentName,
+              json,
+              connection.context.userId,
+              documentSchemaVersion,
+            ],
           )
         ).rows[0];
         await c.query(

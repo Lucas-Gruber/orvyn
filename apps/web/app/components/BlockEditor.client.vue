@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { Editor, EditorContent } from "@tiptap/vue-3";
+import { Editor, EditorContent, VueNodeViewRenderer } from "@tiptap/vue-3";
 import Collaboration from "@tiptap/extension-collaboration";
 import CollaborationCaret from "@tiptap/extension-collaboration-caret";
 import { HocuspocusProvider } from "@hocuspocus/provider";
+import EmbeddedDatabaseNode from "./EmbeddedDatabaseNode.vue";
 import { editorExtensions } from "@orvyn/editor";
 import * as Y from "yjs";
-const props = defineProps<{ pageId: string; user: any }>();
+const props = defineProps<{ pageId: string; spaceId: string; user: any }>();
 const document = new Y.Doc(),
   editor = shallowRef<Editor>(),
   status = ref("connecting"),
@@ -39,7 +40,12 @@ const saveStatus = computed(() =>
             ? "Saving changes…"
             : "All changes saved",
 );
-const commands = [
+interface SlashCommand {
+  label: string;
+  run: (editor: Editor) => unknown;
+  keepSelection?: boolean;
+}
+const commands: SlashCommand[] = [
   {
     label: "Paragraph",
     run: (e: Editor) => e.chain().focus().setParagraph().run(),
@@ -81,6 +87,13 @@ const commands = [
     run: (e: Editor) => e.chain().focus().setHorizontalRule().run(),
   },
   {
+    label: "Linked database",
+    keepSelection: true,
+    run: () => {
+      void openLinkPicker();
+    },
+  },
+  {
     label: "Table",
     run: (e: Editor) =>
       e
@@ -99,14 +112,23 @@ function applyCommand(index: number) {
   const command = filtered.value[index];
   if (!editor.value || !command) return;
   slashOpen.value = false;
-  editor.value.chain().focus().deleteRange(slashRange).run();
+  if (command.keepSelection) editor.value.commands.setTextSelection(slashRange);
+  else editor.value.chain().focus().deleteRange(slashRange).run();
   command.run(editor.value);
 }
 function initialize() {
   if (editor.value) return;
   editor.value = new Editor({
     extensions: [
-      ...editorExtensions(true),
+      ...editorExtensions(true).map((extension) =>
+        extension.name === "orvynDatabase"
+          ? extension.extend({
+              addNodeView() {
+                return VueNodeViewRenderer(EmbeddedDatabaseNode);
+              },
+            })
+          : extension,
+      ),
       Collaboration.configure({ document }),
       CollaborationCaret.configure({
         provider,
@@ -167,6 +189,129 @@ function initialize() {
       } else slashOpen.value = false;
     },
   });
+}
+const linkDialog = ref<HTMLDialogElement>(),
+  linkSpaces = ref<any[]>([]),
+  linkDatabases = ref<any[]>([]),
+  linkMetadata = ref<any>(),
+  linkSpace = ref(props.spaceId),
+  linkDatabase = ref(""),
+  linkView = ref(""),
+  linkSeparate = ref(false),
+  linkName = ref(""),
+  inlineName = ref(""),
+  linkError = ref(""),
+  linkBusy = ref(false);
+async function loadLinkMetadata() {
+  linkMetadata.value = undefined;
+  linkView.value = "";
+  if (!linkDatabase.value) return;
+  const id = linkDatabase.value;
+  try {
+    const data = await $fetch<any>("/api/v1/databases/" + id);
+    if (linkDatabase.value === id) {
+      linkMetadata.value = data;
+      linkView.value = data.views[0]?.id || "";
+    }
+  } catch {
+    linkError.value = "This database is unavailable";
+  }
+}
+async function loadLinkDatabases() {
+  linkDatabase.value = "";
+  linkDatabases.value = [];
+  linkMetadata.value = undefined;
+  const space = linkSpace.value;
+  try {
+    const data = await $fetch<any[]>("/api/v1/spaces/" + space + "/databases");
+    if (linkSpace.value === space) {
+      linkDatabases.value = data;
+      linkDatabase.value = data[0]?.id || "";
+      await loadLinkMetadata();
+    }
+  } catch {
+    linkError.value = "Databases could not be loaded";
+  }
+}
+async function openLinkPicker() {
+  if (!editor.value?.isEditable) return;
+  slashOpen.value = false;
+  linkError.value = "";
+  linkSeparate.value = false;
+  linkName.value = "";
+  inlineName.value = "";
+  linkSpace.value = props.spaceId;
+  linkDialog.value?.showModal();
+  linkBusy.value = true;
+  try {
+    linkSpaces.value = await $fetch<any[]>("/api/v1/spaces");
+    await loadLinkDatabases();
+  } catch {
+    linkError.value = "Sources could not be loaded";
+  } finally {
+    linkBusy.value = false;
+  }
+}
+function insertDatabase(databaseId: string, viewId: string | null) {
+  if (!editor.value?.isEditable) {
+    linkError.value = "Editing is paused";
+    return;
+  }
+  linkDialog.value?.close();
+  editor.value
+    .chain()
+    .focus()
+    .insertContent({ type: "orvynDatabase", attrs: { databaseId, viewId } })
+    .run();
+}
+async function insertLinkedDatabase() {
+  if (linkBusy.value || !linkDatabase.value || !linkView.value) return;
+  linkBusy.value = true;
+  linkError.value = "";
+  try {
+    let viewId = linkView.value;
+    if (linkSeparate.value) {
+      const selected = linkMetadata.value.views.find(
+        (v: any) => v.id === viewId,
+      );
+      const view = await $fetch<any>(
+        "/api/v1/databases/" + linkDatabase.value + "/views",
+        {
+          method: "POST",
+          body: {
+            name: linkName.value,
+            type: selected.type,
+            config: selected.config,
+          },
+        },
+      );
+      viewId = view.id;
+    }
+    insertDatabase(linkDatabase.value, viewId);
+  } catch (e: any) {
+    linkError.value = e.data?.message || "Database could not be linked";
+  } finally {
+    linkBusy.value = false;
+  }
+}
+async function createInlineDatabase() {
+  if (linkBusy.value) return;
+  linkBusy.value = true;
+  linkError.value = "";
+  try {
+    const data = await $fetch<any>(
+      "/api/v1/spaces/" + props.spaceId + "/databases",
+      {
+        method: "POST",
+        body: { name: inlineName.value, parentId: props.pageId },
+      },
+    );
+    insertDatabase(data.id, data.views[0]?.id || null);
+  } catch (e: any) {
+    linkError.value = e.data?.message || "Database could not be created";
+  } finally {
+    linkBusy.value = false;
+  }
 }
 const provider = new HocuspocusProvider({
   url,
@@ -240,8 +385,91 @@ onBeforeUnmount(() => {
     <p v-if="peers.length" class="presence">
       {{ peers.map((p) => p.name).join(" · ") }}
     </p>
+    <dialog
+      ref="linkDialog"
+      aria-labelledby="link-database-title"
+      class="link-database-dialog"
+    >
+      <h2 id="link-database-title">Link a database</h2>
+      <p v-if="linkError" class="error" role="alert">{{ linkError }}</p>
+      <p v-if="linkBusy" role="status">Loading or saving…</p>
+      <form @submit.prevent="insertLinkedDatabase">
+        <label for="linked-space">Source space</label
+        ><select
+          id="linked-space"
+          v-model="linkSpace"
+          :disabled="linkBusy"
+          @change="loadLinkDatabases"
+        >
+          <option v-for="space in linkSpaces" :key="space.id" :value="space.id">
+            {{ space.name }}
+          </option></select
+        ><label for="linked-database">Source database</label
+        ><select
+          id="linked-database"
+          v-model="linkDatabase"
+          :disabled="linkBusy"
+          required
+          @change="loadLinkMetadata"
+        >
+          <option
+            v-for="database in linkDatabases"
+            :key="database.id"
+            :value="database.id"
+          >
+            {{ database.title }}
+          </option>
+        </select>
+        <p v-if="!linkDatabases.length && !linkBusy">
+          No accessible databases in this space.
+        </p>
+        <label for="linked-view">View</label
+        ><select
+          id="linked-view"
+          v-model="linkView"
+          :disabled="linkBusy"
+          required
+        >
+          <option
+            v-for="view in linkMetadata?.views || []"
+            :key="view.id"
+            :value="view.id"
+          >
+            {{ view.name }}
+          </option></select
+        ><label v-if="linkMetadata?.accessRank >= 30"
+          ><input
+            v-model="linkSeparate"
+            type="checkbox"
+            style="width: auto"
+          />Create a separate view with independent filters</label
+        ><template v-if="linkSeparate"
+          ><label for="linked-view-name">New view name</label
+          ><input
+            id="linked-view-name"
+            v-model="linkName"
+            required
+            maxlength="80" /></template
+        ><button :disabled="linkBusy || !linkView">Insert linked view</button>
+      </form>
+      <hr />
+      <form @submit.prevent="createInlineDatabase">
+        <h3>Or create a database in this page</h3>
+        <label for="inline-database-name">Inline database name</label
+        ><input
+          id="inline-database-name"
+          v-model="inlineName"
+          required
+          maxlength="120"
+        /><button :disabled="linkBusy">Create and insert database</button>
+      </form>
+      <button type="button" @click="linkDialog?.close()">Cancel</button>
+    </dialog>
     <template v-if="editor"
       ><div class="editor-toolbar" aria-label="Text formatting">
+        <button :disabled="!editor.isEditable" @click="openLinkPicker">
+          Link database
+        </button>
         <button
           :disabled="!editor.isEditable"
           :aria-pressed="editor.isActive('bold')"
@@ -441,5 +669,22 @@ onBeforeUnmount(() => {
 button:disabled {
   cursor: default;
   opacity: 0.5;
+}
+.link-database-dialog {
+  max-width: 640px;
+  width: calc(100% - 2rem);
+  max-height: 90vh;
+  overflow: auto;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 0.7rem;
+  padding: 2rem;
+}
+.link-database-dialog::backdrop {
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+}
+.link-database-dialog form {
+  margin: 1rem 0;
 }
 </style>

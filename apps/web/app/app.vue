@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { pageNavigationKey } from "./composables/pageNavigation";
+provide(pageNavigationKey, (id) => {
+  void run(() => openPage(id));
+});
 const view = ref("workspace"),
   me = ref<any>(null),
   providers = ref<any[]>([]),
@@ -614,6 +618,7 @@ onMounted(async () => {
               v-if="me"
               :key="page.id"
               :page-id="page.id"
+              :space-id="page.space_id"
               :user="me"
             />
             <button v-if="page.access_rank >= 30" @click="save">

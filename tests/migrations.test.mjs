@@ -17,6 +17,29 @@ test("migrations install, upgrade existing records, serialize and roll back fail
     const account = await db.query(
       "INSERT INTO users(email,password_hash) VALUES('upgrade@example.test','existing') RETURNING id",
     );
+    const oldSpace = (
+      await db.query(
+        "INSERT INTO spaces(owner_id,name) VALUES($1,'Legacy space') RETURNING id",
+        [account.rows[0].id],
+      )
+    ).rows[0].id;
+    const oldPage = (
+      await db.query(
+        "INSERT INTO pages(space_id,title,document,version) VALUES($1,'Legacy page',$2,7) RETURNING id",
+        [
+          oldSpace,
+          {
+            type: "doc",
+            content: [
+              {
+                type: "paragraph",
+                text: "Preserved legacy knowledge <script> stays text",
+              },
+            ],
+          },
+        ],
+      )
+    ).rows[0].id;
     await Promise.all([migrate(db), migrate(db)]);
     const row = (
       await db.query(
@@ -29,6 +52,38 @@ test("migrations install, upgrade existing records, serialize and roll back fail
       password_hash: "existing",
       email_verified: false,
     });
+    const migrated = (
+      await db.query(
+        "SELECT document,version,created_by,document_schema_version FROM pages WHERE id=$1",
+        [oldPage],
+      )
+    ).rows[0];
+    assert.deepEqual(migrated.document, {
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            {
+              type: "text",
+              text: "Preserved legacy knowledge <script> stays text",
+            },
+          ],
+        },
+      ],
+    });
+    assert.equal(migrated.version, 7);
+    assert.equal(migrated.created_by, account.rows[0].id);
+    assert.equal(migrated.document_schema_version, 1);
+    assert.deepEqual(
+      (
+        await db.query(
+          "SELECT document FROM page_revisions WHERE page_id=$1 AND version=7",
+          [oldPage],
+        )
+      ).rows[0].document,
+      migrated.document,
+    );
     assert.deepEqual(
       (
         await db.query("SELECT version FROM schema_migrations ORDER BY version")

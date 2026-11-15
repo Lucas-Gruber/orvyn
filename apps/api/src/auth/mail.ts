@@ -80,6 +80,7 @@ export async function deliverMailBatch() {
   }
 }
 export async function cleanupAuth() {
+  await db.query("DELETE FROM csv_import_previews WHERE expires_at<now()");
   await db.query("DELETE FROM sessions WHERE expires_at<now()");
   await db.query("DELETE FROM account_tokens WHERE expires_at<now()");
   await db.query("DELETE FROM oidc_flows WHERE expires_at<now()");

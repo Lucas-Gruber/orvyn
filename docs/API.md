@@ -54,3 +54,9 @@ PATCH /pages/:id/title accepts title and titleVersion. REST content updates norm
 File routes: GET /files/limits; GET/POST /pages/:id/files (POST is authenticated multipart/form-data with one file field, Origin required); GET /files/:id/download; GET /files/:id/preview for detected raster images; DELETE /files/:id with JSON body. All file resources inherit page permissions.
 
 Database routes: GET/POST /spaces/:id/databases; GET /databases/:id; POST /databases/:id/properties; PATCH /databases/:id/properties/:property (name, schemaVersion); POST /databases/:id/views; PATCH /databases/:id/views/:view (version plus view settings); POST /databases/:id/query (200, typed filters/sorts/search/pagination); POST /databases/:id/records (title, values, optional visibility); PATCH /databases/:id/records/:record (version, partial values). Opening/editing record documents uses the ordinary page APIs. GET /spaces/:id/directory provides a member-scoped identity directory for account selectors.
+
+Database transfer routes (all authenticated):
+- `POST /api/v1/databases/:id/import/csv/preview`: exact Origin, write access, multipart `file` and optional JSON `settings` (`mapping`, `allowNewOptions`). Returns headers, first 20 raw rows, mapping, proposed properties/options, validation errors and an actor-bound token if valid.
+- `POST /api/v1/databases/:id/import/csv/confirm`: same multipart file and JSON `settings: {token}`; atomic creation, schema conflict 409, idempotent retry 200.
+- `GET /api/v1/databases/:id/export.csv`: authorized attachment download; optional `viewId`, `spreadsheetSafe=true` default.
+- `GET /api/v1/databases/:id/export.json`: exact typed values, schema/views/documents and attachment metadata; optional `viewId`.

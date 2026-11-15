@@ -132,6 +132,8 @@ try {
           "tests/database-events.test.mjs",
           "tests/database-browser.test.mjs",
           "tests/rate-limit.test.mjs",
+          "tests/embedded-database.test.mjs",
+          "tests/database-transfer.test.mjs",
         ];
   const tests = spawn(
     process.execPath,

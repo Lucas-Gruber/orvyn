@@ -13,12 +13,14 @@
     "@nestjs/platform-express": "12.5.0",
     "@orvyn/auth": "workspace:*",
     "@orvyn/editor": "workspace:*",
+    "@orvyn/shared": "workspace:*",
+    "csv-parse": "7.0.3",
+    "csv-stringify": "6.9.0",
     "nodemailer": "10.5.0",
     "openid-client": "6.9.0",
     "pg": "8.23.1",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.2",
-    "@orvyn/shared": "workspace:*"
+    "rxjs": "^7.8.2"
   },
   "devDependencies": {
     "@types/multer": "2.3.0",

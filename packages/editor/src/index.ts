@@ -1,3 +1,4 @@
+import { DatabaseBlock } from "./database-node.js";
 import { getSchema, type AnyExtension } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import TaskList from "@tiptap/extension-task-list";
@@ -5,7 +6,7 @@ import TaskItem from "@tiptap/extension-task-item";
 import { TableKit } from "@tiptap/extension-table";
 import { prosemirrorJSONToYDoc, yDocToProsemirrorJSON } from "y-prosemirror";
 import * as Y from "yjs";
-export const documentSchemaVersion = 1;
+export const documentSchemaVersion = 2;
 export function editorExtensions(collaborative = false): AnyExtension[] {
   return [
     StarterKit.configure({
@@ -16,6 +17,7 @@ export function editorExtensions(collaborative = false): AnyExtension[] {
     TaskList,
     TaskItem.configure({ nested: true }),
     TableKit.configure({ table: { resizable: false } }),
+    DatabaseBlock,
   ];
 }
 export const schema: ReturnType<typeof getSchema> =
@@ -34,6 +36,17 @@ export function validateDocument(input: unknown) {
   const bounded = (n: any, depth: number) => {
     if (++nodes > 3000 || depth > 64)
       throw Error("Document structure limit exceeded");
+    if (n.type.name === "orvynDatabase") {
+      const uuid =
+        /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
+      if (
+        typeof n.attrs.databaseId !== "string" ||
+        !uuid.test(n.attrs.databaseId) ||
+        (n.attrs.viewId !== null &&
+          (typeof n.attrs.viewId !== "string" || !uuid.test(n.attrs.viewId)))
+      )
+        throw Error("Invalid database block reference");
+    }
     if (n.type.name === "heading" && ![1, 2, 3].includes(n.attrs.level))
       throw Error("Invalid heading level");
     if (
@@ -125,3 +138,5 @@ export { default as StarterKit } from "@tiptap/starter-kit";
 export { default as TaskList } from "@tiptap/extension-task-list";
 export { default as TaskItem } from "@tiptap/extension-task-item";
 export { TableKit } from "@tiptap/extension-table";
+
+export { DatabaseBlock } from "./database-node.js";

@@ -254,6 +254,29 @@ BEGIN
 END $$;
 `,
   },
+  {
+    version: 11,
+    sql: `ALTER TABLE pages ALTER COLUMN document_schema_version SET DEFAULT 2;`,
+  },
+  {
+    version: 12,
+    sql: `
+CREATE TABLE csv_import_previews (
+ token_hash text PRIMARY KEY,database_id uuid NOT NULL REFERENCES databases(page_id),user_id uuid NOT NULL REFERENCES users(id),
+ file_digest text NOT NULL,plan jsonb NOT NULL,result jsonb,created_at timestamptz NOT NULL DEFAULT now(),expires_at timestamptz NOT NULL DEFAULT now()+interval '15 minutes'
+);
+CREATE INDEX csv_import_expiry ON csv_import_previews(expires_at);
+CREATE OR REPLACE FUNCTION orvyn_database_notify() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE target uuid; record_id uuid;
+BEGIN
+ target=coalesce(NEW.database_id,OLD.database_id);
+ IF TG_TABLE_NAME='database_properties' THEN UPDATE databases SET schema_version=schema_version+1 WHERE page_id=target; END IF;
+ IF current_setting('orvyn.bulk_database',true)=target::text THEN RETURN NULL; END IF;
+ IF TG_TABLE_NAME='database_records' THEN record_id=coalesce(NEW.page_id,OLD.page_id); END IF;
+ PERFORM pg_notify('orvyn_database_changed',json_build_object('databaseId',target,'recordId',record_id)::text);RETURN NULL;
+END $$;
+`,
+  },
 ] as const;
 
 export async function migrate(pool: Pool, target = migrations.at(-1)!.version) {

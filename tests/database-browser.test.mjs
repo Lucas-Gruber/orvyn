@@ -158,6 +158,48 @@ test("Chromium: five database views, live Kanban drag, record documents and save
     await row()
       .getByRole("spinbutton", { name: "Estimate", exact: true })
       .fill("1");
+    // A committed update arrives while this local input is still focused.
+    const remote = await page.evaluate(
+      async ({ space, database, title }) => {
+        const get = async (path, body) =>
+          (
+            await fetch("/api/v1/" + path, {
+              method: body ? "POST" : "GET",
+              headers: { "Content-Type": "application/json" },
+              body: body ? JSON.stringify(body) : undefined,
+            })
+          ).json();
+        const source = (await get("spaces")).find((s) => s.name === space);
+        const db = (await get("spaces/" + source.id + "/databases")).find(
+          (d) => d.title === database,
+        );
+        const record = (
+          await get("databases/" + db.id + "/query", {})
+        ).records.find((r) => r.title === title);
+        return { id: db.id, record };
+      },
+      { space, database, title },
+    );
+    const refresh = page.waitForResponse(
+      (response) =>
+        response.url().includes("/databases/" + remote.id + "/query") &&
+        response.request().method() === "POST",
+    );
+    await page.evaluate(async ({ id, record }) => {
+      const response = await fetch(
+        "/api/v1/databases/" + id + "/records/" + record.pageId,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ version: record.version, values: {} }),
+        },
+      );
+      if (!response.ok) throw Error("Concurrent update failed");
+    }, remote);
+    await refresh;
+    await expect(
+      row().getByRole("spinbutton", { name: "Estimate", exact: true }),
+    ).toHaveValue("1");
     await row()
       .getByRole("spinbutton", { name: "Estimate", exact: true })
       .press("Tab");

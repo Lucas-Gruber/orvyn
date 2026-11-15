@@ -86,3 +86,34 @@ test("shared editor schema upgrades paragraphs, round-trips Yjs and rejects unsa
     validateDocument({ type: "doc", content: [{ type: "unknown" }] }),
   );
 });
+
+test("linked database references round-trip through Yjs and reject unsafe identifiers", () => {
+  const databaseId = "1b4a872d-8b47-482f-9daa-2a32fb390674",
+    viewId = "b7dd873f-d427-4853-a5c9-3867edb784e2";
+  const document = {
+    type: "doc",
+    content: [{ type: "orvynDatabase", attrs: { databaseId, viewId } }],
+  };
+  const ydoc = documentToYDoc(document);
+  try {
+    assert.deepEqual(
+      JSON.parse(JSON.stringify(yDocToDocument(ydoc))),
+      document,
+    );
+  } finally {
+    ydoc.destroy();
+  }
+  for (const attrs of [
+    { databaseId: "javascript:alert(1)", viewId },
+    { databaseId, viewId: "not-a-view" },
+    { databaseId: null, viewId: null },
+  ])
+    assert.throws(
+      () =>
+        validateDocument({
+          type: "doc",
+          content: [{ type: "orvynDatabase", attrs }],
+        }),
+      /database block reference/,
+    );
+});

@@ -63,5 +63,15 @@ export function useDatabaseEvents(id: string, changed: () => void) {
     provider?.destroy();
     document.destroy();
   });
-  return { live, denied, watchRecords };
+  return {
+    live,
+    denied,
+    watchRecords,
+    reconnect() {
+      if (provider && denied.value) {
+        denied.value = false;
+        void provider.connect();
+      }
+    },
+  };
 }

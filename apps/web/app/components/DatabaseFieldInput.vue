@@ -6,6 +6,8 @@ const props = defineProps<{
   id?: string;
   disabled?: boolean;
 }>();
+const focused = ref(false),
+  editingValue = ref("");
 const emit = defineEmits<{ "update:modelValue": [value: unknown] }>();
 function changed(event: Event) {
   const input = event.target as HTMLInputElement;
@@ -81,10 +83,16 @@ const inputType = computed(
     :id="id"
     :aria-label="property.name"
     :type="inputType"
-    :value="modelValue ?? ''"
+    :value="focused ? editingValue : (modelValue ?? '')"
     :disabled="disabled"
     :step="inputType === 'number' ? 'any' : undefined"
     maxlength="10000"
+    @focus="
+      focused = true;
+      editingValue = ($event.target as HTMLInputElement).value;
+    "
+    @input="editingValue = ($event.target as HTMLInputElement).value"
+    @blur="focused = false"
     @change="changed"
   />
 </template>

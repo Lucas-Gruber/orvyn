@@ -7,19 +7,21 @@ import {
   type DatabaseRecord,
   type ViewConfig,
 } from "@orvyn/shared";
-const props = defineProps<{ databaseId: string }>(),
+const props = defineProps<{ databaseId: string; initialViewId?: string }>(),
   emit = defineEmits<{ open: [pageId: string]; changed: [] }>();
+const domId = useId();
 const directory = ref<any[]>([]),
   restrictedRecord = ref(false),
   showPermissions = ref(false);
 const metadata = ref<any>(),
   records = ref<DatabaseRecord[]>([]),
   columns = ref<Property[]>([]),
-  viewId = ref(""),
+  viewId = ref(props.initialViewId || ""),
   offset = ref(0),
   nextOffset = ref<number | null>(null),
   search = ref(""),
   error = ref(""),
+  loadError = ref(""),
   notice = ref(""),
   busy = ref(false),
   loading = ref(false),
@@ -108,6 +110,8 @@ async function load() {
     const meta = await api("");
     if (disposed || request !== generation) return;
     metadata.value = meta;
+    loadError.value = "";
+    if (events.denied.value) events.reconnect();
     if (!meta.views.some((v: any) => v.id === viewId.value))
       viewId.value = meta.views[0]?.id || "";
     const query: any = {
@@ -133,7 +137,12 @@ async function load() {
     events.watchRecords(records.value.map((r) => r.pageId));
   } catch (e: any) {
     if (request === generation) {
-      error.value = e.data?.message || "Database could not be loaded";
+      loadError.value =
+        e.status === 404
+          ? "This database is unavailable or you do not have access."
+          : e.status === 401
+            ? "Sign in to view this database."
+            : "Database could not be loaded. Try refreshing.";
       if (e.status === 404 || e.status === 401) {
         metadata.value = null;
         records.value = [];
@@ -398,6 +407,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="database-workspace">
     <p v-if="error" role="alert" class="error">{{ error }}</p>
+    <p v-if="loadError" role="alert" class="error">{{ loadError }}</p>
     <p v-if="notice" role="status">{{ notice }}</p>
     <template v-if="metadata"
       ><div class="database-heading">
@@ -427,9 +437,9 @@ onBeforeUnmount(() => {
             load();
           "
         >
-          <label :for="'db-search-' + databaseId">Search records</label
+          <label :for="'db-search-' + domId">Search records</label
           ><input
-            :id="'db-search-' + databaseId"
+            :id="'db-search-' + domId"
             v-model="search"
             type="search"
             maxlength="200"
@@ -453,14 +463,24 @@ onBeforeUnmount(() => {
           Database access</button
         ><button @click="load()">Refresh records</button>
       </div>
+      <DatabaseTransfer
+        :database-id="databaseId"
+        :view-id="viewId"
+        :properties="metadata.properties"
+        :can-edit="canEdit"
+        @imported="
+          offset = 0;
+          load();
+        "
+      />
       <form
         v-if="showRename && canEdit"
         class="database-form"
         @submit.prevent="renameDatabase"
       >
-        <label :for="'database-title-' + databaseId">Database title</label
+        <label :for="'database-title-' + domId">Database title</label
         ><input
-          :id="'database-title-' + databaseId"
+          :id="'database-title-' + domId"
           v-model="rename"
           required
           maxlength="300"
@@ -484,18 +504,18 @@ onBeforeUnmount(() => {
         @submit.prevent="createRecord"
       >
         <h2>New record</h2>
-        <label :for="'record-title-' + databaseId">Record name</label
+        <label :for="'record-title-' + domId">Record name</label
         ><input
-          :id="'record-title-' + databaseId"
+          :id="'record-title-' + domId"
           v-model="title"
           required
           maxlength="300"
         /><template v-for="property in editableProperties" :key="property.id"
-          ><label :for="'record-value-' + property.id">{{
+          ><label :for="'record-value-' + domId + '-' + property.id">{{
             property.name
           }}</label
           ><DatabaseFieldInput
-            :id="'record-value-' + property.id"
+            :id="'record-value-' + domId + '-' + property.id"
             :property="property"
             :model-value="draft[property.id]"
             @update:model-value="draft[property.id] = $event"
@@ -615,9 +635,9 @@ onBeforeUnmount(() => {
           </button>
           <h2>{{ monthLabel }}</h2>
           <button aria-label="Next month" @click="shiftMonth(1)">Next</button
-          ><label :for="'calendar-month-' + databaseId">Month</label
+          ><label :for="'calendar-month-' + domId">Month</label
           ><input
-            :id="'calendar-month-' + databaseId"
+            :id="'calendar-month-' + domId"
             v-model="month"
             type="month"
             @change="
@@ -719,14 +739,14 @@ onBeforeUnmount(() => {
       <details v-if="canEdit" class="database-form">
         <summary>Add a property</summary>
         <form @submit.prevent="addProperty">
-          <label :for="'property-name-' + databaseId">Property name</label
+          <label :for="'property-name-' + domId">Property name</label
           ><input
-            :id="'property-name-' + databaseId"
+            :id="'property-name-' + domId"
             v-model="propertyName"
             required
             maxlength="80"
-          /><label :for="'property-type-' + databaseId">Property type</label
-          ><select :id="'property-type-' + databaseId" v-model="propertyType">
+          /><label :for="'property-type-' + domId">Property type</label
+          ><select :id="'property-type-' + domId" v-model="propertyType">
             <option
               v-for="type in [
                 ...writablePropertyTypes,
@@ -739,10 +759,10 @@ onBeforeUnmount(() => {
             </option></select
           ><template
             v-if="['Select', 'MultiSelect', 'Status'].includes(propertyType)"
-            ><label :for="'property-options-' + databaseId"
+            ><label :for="'property-options-' + domId"
               >Options, separated by commas</label
             ><input
-              :id="'property-options-' + databaseId"
+              :id="'property-options-' + domId"
               v-model="optionNames"
               required /></template
           ><button :disabled="busy">Add property</button>
@@ -754,20 +774,20 @@ onBeforeUnmount(() => {
         @submit.prevent="saveView"
       >
         <h2>{{ newView ? "Create view" : "View settings" }}</h2>
-        <label for="view-name">View name</label
+        <label :for="'view-name-' + domId">View name</label
         ><input
-          id="view-name"
+          :id="'view-name-' + domId"
           v-model="viewDraft.name"
           required
           maxlength="80"
-        /><label for="view-type">View type</label
-        ><select id="view-type" v-model="viewDraft.type">
+        /><label :for="'view-type-' + domId">View type</label
+        ><select :id="'view-type-' + domId" v-model="viewDraft.type">
           <option v-for="type in viewTypes" :key="type">
             {{ type }}
           </option></select
-        ><label for="view-group">Group by</label
+        ><label :for="'view-group-' + domId">Group by</label
         ><select
-          id="view-group"
+          :id="'view-group-' + domId"
           v-model="viewDraft.config.groupBy"
           :disabled="viewDraft.type === 'Calendar'"
         >
@@ -781,8 +801,11 @@ onBeforeUnmount(() => {
           >
             {{ property.name }}
           </option></select
-        ><label for="view-date">Calendar date property</label
-        ><select id="view-date" v-model="viewDraft.config.dateProperty">
+        ><label :for="'view-date-' + domId">Calendar date property</label
+        ><select
+          :id="'view-date-' + domId"
+          v-model="viewDraft.config.dateProperty"
+        >
           <option :value="null">No date property</option>
           <option
             v-for="property in metadata.properties.filter(

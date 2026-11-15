@@ -1,4 +1,4 @@
-import { normalizeDocument } from "@orvyn/editor";
+import { normalizeDocument, documentSchemaVersion } from "@orvyn/editor";
 import {
   Module,
   Controller,
@@ -102,6 +102,8 @@ class PagesController {
       input = documentInput(body);
     return transaction(async (c) => {
       const p = await pageWrite(c, uid, id);
+      if (p.document_schema_version > documentSchemaVersion)
+        fail(409, "Document format requires a newer server");
       const editor = await c.query(
         "SELECT 1 FROM editor_documents WHERE page_id=$1",
         [p.id],
@@ -111,8 +113,8 @@ class PagesController {
       if (p.version !== input.version)
         fail(409, "Page changed; reload before saving");
       const r = await c.query(
-        "UPDATE pages SET title=$1,document=$2,version=version+1,last_edited_by=$4 WHERE id=$3 RETURNING *",
-        [input.title, input.document, p.id, uid],
+        "UPDATE pages SET title=$1,document=$2,document_schema_version=$5,version=version+1,last_edited_by=$4 WHERE id=$3 RETURNING *",
+        [input.title, input.document, p.id, uid, documentSchemaVersion],
       );
       const saved = r.rows[0];
       await c.query(
