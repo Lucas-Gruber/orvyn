@@ -1,0 +1,120 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+import { chromium, expect } from "@playwright/test";
+import { Pool, base, waitForMail, emailToken } from "./helpers.mjs";
+test("Chromium: account, persisted page, verification, session settings and OIDC administration", async () => {
+  const browser = await chromium.launch({
+    executablePath: process.env.CHROMIUM_PATH || "/usr/bin/chromium",
+    headless: true,
+    args: ["--no-sandbox"],
+  });
+  const context = await browser.newContext(),
+    page = await context.newPage(),
+    errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  const email = randomUUID() + "@example.test",
+    password = randomUUID(),
+    space = "Browser space " + randomUUID().slice(0, 8);
+  try {
+    await page.goto(base);
+    await page.getByLabel("Email", { exact: true }).fill(email);
+    await page
+      .getByLabel("Password · at least 12 characters", { exact: true })
+      .fill(password);
+    await page
+      .getByRole("button", { name: "Create account", exact: true })
+      .click();
+    await expect(
+      page.getByRole("button", { name: "Account & security" }),
+    ).toBeVisible();
+    await page.getByLabel("New private space", { exact: true }).fill(space);
+    await page
+      .getByRole("button", { name: "Create space", exact: true })
+      .click();
+    await page
+      .getByLabel("New page", { exact: true })
+      .fill("A real persisted page");
+    await page
+      .getByRole("button", { name: "Create page", exact: true })
+      .click();
+    await page
+      .getByLabel("Document", { exact: true })
+      .fill("Written through the browser.");
+    await page
+      .getByRole("button", { name: "Save changes", exact: true })
+      .click();
+    await expect(page.getByText("Revision 2", { exact: false })).toBeVisible();
+    await page.reload();
+    await page.getByRole("button", { name: space, exact: true }).click();
+    await page
+      .getByRole("button", { name: "A real persisted page", exact: true })
+      .click();
+    await expect(page.getByLabel("Document", { exact: true })).toHaveValue(
+      "Written through the browser.",
+    );
+    const token = emailToken(
+      await waitForMail(email, "Verify your Orvyn email"),
+    );
+    await page.goto(
+      base + "/#" + new URLSearchParams({ action: "verify-email", token }),
+    );
+    await expect(page).not.toHaveURL(/#/);
+    await page
+      .getByRole("button", { name: "Confirm email address", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Account & security", exact: true })
+      .click();
+    await expect(
+      page.getByText("Email verified", { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText("This session", { exact: true })).toBeVisible();
+    const db = new Pool({ connectionString: process.env.DATABASE_URL });
+    try {
+      await db.query(
+        "UPDATE users SET is_admin=true WHERE email=$1 AND email_verified=true",
+        [email],
+      );
+    } finally {
+      await db.end();
+    }
+    await page.reload();
+    await page
+      .getByRole("button", { name: "SSO administration", exact: true })
+      .click();
+    await page
+      .getByLabel("Display name", { exact: true })
+      .fill("Browser provider");
+    await page
+      .getByLabel("Issuer URL", { exact: true })
+      .fill("https://id.example.test");
+    await page.getByLabel("Client ID", { exact: true }).fill("browser-test");
+    await page
+      .getByLabel("Client secret (optional for public clients)", {
+        exact: true,
+      })
+      .fill(randomUUID());
+    await page
+      .getByRole("button", { name: "Save provider", exact: true })
+      .click();
+    await expect(
+      page.getByRole("button", {
+        name: "Browser provider · Disabled",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Client secret: Configured", { exact: true }),
+    ).toBeVisible();
+    assert.deepEqual(errors, []);
+  } catch (e) {
+    console.error("Browser errors:", errors);
+    console.error("Visible page:", await page.locator("body").innerText());
+    await page.screenshot({ path: "/tmp/orvyn-browser-failure.png" });
+    throw e;
+  } finally {
+    await context.close();
+    await browser.close();
+  }
+});

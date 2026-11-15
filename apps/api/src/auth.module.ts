@@ -1,27 +1,246 @@
-import { Module, Controller, Get, Post, Put, Req, Res, Body, Param } from '@nestjs/common';
-import { randomBytes, timingSafeEqual } from 'node:crypto';
-import { db, derive, hash, fail, text, mutation, user } from './runtime';
-@Controller('api/v1')
+import {
+  Module,
+  Controller,
+  Get,
+  Post,
+  Delete,
+  Req,
+  Res,
+  Body,
+  Param,
+} from "@nestjs/common";
+import { randomBytes, timingSafeEqual } from "node:crypto";
+import type { PoolClient } from "pg";
+import { db, derive, hash, fail, text, mutation, user } from "./runtime";
+import {
+  transaction,
+  audit,
+  issueSession,
+  sessionToken,
+  passwordInput,
+  cookie,
+  rateLimit,
+} from "./auth/security";
+import { accountLink } from "./auth/mail";
+
+function emailInput(value: unknown) {
+  const email = text(value, 254).toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail(400, "Invalid email");
+  return email;
+}
+async function passwordHash(password: string) {
+  const salt = randomBytes(16).toString("hex");
+  return `${salt}:${(await derive(password, salt)).toString("hex")}`;
+}
+async function validPassword(
+  password: string,
+  stored: string | null | undefined,
+) {
+  const [salt, digest] = (
+    stored || "00000000000000000000000000000000:" + "0".repeat(128)
+  ).split(":");
+  return (
+    timingSafeEqual(await derive(password, salt), Buffer.from(digest, "hex")) &&
+    !!stored
+  );
+}
+async function consumeToken(c: PoolClient, token: string, purpose: string) {
+  const found = await c.query(
+    "SELECT user_id FROM account_tokens WHERE token_hash=$1 AND purpose=$2 AND expires_at>now()",
+    [hash(token), purpose],
+  );
+  if (!found.rowCount) return fail(400, "Invalid or expired link");
+  // Always lock the user before token rows, matching token issuance and login.
+  await c.query("SELECT id FROM users WHERE id=$1 FOR UPDATE", [
+    found.rows[0].user_id,
+  ]);
+  const r = await c.query(
+    "DELETE FROM account_tokens WHERE token_hash=$1 AND purpose=$2 AND expires_at>now() RETURNING user_id",
+    [hash(token), purpose],
+  );
+  if (!r.rowCount) return fail(400, "Invalid or expired link");
+  return r.rows[0].user_id as string;
+}
+@Controller("api/v1/auth")
 class AuthController {
-  @Post('auth/:action') async auth(@Param('action') action: string, @Req() req: any, @Res({ passthrough: true }) res: any, @Body() body: any) {
+  @Post("register") async register(
+    @Req() req: any,
+    @Res({ passthrough: true }) res: any,
+    @Body() body: any,
+  ) {
     mutation(req);
-    if (action === 'logout') { const token = /orvyn_session=([a-f0-9]{64})/.exec(req.headers.cookie || '')?.[1]; if(token) await db.query('DELETE FROM sessions WHERE token_hash=$1',[hash(token)]); res.setHeader('Set-Cookie','orvyn_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0'); return { ok:true }; }
-    if (!['register','login'].includes(action)) fail(404,'Not found');
-    const limit=await db.query(`INSERT INTO auth_limits VALUES($1,1,now()+interval '15 minutes') ON CONFLICT(key) DO UPDATE SET attempts=CASE WHEN auth_limits.reset_at<now() THEN 1 ELSE auth_limits.attempts+1 END, reset_at=CASE WHEN auth_limits.reset_at<now() THEN now()+interval '15 minutes' ELSE auth_limits.reset_at END RETURNING attempts`,[hash(req.ip)]);
-    if(limit.rows[0].attempts>30) fail(429,'Too many attempts; retry later');
-    const email = text(body?.email,254).toLowerCase(); const password = text(body?.password,256);
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || password.length < 12) fail(400,'Use a valid email and at least 12 password characters');
-    if(action==='register') {
-      const salt=randomBytes(16).toString('hex'); const digest=(await derive(password,salt)).toString('hex');
-      await db.query('INSERT INTO users(email,password_hash) VALUES($1,$2) ON CONFLICT DO NOTHING',[email,`${salt}:${digest}`]);
-    }
-    const result=await db.query('SELECT id,password_hash FROM users WHERE email=$1',[email]);
-    const [salt,digest]=(result.rows[0]?.password_hash || '00000000000000000000000000000000:'+'0'.repeat(128)).split(':');
-    if (!timingSafeEqual(await derive(password,salt),Buffer.from(digest,'hex')) || !result.rowCount) fail(401,'Invalid credentials');
-    const token=randomBytes(32).toString('hex');
-    await db.query("INSERT INTO sessions VALUES($1,$2,now()+interval '7 days')",[hash(token),result.rows[0].id]);
-    res.setHeader('Set-Cookie',`orvyn_session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=604800${process.env.NODE_ENV==='production'?'; Secure':''}`);
-    return { email };
+    await rateLimit("credentials:" + req.ip);
+    const email = emailInput(body?.email),
+      password = passwordInput(body?.password),
+      digest = await passwordHash(password);
+    return transaction(async (c) => {
+      const r = await c.query(
+        "INSERT INTO users(email,password_hash) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING id",
+        [email, digest],
+      );
+      if (!r.rowCount)
+        return fail(409, "Account cannot be created with these details");
+      const uid = r.rows[0].id;
+      await accountLink(c, uid, email, "verify-email");
+      await audit(c, uid, "account.registered");
+      await issueSession(c, uid, res);
+      return { email, emailVerified: false };
+    });
+  }
+  @Post("login") async login(
+    @Req() req: any,
+    @Res({ passthrough: true }) res: any,
+    @Body() body: any,
+  ) {
+    mutation(req);
+    await rateLimit("credentials:" + req.ip);
+    const email = emailInput(body?.email),
+      password = passwordInput(body?.password);
+    return transaction(async (c) => {
+      const r = await c.query(
+        "SELECT id,password_hash,email_verified FROM users WHERE email=$1 FOR UPDATE",
+        [email],
+      );
+      if (!(await validPassword(password, r.rows[0]?.password_hash))) {
+        await audit(c, null, "account.login_failed");
+        return { invalid: true } as const;
+      }
+      await issueSession(c, r.rows[0].id, res);
+      await audit(c, r.rows[0].id, "account.login");
+      return { email, emailVerified: r.rows[0].email_verified };
+    }).then((result) => {
+      if ("invalid" in result) return fail(401, "Invalid credentials");
+      return result;
+    });
+  }
+  @Post("logout") async logout(
+    @Req() req: any,
+    @Res({ passthrough: true }) res: any,
+  ) {
+    mutation(req);
+    const token = sessionToken(req);
+    if (token)
+      await transaction(async (c) => {
+        const r = await c.query(
+          "DELETE FROM sessions WHERE token_hash=$1 RETURNING user_id",
+          [hash(token)],
+        );
+        if (r.rowCount) await audit(c, r.rows[0].user_id, "session.logout");
+      });
+    res.setHeader("Set-Cookie", cookie("orvyn_session", "", 0));
+    return { ok: true };
+  }
+  @Get("me") async me(@Req() req: any) {
+    const r = await db.query(
+      'SELECT id,email,email_verified AS "emailVerified",is_admin AS "isAdmin" FROM users WHERE id=$1',
+      [await user(req)],
+    );
+    return r.rows[0];
+  }
+  @Get("sessions") async sessions(@Req() req: any) {
+    const uid = await user(req);
+    return (
+      await db.query(
+        'SELECT id,created_at AS "createdAt",expires_at AS "expiresAt",token_hash=$2 AS current FROM sessions WHERE user_id=$1 AND expires_at>now() ORDER BY created_at DESC',
+        [uid, hash(sessionToken(req)!)],
+      )
+    ).rows;
+  }
+  @Delete("sessions/:id") async revoke(
+    @Req() req: any,
+    @Param("id") id: string,
+    @Res({ passthrough: true }) res: any,
+  ) {
+    mutation(req);
+    const uid = await user(req);
+    await transaction(async (c) => {
+      const r = await c.query(
+        "DELETE FROM sessions WHERE id::text=$1 AND user_id=$2 RETURNING token_hash",
+        [id, uid],
+      );
+      if (!r.rowCount) fail(404, "Session not found");
+      await audit(c, uid, "session.revoked");
+      if (r.rows[0].token_hash === hash(sessionToken(req)!))
+        res.setHeader("Set-Cookie", cookie("orvyn_session", "", 0));
+    });
+    return { ok: true };
+  }
+  @Post("logout-all") async logoutAll(
+    @Req() req: any,
+    @Res({ passthrough: true }) res: any,
+  ) {
+    mutation(req);
+    const uid = await user(req);
+    await transaction(async (c) => {
+      await c.query("DELETE FROM sessions WHERE user_id=$1", [uid]);
+      await audit(c, uid, "session.revoked_all");
+    });
+    res.setHeader("Set-Cookie", cookie("orvyn_session", "", 0));
+    return { ok: true };
+  }
+  @Post("request-verification") async requestVerification(@Req() req: any) {
+    mutation(req);
+    const uid = await user(req);
+    await rateLimit("verify:" + uid, 5);
+    await transaction(async (c) => {
+      const r = await c.query(
+        "SELECT email,email_verified FROM users WHERE id=$1 FOR UPDATE",
+        [uid],
+      );
+      if (!r.rows[0].email_verified)
+        await accountLink(c, uid, r.rows[0].email, "verify-email");
+    });
+    return { ok: true };
+  }
+  @Post("verify-email") async verify(@Req() req: any, @Body() body: any) {
+    mutation(req);
+    await rateLimit("verify-token:" + req.ip);
+    const token = text(body?.token, 64);
+    await transaction(async (c) => {
+      const uid = await consumeToken(c, token, "verify-email");
+      await c.query("UPDATE users SET email_verified=true WHERE id=$1", [uid]);
+      await audit(c, uid, "account.email_verified");
+    });
+    return { ok: true };
+  }
+  @Post("request-password-reset") async requestReset(
+    @Req() req: any,
+    @Body() body: any,
+  ) {
+    mutation(req);
+    await rateLimit("reset:" + req.ip, 10);
+    const email = emailInput(body?.email);
+    await transaction(async (c) => {
+      const r = await c.query(
+        "SELECT id FROM users WHERE email=$1 AND password_hash IS NOT NULL FOR UPDATE",
+        [email],
+      );
+      if (r.rowCount)
+        await accountLink(c, r.rows[0].id, email, "reset-password");
+    });
+    return { ok: true };
+  }
+  @Post("reset-password") async resetPassword(
+    @Req() req: any,
+    @Res({ passthrough: true }) res: any,
+    @Body() body: any,
+  ) {
+    mutation(req);
+    await rateLimit("reset-token:" + req.ip);
+    const token = text(body?.token, 64),
+      digest = await passwordHash(passwordInput(body?.password));
+    await transaction(async (c) => {
+      const uid = await consumeToken(c, token, "reset-password");
+      await c.query("UPDATE users SET password_hash=$1 WHERE id=$2", [
+        digest,
+        uid,
+      ]);
+      await c.query("DELETE FROM sessions WHERE user_id=$1", [uid]);
+      await c.query("DELETE FROM account_tokens WHERE user_id=$1", [uid]);
+      await audit(c, uid, "account.password_reset");
+    });
+    res.setHeader("Set-Cookie", cookie("orvyn_session", "", 0));
+    return { ok: true };
   }
 }
 @Module({ controllers: [AuthController] })

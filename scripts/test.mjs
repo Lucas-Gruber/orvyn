@@ -1,0 +1,113 @@
+import { createRequire } from "node:module";
+import { randomBytes } from "node:crypto";
+import { spawn } from "node:child_process";
+import { createServer } from "node:net";
+import { once } from "node:events";
+const require = createRequire(
+  new URL("../apps/api/package.json", import.meta.url),
+);
+const { Pool } = require("pg");
+const url = new URL(process.env.DATABASE_URL);
+if (!["localhost", "127.0.0.1", "[::1]"].includes(url.hostname))
+  throw Error("Use a local disposable PostgreSQL instance for tests");
+const root = new Pool({ connectionString: url.toString() }),
+  name = "orvyn_suite_" + randomBytes(8).toString("hex");
+const children = [];
+const port = async () => {
+  const server = createServer();
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const p = server.address().port;
+  await new Promise((r) => server.close(r));
+  return p;
+};
+async function ready(address, child) {
+  for (let i = 0; i < 100; i++) {
+    if (child.exitCode !== null)
+      throw Error("Test service exited during startup");
+    try {
+      const r = await fetch(address);
+      if (r.ok) return;
+    } catch {}
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  throw Error("Test service did not become ready");
+}
+function start(args, env) {
+  const c = spawn(process.execPath, args, {
+    cwd: process.cwd(),
+    env,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  children.push(c);
+  c.stderr.on("data", (b) => process.stderr.write(b));
+  return c;
+}
+let created = false;
+try {
+  await root.query("CREATE DATABASE " + name);
+  created = true;
+  url.pathname = "/" + name;
+  const apiPort = await port(),
+    webPort = await port(),
+    base = `http://127.0.0.1:${webPort}`;
+  const common = {
+    ...process.env,
+    DATABASE_URL: url.toString(),
+    ORVYN_ORIGIN: base,
+    NODE_ENV: "test",
+    ORVYN_OIDC_ALLOW_HTTP_LOCAL: "true",
+    TEST_ORIGIN: base,
+    TEST_URL: base,
+  };
+  const api = start(["apps/api/dist/main.js"], {
+    ...common,
+    PORT: String(apiPort),
+  });
+  await ready(`http://127.0.0.1:${apiPort}/api/v1/health`, api);
+  const worker = start(["apps/api/dist/worker.js"], common);
+  const web = start(["apps/web/.output/server/index.mjs"], {
+    ...common,
+    NITRO_PORT: String(webPort),
+    NUXT_API_URL: `http://127.0.0.1:${apiPort}`,
+  });
+  await ready(base + "/api/v1/health", web);
+  const args = process.argv.slice(2),
+    testArgs = args.length
+      ? args
+      : [
+          "tests/accounts.test.mjs",
+          "tests/browser.test.mjs",
+          "tests/migrations.test.mjs",
+          "tests/oidc.test.mjs",
+          "tests/workspace.test.mjs",
+        ];
+  const tests = spawn(
+    process.execPath,
+    ["--test", "--test-concurrency=1", ...testArgs],
+    { env: common, stdio: "inherit" },
+  );
+  process.exitCode = await new Promise((resolve) =>
+    tests.on("exit", (code) => resolve(code ?? 1)),
+  );
+} finally {
+  for (const child of children) child.kill("SIGTERM");
+  await Promise.all(
+    children.map(async (child) => {
+      if (child.exitCode !== null) return;
+      let timer;
+      await Promise.race([
+        once(child, "exit"),
+        new Promise((r) => {
+          timer = setTimeout(() => {
+            child.kill("SIGKILL");
+            r();
+          }, 3000);
+        }),
+      ]);
+      clearTimeout(timer);
+    }),
+  );
+  if (created) await root.query("DROP DATABASE " + name + " WITH (FORCE)");
+  await root.end();
+}
