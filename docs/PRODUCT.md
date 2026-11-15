@@ -1,11 +1,11 @@
 # ORVYN — MASTER DEVELOPMENT PROMPT
 
-**Product:** Orvyn  
-**Tagline:** Your knowledge. Organized.  
-**Product category:** Collaborative knowledge management and workspace platform  
-**Primary deployment:** Self-hosted Kubernetes web application  
-**Desktop application:** Tauri 2  
-**Future platforms:** iOS and Android  
+**Product:** Orvyn
+**Tagline:** Your knowledge. Organized.
+**Product category:** Collaborative knowledge management and workspace platform
+**Primary deployment:** Self-hosted Kubernetes web application
+**Desktop application:** Tauri 2
+**Future platforms:** iOS and Android
 **Development objective:** Production-ready, modular, secure, extensible, open-source-friendly platform
 
 ---
@@ -1657,5 +1657,5 @@ Die Plattform soll sich wie ein zusammenhängendes Produkt anfühlen – unabhä
 
 Das Produkt heißt:
 
-**orvyn.**  
+**orvyn.**
 **Your knowledge. Organized.**
