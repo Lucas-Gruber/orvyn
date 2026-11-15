@@ -21,3 +21,5 @@ Production can use another S3-compatible service via environment variables. Supp
 ## Validation
 
 Integration tests use isolated S3 buckets, verify unauthorized/read-only/CSRF rejection, byte-based preview MIME policy, non-ASCII filenames, download disposition, size limits, parent trash/restore, membership revocation, orphan cleanup and retention cleanup. Chromium uploads/downloads a real attachment. The runner removes only its own newly-created test buckets and removes empty prefix directories retained by SeaweedFS without disabling its protection against deleting nonempty buckets.
+
+Mail delivery, authentication expiry cleanup and attachment retention run as independent worker loops. A slow SMTP batch cannot postpone attachment cleanup; failures are logged by maintenance category without payloads or credentials. Each loop retries after one second and stops between batches on shutdown.

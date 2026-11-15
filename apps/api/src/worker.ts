@@ -8,19 +8,24 @@ const stop = () => {
 };
 process.on("SIGTERM", stop);
 process.on("SIGINT", stop);
-async function run() {
-  encryptionKey();
-  if (!process.env.SMTP_URL) throw Error("SMTP_URL required for email worker");
+async function maintain(label: string, task: () => Promise<void>) {
   while (!stopping) {
     try {
-      await deliverMailBatch();
-      await cleanupAuth();
-      await cleanupFiles();
+      await task();
     } catch {
-      console.error("Background authentication maintenance failed");
+      console.error(label + " maintenance failed");
     }
     if (!stopping) await new Promise((resolve) => setTimeout(resolve, 1000));
   }
+}
+async function run() {
+  encryptionKey();
+  if (!process.env.SMTP_URL) throw Error("SMTP_URL required for email worker");
+  await Promise.all([
+    maintain("Mail delivery", deliverMailBatch),
+    maintain("Authentication", cleanupAuth),
+    maintain("Attachment", cleanupFiles),
+  ]);
   await db.end();
 }
 run().catch(() => {

@@ -46,7 +46,15 @@ export async function accountLink(
 }
 export async function deliverMailBatch() {
   if (!process.env.SMTP_URL) return;
-  const transport = nodemailer.createTransport(process.env.SMTP_URL);
+  const transport = nodemailer.createTransport({
+    url: process.env.SMTP_URL,
+    pool: true,
+    maxConnections: 2,
+    maxMessages: 100,
+    connectionTimeout: 5000,
+    greetingTimeout: 5000,
+    socketTimeout: 10000,
+  });
   try {
     for (let i = 0; i < 10; i++) {
       const found = await transaction(async (c) => {

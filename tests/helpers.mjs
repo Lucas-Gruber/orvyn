@@ -43,7 +43,9 @@ export async function waitForMail(email, subject) {
   const end = Date.now() + 12000;
   while (Date.now() < end) {
     const { messages } = await (
-      await fetch(mailbox + "/api/v1/messages")
+      await fetch(
+        mailbox + "/api/v1/search?query=" + encodeURIComponent("to:" + email),
+      )
     ).json();
     const message = messages.find(
       (m) => m.To.some((t) => t.Address === email) && m.Subject === subject,
@@ -53,6 +55,22 @@ export async function waitForMail(email, subject) {
         await fetch(mailbox + "/api/v1/message/" + message.ID)
       ).json();
     await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+  const diagnosticDb = new Pool({ connectionString: process.env.DATABASE_URL });
+  try {
+    const outbox = (
+      await diagnosticDb.query(
+        "SELECT count(*)::int AS pending,max(attempts) AS max_attempts,extract(epoch FROM now()-min(created_at))::int AS oldest_seconds FROM mail_outbox WHERE sent_at IS NULL",
+      )
+    ).rows[0];
+    const waits = (
+      await diagnosticDb.query(
+        "SELECT wait_event_type,wait_event,count(*)::int FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid() GROUP BY wait_event_type,wait_event",
+      )
+    ).rows;
+    console.error("SMTP timeout diagnostics", { outbox, waits });
+  } finally {
+    await diagnosticDb.end();
   }
   assert.fail("Expected SMTP message was not delivered");
 }
