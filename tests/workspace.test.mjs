@@ -79,7 +79,7 @@ test("private workspace persists documents, enforces isolation, CSRF, conflicts 
         body: update,
       })
     ).response.status,
-    409,
+    404,
   );
   const saved = await request("pages/" + p.data.id, {
     method: "PUT",

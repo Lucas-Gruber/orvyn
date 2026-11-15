@@ -81,6 +81,7 @@ try {
           "tests/migrations.test.mjs",
           "tests/oidc.test.mjs",
           "tests/workspace.test.mjs",
+          "tests/permissions.test.mjs",
         ];
   const tests = spawn(
     process.execPath,

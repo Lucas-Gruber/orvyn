@@ -53,6 +53,25 @@ test("Chromium: account, persisted page, verification, session settings and OIDC
     await expect(page.getByLabel("Document", { exact: true })).toHaveValue(
       "Written through the browser.",
     );
+    await page
+      .getByRole("button", { name: "Space settings", exact: true })
+      .click();
+    await expect(
+      page.getByRole("heading", {
+        name: "Pages that will stay restricted",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await page
+      .getByRole("button", {
+        name: "Confirm conversion to a team space",
+        exact: true,
+      })
+      .click();
+    await expect(
+      page.getByRole("heading", { name: "Members", exact: true }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Workspace", exact: true }).click();
     const token = emailToken(
       await waitForMail(email, "Verify your Orvyn email"),
     );

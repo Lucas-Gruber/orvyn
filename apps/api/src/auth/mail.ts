@@ -3,6 +3,16 @@ import { PoolClient } from "pg";
 import { randomBytes } from "node:crypto";
 import { hash, db } from "../runtime";
 import { encrypt, decrypt, origin, transaction } from "./security";
+export async function queueMail(
+  c: PoolClient,
+  to: string,
+  subject: string,
+  body: string,
+) {
+  await c.query("INSERT INTO mail_outbox(payload) VALUES($1)", [
+    encrypt(JSON.stringify({ to, subject, text: body })),
+  ]);
+}
 export async function accountLink(
   c: PoolClient,
   uid: string,
@@ -73,6 +83,7 @@ export async function cleanupAuth() {
   await db.query("DELETE FROM sessions WHERE expires_at<now()");
   await db.query("DELETE FROM account_tokens WHERE expires_at<now()");
   await db.query("DELETE FROM oidc_flows WHERE expires_at<now()");
+  await db.query("DELETE FROM space_invitations WHERE expires_at<now()");
   await db.query("DELETE FROM auth_limits WHERE reset_at<now()");
   await db.query(
     "DELETE FROM mail_outbox WHERE sent_at < now()-interval '7 days'",

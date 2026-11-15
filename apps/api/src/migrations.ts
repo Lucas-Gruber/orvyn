@@ -66,6 +66,71 @@ ALTER TABLE oidc_providers ADD COLUMN config_version integer NOT NULL DEFAULT 1;
 ALTER TABLE oidc_flows ADD COLUMN provider_version integer NOT NULL DEFAULT 1;
 `,
   },
+  {
+    version: 5,
+    sql: `
+ALTER TABLE spaces ADD COLUMN kind text NOT NULL DEFAULT 'personal' CHECK(kind IN ('personal','team'));
+ALTER TABLE spaces ADD COLUMN version integer NOT NULL DEFAULT 1;
+CREATE TABLE space_members (
+ space_id uuid NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+ user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ role text NOT NULL CHECK(role IN ('Admin','Editor','Commenter','Viewer')),
+ PRIMARY KEY(space_id,user_id)
+);
+CREATE INDEX space_members_user ON space_members(user_id);
+CREATE TABLE space_invitations (
+ token_hash text PRIMARY KEY, space_id uuid NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+ email text NOT NULL,role text NOT NULL CHECK(role IN ('Admin','Editor','Commenter','Viewer')),
+ invited_by uuid NOT NULL REFERENCES users(id),expires_at timestamptz NOT NULL,
+ created_at timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE pages ADD COLUMN parent_id uuid;
+ALTER TABLE pages ADD COLUMN sort_order integer NOT NULL DEFAULT 0;
+ALTER TABLE pages ADD COLUMN visibility text NOT NULL DEFAULT 'space' CHECK(visibility IN ('space','restricted'));
+ALTER TABLE pages ADD COLUMN deleted_at timestamptz;
+ALTER TABLE pages ADD CONSTRAINT pages_space_id_unique UNIQUE(space_id,id);
+ALTER TABLE pages ADD CONSTRAINT pages_parent_same_space FOREIGN KEY(space_id,parent_id) REFERENCES pages(space_id,id);
+ALTER TABLE pages ADD CONSTRAINT pages_not_own_parent CHECK(parent_id IS DISTINCT FROM id);
+CREATE INDEX pages_parent ON pages(space_id,parent_id);
+CREATE TABLE page_revisions (
+ page_id uuid NOT NULL REFERENCES pages(id) ON DELETE CASCADE,version integer NOT NULL,
+ title text NOT NULL,document jsonb NOT NULL,author_id uuid REFERENCES users(id),
+ created_at timestamptz NOT NULL DEFAULT now(),PRIMARY KEY(page_id,version)
+);
+INSERT INTO page_revisions(page_id,version,title,document) SELECT id,version,title,document FROM pages;
+CREATE TABLE page_permissions (
+ page_id uuid NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
+ user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ role text NOT NULL CHECK(role IN ('Admin','Editor','Commenter','Viewer')),
+ PRIMARY KEY(page_id,user_id)
+);
+CREATE FUNCTION orvyn_role_rank(role text) RETURNS integer LANGUAGE sql IMMUTABLE AS $$
+ SELECT CASE role WHEN 'Owner' THEN 50 WHEN 'Admin' THEN 40 WHEN 'Editor' THEN 30 WHEN 'Commenter' THEN 20 WHEN 'Viewer' THEN 10 ELSE 0 END
+$$;
+CREATE FUNCTION orvyn_page_role(target uuid, actor uuid, include_deleted boolean DEFAULT false) RETURNS integer LANGUAGE sql STABLE AS $$
+ WITH RECURSIVE ancestry AS (
+  SELECT p.id,p.parent_id,p.space_id,p.visibility,p.deleted_at,0 AS depth FROM pages p WHERE p.id=target
+  UNION ALL
+  SELECT p.id,p.parent_id,p.space_id,p.visibility,p.deleted_at,a.depth+1 FROM pages p JOIN ancestry a ON a.parent_id=p.id WHERE a.depth<63
+ ), context AS (
+  SELECT s.owner_id,CASE WHEN s.owner_id=actor THEN 50 ELSE orvyn_role_rank(m.role) END AS rank
+  FROM spaces s JOIN ancestry a ON a.space_id=s.id AND a.depth=0
+  LEFT JOIN space_members m ON m.space_id=s.id AND m.user_id=actor
+ )
+ SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM ancestry WHERE parent_id IS NULL) THEN 0
+ WHEN NOT include_deleted AND EXISTS(SELECT 1 FROM ancestry WHERE deleted_at IS NOT NULL) THEN 0
+ WHEN (SELECT owner_id FROM context)=actor THEN 50
+ ELSE least(coalesce((SELECT rank FROM context),0),coalesce((
+ SELECT min(CASE WHEN a.visibility='restricted' THEN coalesce(orvyn_role_rank(p.role),0) ELSE 50 END)
+ FROM ancestry a LEFT JOIN page_permissions p ON p.page_id=a.id AND p.user_id=actor
+ ),0)) END
+$$;
+CREATE FUNCTION orvyn_touch_space() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN UPDATE spaces SET version=version+1 WHERE id=coalesce(NEW.space_id,OLD.space_id); RETURN NULL; END
+$$;
+CREATE TRIGGER pages_touch_space AFTER INSERT OR UPDATE OR DELETE ON pages FOR EACH ROW EXECUTE FUNCTION orvyn_touch_space();
+`,
+  },
 ] as const;
 
 export async function migrate(pool: Pool, target = migrations.at(-1)!.version) {

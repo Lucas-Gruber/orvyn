@@ -64,11 +64,17 @@ async function select(s: any) {
     view.value = "workspace";
     space.value = s;
     page.value = null;
-    pages.value = await api(`spaces/${s.id}/pages`);
+    search.value = "";
+    createParent.value = "";
+    await loadPages();
   });
 }
 function edit(p: any) {
   page.value = p;
+  showPermissions.value = false;
+  showHistory.value = false;
+  revision.value = null;
+  moveParent.value = p.parent_id || "";
   content.value = p.document.content.map((n: any) => n.text).join("\n");
 }
 async function save() {
@@ -86,19 +92,126 @@ async function save() {
     Object.assign(page.value, p);
   });
 }
+const createParent = ref(""),
+  moveParent = ref(""),
+  showPermissions = ref(false),
+  showHistory = ref(false),
+  history = ref<any[]>([]),
+  revision = ref<any>(),
+  trash = ref<any[]>([]),
+  search = ref(""),
+  nextCursor = ref("");
+const canCreate = computed(() =>
+  ["Owner", "Admin", "Editor"].includes(space.value?.role),
+);
+const orderedPages = computed(() => {
+  const result: any[] = [],
+    seen = new Set<string>(),
+    ids = new Set(pages.value.map((p) => p.id));
+  const visit = (parent: string | null, depth: number) => {
+    for (const p of pages.value
+      .filter((p) => (p.parent_id || null) === parent)
+      .sort(
+        (a, b) => a.sort_order - b.sort_order || a.title.localeCompare(b.title),
+      )) {
+      if (seen.has(p.id)) continue;
+      seen.add(p.id);
+      result.push({ ...p, depth });
+      visit(p.id, depth + 1);
+    }
+  };
+  visit(null, 0);
+  for (const p of pages.value) {
+    if (!seen.has(p.id) && !ids.has(p.parent_id)) {
+      result.push({ ...p, depth: 0 });
+      seen.add(p.id);
+      visit(p.id, 1);
+    }
+  }
+  return result;
+});
+async function loadPages(after = "") {
+  const response = await $fetch.raw<any[]>(
+    `/api/v1/spaces/${space.value.id}/pages?limit=200&after=${encodeURIComponent(after)}&q=${encodeURIComponent(search.value)}`,
+  );
+  pages.value = after
+    ? [...pages.value, ...(response._data || [])]
+    : response._data || [];
+  nextCursor.value = response.headers.get("X-Next-Cursor") || "";
+}
+async function refreshSpace() {
+  const id = space.value?.id;
+  spaces.value = await api("spaces");
+  if (id) space.value = spaces.value.find((s) => s.id === id);
+  if (space.value) await loadPages();
+}
+async function createPage() {
+  await run(async () => {
+    const p = await api(`spaces/${space.value.id}/pages`, "POST", {
+      title: title.value,
+      parentId: createParent.value || null,
+    });
+    title.value = "";
+    await loadPages();
+    edit(p);
+  });
+}
+async function refreshPage() {
+  const id = page.value?.id;
+  await loadPages();
+  if (id) edit(await api("pages/" + id));
+  showPermissions.value = false;
+}
+async function movePage() {
+  await run(async () => {
+    await api("pages/" + page.value.id + "/move", "POST", {
+      version: page.value.version,
+      parentId: moveParent.value || null,
+      sortOrder: 0,
+    });
+    await refreshPage();
+  });
+}
+async function trashPage() {
+  await run(async () => {
+    await api("pages/" + page.value.id, "DELETE", { confirm: true });
+    page.value = null;
+    await loadPages();
+  });
+}
+async function openTrash() {
+  await run(async () => {
+    trash.value = await api(`spaces/${space.value.id}/trash`);
+    view.value = "trash";
+  });
+}
+async function openHistory() {
+  await run(async () => {
+    history.value = await api("pages/" + page.value.id + "/history");
+    showHistory.value = !showHistory.value;
+    revision.value = null;
+  });
+}
 async function completeLink() {
   await run(async () => {
-    await api("auth/" + linkAction.value, "POST", {
-      token: linkToken.value,
-      ...(linkAction.value === "reset-password"
-        ? { password: newPassword.value }
-        : {}),
-    });
-    notice.value =
-      linkAction.value === "verify-email"
-        ? "Email verified. You can now sign in."
-        : "Password reset. Sign in with your new password.";
-    if (linkAction.value === "reset-password") signedOut();
+    const action = linkAction.value;
+    if (action === "accept-invitation") {
+      await api("spaces/invitations/accept", "POST", {
+        token: linkToken.value,
+      });
+      await refreshSpace();
+      notice.value = "Invitation accepted. Select your team space to begin.";
+    } else {
+      await api("auth/" + action, "POST", {
+        token: linkToken.value,
+        ...(action === "reset-password" ? { password: newPassword.value } : {}),
+      });
+      notice.value =
+        action === "verify-email"
+          ? "Email verified. You can now sign in."
+          : "Password reset. Sign in with your new password.";
+      if (action === "reset-password") signedOut();
+    }
     linkAction.value = "";
     linkToken.value = "";
     newPassword.value = "";
@@ -110,7 +223,12 @@ const route = useRoute(),
 async function readAccountLink(hash = route.hash) {
   const params = new URLSearchParams(hash.slice(1)),
     action = params.get("action");
-  if (!["verify-email", "reset-password"].includes(action || "")) return;
+  if (
+    !["verify-email", "reset-password", "accept-invitation"].includes(
+      action || "",
+    )
+  )
+    return;
   await router.replace({ path: route.path, query: route.query, hash: "" });
   linkAction.value = action!;
   linkToken.value = params.get("token") || "";
@@ -144,14 +262,14 @@ onMounted(async () => {
         ><button v-if="me?.isAdmin" @click="view = 'oidc'">
           SSO administration
         </button>
-        <h2>Private spaces</h2>
+        <h2>Your spaces</h2>
         <button
           v-for="s in spaces"
           :key="s.id"
           :aria-pressed="space?.id === s.id"
           @click="select(s)"
         >
-          {{ s.name }}
+          {{ s.kind === "team" ? "Team · " : "" }}{{ s.name }}
         </button>
         <form
           @submit.prevent="
@@ -178,7 +296,7 @@ onMounted(async () => {
         >
           Sign out
         </button></template
-      ><small>Foundation · Local accounts and private pages</small>
+      ><small>orvyn. · Your knowledge. Organized.</small>
     </aside>
     <main>
       <p v-if="error" role="alert" class="error">{{ error }}</p>
@@ -188,10 +306,15 @@ onMounted(async () => {
           {{
             linkAction === "verify-email"
               ? "Verify your email"
-              : "Reset your password"
+              : linkAction === "reset-password"
+                ? "Reset your password"
+                : "Accept space invitation"
           }}
         </h1>
-        <form @submit.prevent="completeLink">
+        <form
+          v-if="linkAction !== 'accept-invitation' || signedIn"
+          @submit.prevent="completeLink"
+        >
           <template v-if="linkAction === 'reset-password'"
             ><label for="new-password"
               >New password · at least 12 characters</label
@@ -202,23 +325,53 @@ onMounted(async () => {
               autocomplete="new-password"
               minlength="12"
               maxlength="256"
-              required /></template
-          ><button>
+              required
+          /></template>
+          <p v-if="linkAction === 'accept-invitation'">
+            Accept using your invited, verified email address. Existing private
+            pages remain restricted.
+          </p>
+          <button>
             {{
               linkAction === "verify-email"
                 ? "Confirm email address"
-                : "Reset password"
-            }}</button
-          ><button
-            type="button"
-            @click="
-              linkAction = '';
-              linkToken = '';
-            "
-          >
-            Cancel
+                : linkAction === "reset-password"
+                  ? "Reset password"
+                  : "Accept invitation"
+            }}
           </button>
         </form>
+        <form v-else @submit.prevent="login('login')">
+          <p>
+            Sign in with the invited account, then accept the invitation. If you
+            need an account, register and verify your email first, then reopen
+            this invitation.
+          </p>
+          <label for="invite-signin-email">Email</label
+          ><input
+            id="invite-signin-email"
+            v-model="email"
+            type="email"
+            required
+            autocomplete="username"
+          /><label for="invite-signin-password">Password</label
+          ><input
+            id="invite-signin-password"
+            v-model="password"
+            type="password"
+            required
+            autocomplete="current-password"
+          /><button>Sign in</button>
+        </form>
+        <button
+          type="button"
+          @click="
+            linkAction = '';
+            linkToken = '';
+          "
+        >
+          Cancel
+        </button>
       </section>
       <section v-else-if="!signedIn" class="auth">
         <p class="eyebrow">A place for your ideas</p>
@@ -265,11 +418,7 @@ onMounted(async () => {
           <button
             v-for="p in providers"
             :key="p.id"
-            @click="
-              run(async () => {
-                await startOidc(p.id);
-              })
-            "
+            @click="run(() => startOidc(p.id))"
           >
             Continue with {{ p.name }}
           </button>
@@ -280,43 +429,117 @@ onMounted(async () => {
         :me="me"
         @changed="run(refreshMe)"
         @signed-out="signedOut"
-      /><OidcAdministration
-        v-else-if="view === 'oidc' && me?.isAdmin"
-      /><template v-else
+      />
+      <OidcAdministration v-else-if="view === 'oidc' && me?.isAdmin" />
+      <SpaceSettings
+        v-else-if="
+          view === 'space-settings' &&
+          space &&
+          ['Owner', 'Admin'].includes(space.role)
+        "
+        :space="space"
+        @changed="run(refreshSpace)"
+      />
+      <section v-else-if="view === 'trash' && space">
+        <h1>Trash · {{ space.name }}</h1>
+        <p>
+          Restoring a page also restores descendants that were not independently
+          deleted.
+        </p>
+        <ul>
+          <li v-for="p in trash" :key="p.id">
+            {{ p.title }}
+            <button
+              v-if="p.access_rank >= 30"
+              @click="
+                run(async () => {
+                  await api('pages/' + p.id + '/restore', 'POST', {});
+                  trash = await api('spaces/' + space.id + '/trash');
+                  await loadPages();
+                })
+              "
+            >
+              Restore page
+            </button>
+          </li>
+        </ul>
+        <p v-if="!trash.length">No deleted pages you can access.</p>
+        <button @click="view = 'workspace'">Back to workspace</button>
+      </section>
+      <template v-else
         ><header>
-          <span>{{ space?.name || "Your workspace" }}</span
-          ><span class="badge">Private</span>
+          <span>{{ space?.name || "Your workspace" }}</span><span
+            class="badge"
+            >{{ space?.kind === "team" ? "Team space" : "Private" }}</span
+          >
         </header>
         <section v-if="!space">
           <h1>Your knowledge.<br />Your space.</h1>
-          <p>Create or select a private space to begin.</p>
+          <p>Create or select a space to begin.</p>
         </section>
         <template v-else
-          ><nav aria-label="Pages">
-            <button v-for="p in pages" :key="p.id" @click="edit(p)">
-              {{ p.title }}
-            </button>
-          </nav>
+          ><div class="actions">
+            <button
+              v-if="['Owner', 'Admin'].includes(space.role)"
+              @click="view = 'space-settings'"
+            >
+              Space settings</button
+            ><button @click="openTrash">Trash</button>
+          </div>
           <form
             class="newpage"
             @submit.prevent="
               run(async () => {
-                const p = await api(`spaces/${space.id}/pages`, 'POST', {
-                  title,
-                });
-                pages.push(p);
-                edit(p);
-                title = '';
+                page = null;
+                await loadPages();
               })
             "
           >
+            <label for="page-search">Search pages in this space</label
+            ><input
+              id="page-search"
+              v-model="search"
+              maxlength="200"
+              type="search"
+            /><button>Search</button>
+          </form>
+          <nav class="page-tree" aria-label="Pages">
+            <button
+              v-for="p in orderedPages"
+              :key="p.id"
+              :style="{ marginLeft: Math.min(p.depth, 8) + 'rem' }"
+              :aria-pressed="page?.id === p.id"
+              @click="edit(p)"
+            >
+              {{ p.title
+              }}<small v-if="p.visibility === 'restricted'">
+                · Restricted</small
+              ></button
+            ><button
+              v-if="nextCursor"
+              @click="run(() => loadPages(nextCursor))"
+            >
+              Load more pages
+            </button>
+          </nav>
+          <form v-if="canCreate" class="newpage" @submit.prevent="createPage">
             <label for="newpage">New page</label
             ><input
               id="newpage"
               v-model="title"
               required
               maxlength="300"
-            /><button>Create page</button>
+            /><label for="newpage-parent">Parent page</label
+            ><select id="newpage-parent" v-model="createParent">
+              <option value="">Space root</option>
+              <option
+                v-for="p in pages.filter((p) => p.access_rank >= 30)"
+                :key="p.id"
+                :value="p.id"
+              >
+                {{ p.title }}
+              </option></select
+            ><button>Create page</button>
           </form>
           <section v-if="page">
             <label for="title">Page title</label
@@ -325,15 +548,76 @@ onMounted(async () => {
               class="title"
               v-model="page.title"
               maxlength="300"
+              :readonly="page.access_rank < 30"
             /><label for="document">Document</label
             ><textarea
               id="document"
               v-model="content"
               placeholder="Start writing…"
-            /><button @click="save">Save changes</button>
+              :readonly="page.access_rank < 30"
+            /><button v-if="page.access_rank >= 30" @click="save">
+              Save changes
+            </button>
             <p class="hint">
               Revision {{ page.version }} · Explicit save · Plain paragraphs
             </p>
+            <div class="actions">
+              <button @click="openHistory">Version history</button
+              ><button
+                v-if="page.access_rank >= 40"
+                @click="showPermissions = !showPermissions"
+              >
+                Page permissions</button
+              ><button v-if="page.access_rank >= 30" @click="trashPage">
+                Trash page and subpages
+              </button>
+            </div>
+            <PagePermissions
+              v-if="showPermissions && page.access_rank >= 40"
+              :key="page.id"
+              :page="page"
+              @changed="run(refreshPage)"
+            />
+            <div v-if="showHistory">
+              <h2>Saved content versions</h2>
+              <button
+                v-for="h in history"
+                :key="h.version"
+                @click="
+                  run(async () => {
+                    revision = await api(
+                      'pages/' + page.id + '/history/' + h.version,
+                    );
+                  })
+                "
+              >
+                Revision {{ h.version }} · {{ h.title }}
+              </button>
+              <pre v-if="revision" class="revision">{{
+                revision.document.content.map((n: any) => n.text).join("\n")
+              }}</pre>
+            </div>
+            <form v-if="page.access_rank >= 30" @submit.prevent="movePage">
+              <h2>Move page</h2>
+              <p>
+                The current audience is preserved on the moved page. Parent
+                restrictions can reduce access further. Save content changes
+                before moving.
+              </p>
+              <label for="move-parent">New parent</label
+              ><select id="move-parent" v-model="moveParent">
+                <option value="">Space root</option>
+                <option
+                  v-for="p in pages.filter(
+                    (p) => p.access_rank >= 30 && p.id !== page.id,
+                  )"
+                  :key="p.id"
+                  :value="p.id"
+                >
+                  {{ p.title }}
+                </option></select
+              ><button>Move page</button>
+            </form>
           </section></template
         ></template
       >
@@ -364,7 +648,8 @@ body {
 }
 button,
 input,
-textarea {
+textarea,
+select {
   font: inherit;
 }
 button {
@@ -439,7 +724,8 @@ form {
   gap: 0.8rem;
 }
 input,
-textarea {
+textarea,
+select {
   width: 100%;
   background: var(--bg);
   border: 1px solid var(--line);
@@ -505,5 +791,29 @@ nav {
   section {
     margin: 2rem auto;
   }
+}
+.page-tree {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+.actions {
+  flex-wrap: wrap;
+  margin: 1rem 0;
+}
+.revision {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.page-tree button {
+  text-align: left;
+}
+select {
+  font: inherit;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  padding: 0.8rem;
 }
 </style>

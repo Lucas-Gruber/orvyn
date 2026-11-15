@@ -4,39 +4,203 @@ import {
   Get,
   Post,
   Put,
+  Delete,
   Req,
   Res,
   Body,
   Param,
+  Query,
 } from "@nestjs/common";
-import { randomBytes, timingSafeEqual } from "node:crypto";
-import { db, derive, hash, fail, text, mutation, user } from "./runtime";
+import { db, fail, text, mutation, user } from "./runtime";
+import { transaction, audit } from "./auth/security";
+import {
+  spaceAccess,
+  pageAccess,
+  pageWrite,
+  subtree,
+  memberRole,
+  roleRanks,
+} from "./permissions/access";
+function documentInput(body: any) {
+  if (
+    !Number.isSafeInteger(body?.version) ||
+    body?.document?.type !== "doc" ||
+    !Array.isArray(body.document.content) ||
+    body.document.content.some(
+      (n: any) => n?.type !== "paragraph" || typeof n.text !== "string",
+    ) ||
+    JSON.stringify(body.document).length > 100000
+  )
+    fail(400, "Invalid document");
+  return {
+    title: text(body.title, 300),
+    document: body.document,
+    version: body.version,
+  };
+}
 @Controller("api/v1")
 class PagesController {
-  @Get("spaces/:id/pages") async pages(
+  @Get("spaces/:id/pages") async list(
     @Req() req: any,
+    @Res({ passthrough: true }) res: any,
     @Param("id") id: string,
+    @Query("after") after = "",
+    @Query("limit") input = "100",
+    @Query("q") q = "",
   ) {
-    return (
-      await db.query(
-        "SELECT p.* FROM pages p JOIN spaces s ON s.id=p.space_id WHERE s.id::text=$1 AND s.owner_id=$2 ORDER BY p.title",
-        [id, await user(req)],
-      )
-    ).rows;
+    const uid = await user(req),
+      limit = Number(input);
+    if (
+      !Number.isInteger(limit) ||
+      limit < 1 ||
+      limit > 200 ||
+      q.length > 200 ||
+      after.length > 36
+    )
+      fail(400, "Invalid pagination");
+    const r = await db.query(
+      "SELECT p.*,orvyn_page_role(p.id,$2) AS access_rank FROM pages p WHERE p.space_id::text=$1 AND p.id::text>$3 AND orvyn_page_role(p.id,$2)>=10 AND strpos(lower(p.title),lower($5))>0 ORDER BY p.id LIMIT $4",
+      [id, uid, after, limit + 1, q],
+    );
+    if (r.rows.length > limit) {
+      r.rows.pop();
+      res.setHeader("X-Next-Cursor", r.rows.at(-1).id);
+    }
+    return r.rows;
   }
-  @Post("spaces/:id/pages") async addPage(
+  @Get("pages/:id") async get(@Req() req: any, @Param("id") id: string) {
+    return pageAccess(db, await user(req), id);
+  }
+  @Post("spaces/:id/pages") async create(
     @Req() req: any,
     @Param("id") id: string,
     @Body() body: any,
   ) {
     mutation(req);
-    const r = await db.query(
-      "INSERT INTO pages(space_id,title) SELECT id,$1 FROM spaces WHERE id::text=$2 AND owner_id=$3 RETURNING *",
-      [text(body?.title, 300), id, await user(req)],
-    );
-    return r.rows[0] || fail(404, "Not found");
+    const uid = await user(req),
+      title = text(body?.title, 300);
+    return transaction(async (c) => {
+      const s = await spaceAccess(c, uid, id, 30, true);
+      let parent = null;
+      if (body.parentId !== undefined && body.parentId !== null) {
+        const p = await pageAccess(c, uid, String(body.parentId), 30);
+        if (p.space_id !== s.id) fail(400, "Parent must belong to this space");
+        parent = p.id;
+        const d = await c.query(
+          "WITH RECURSIVE a AS(SELECT id,parent_id,0 AS depth FROM pages WHERE id=$1 UNION ALL SELECT p.id,p.parent_id,a.depth+1 FROM pages p JOIN a ON a.parent_id=p.id WHERE a.depth<64) SELECT max(depth) AS depth FROM a",
+          [parent],
+        );
+        if (d.rows[0].depth >= 63)
+          fail(400, "Page hierarchy exceeds 64 levels");
+      }
+      const r = await c.query(
+        "INSERT INTO pages(space_id,title,parent_id) VALUES($1,$2,$3) RETURNING *",
+        [s.id, title, parent],
+      );
+      const p = r.rows[0];
+      await c.query(
+        "INSERT INTO page_revisions(page_id,version,title,document,author_id) VALUES($1,$2,$3,$4,$5)",
+        [p.id, p.version, p.title, p.document, uid],
+      );
+      await audit(c, uid, "page.created");
+      return pageAccess(c, uid, p.id);
+    });
   }
   @Put("pages/:id") async save(
+    @Req() req: any,
+    @Param("id") id: string,
+    @Body() body: any,
+  ) {
+    mutation(req);
+    const uid = await user(req),
+      input = documentInput(body);
+    return transaction(async (c) => {
+      const p = await pageWrite(c, uid, id);
+      if (p.version !== input.version)
+        fail(409, "Page changed; reload before saving");
+      const r = await c.query(
+        "UPDATE pages SET title=$1,document=$2,version=version+1 WHERE id=$3 RETURNING *",
+        [input.title, input.document, p.id],
+      );
+      const saved = r.rows[0];
+      await c.query(
+        "INSERT INTO page_revisions(page_id,version,title,document,author_id) VALUES($1,$2,$3,$4,$5)",
+        [saved.id, saved.version, saved.title, saved.document, uid],
+      );
+      await audit(c, uid, "page.updated");
+      return { ...saved, access_rank: p.access_rank };
+    });
+  }
+  @Get("pages/:id/permissions") async permissions(
+    @Req() req: any,
+    @Param("id") id: string,
+  ) {
+    const uid = await user(req),
+      p = await pageAccess(db, uid, id, 40);
+    return {
+      visibility: p.visibility,
+      version: p.version,
+      grants: (
+        await db.query(
+          'SELECT user_id AS "userId",role FROM page_permissions WHERE page_id=$1',
+          [p.id],
+        )
+      ).rows,
+    };
+  }
+  @Put("pages/:id/permissions") async setPermissions(
+    @Req() req: any,
+    @Param("id") id: string,
+    @Body() body: any,
+  ) {
+    mutation(req);
+    const uid = await user(req);
+    if (
+      !["space", "restricted"].includes(body?.visibility) ||
+      body?.confirm !== true ||
+      !Array.isArray(body?.grants) ||
+      body.grants.length > 1000 ||
+      !Number.isSafeInteger(body?.version)
+    )
+      fail(400, "Explicit permission confirmation required");
+    const grants = body.grants.map((g: any) => ({
+      userId: text(g?.userId, 36),
+      role: memberRole(g?.role),
+    }));
+    if (new Set(grants.map((g: any) => g.userId)).size !== grants.length)
+      fail(400, "Duplicate permission grants");
+    return transaction(async (c) => {
+      const p = await pageWrite(c, uid, id, 40);
+      if (p.version !== body.version)
+        fail(409, "Permissions changed; reload first");
+      for (const g of grants) {
+        const m = await c.query(
+          "SELECT role FROM space_members WHERE space_id=$1 AND user_id::text=$2",
+          [p.space_id, g.userId],
+        );
+        if (
+          !m.rowCount ||
+          roleRanks[m.rows[0].role as keyof typeof roleRanks] <
+            roleRanks[g.role as keyof typeof roleRanks]
+        )
+          fail(400, "Grant exceeds space membership");
+      }
+      await c.query("DELETE FROM page_permissions WHERE page_id=$1", [p.id]);
+      for (const g of grants)
+        await c.query("INSERT INTO page_permissions VALUES($1,$2,$3)", [
+          p.id,
+          g.userId,
+          g.role,
+        ]);
+      await c.query(
+        "UPDATE pages SET visibility=$1,version=version+1 WHERE id=$2",
+        [body.visibility, p.id],
+      );
+      await audit(c, uid, "page.permissions_changed");
+      return { ok: true };
+    });
+  }
+  @Post("pages/:id/move") async move(
     @Req() req: any,
     @Param("id") id: string,
     @Body() body: any,
@@ -45,21 +209,149 @@ class PagesController {
     const uid = await user(req);
     if (
       !Number.isSafeInteger(body?.version) ||
-      body?.document?.type !== "doc" ||
-      !Array.isArray(body.document.content) ||
-      body.document.content.some(
-        (n: any) => n?.type !== "paragraph" || typeof n.text !== "string",
-      ) ||
-      JSON.stringify(body.document).length > 100000
+      !Number.isSafeInteger(body?.sortOrder) ||
+      Math.abs(body.sortOrder) > 1000000
     )
-      fail(400, "Invalid document");
+      fail(400, "Page version and sort order required");
+    return transaction(async (c) => {
+      const p = await pageWrite(c, uid, id),
+        descendants = await subtree(c, p.id);
+      if (p.version !== body.version) fail(409, "Page changed; reload first");
+      const denied = await c.query(
+        "SELECT id FROM pages WHERE id=ANY($1::uuid[]) AND orvyn_page_role(id,$2,true)<30",
+        [descendants.map((d) => d.id), uid],
+      );
+      if (denied.rowCount)
+        fail(
+          403,
+          "Moving this hierarchy requires edit access to every descendant",
+        );
+      let parent = null,
+        parentDepth = -1;
+      if (body.parentId !== null) {
+        const dest = await pageAccess(c, uid, text(body.parentId, 36), 30);
+        if (dest.space_id !== p.space_id)
+          fail(400, "Cross-space moves are not supported");
+        if (descendants.some((d) => d.id === dest.id))
+          fail(400, "Cannot move a page inside its descendants");
+        parent = dest.id;
+        const depth = await c.query(
+          "WITH RECURSIVE a AS(SELECT id,parent_id,0 AS depth FROM pages WHERE id=$1 UNION ALL SELECT p.id,p.parent_id,a.depth+1 FROM pages p JOIN a ON a.parent_id=p.id WHERE a.depth<64) SELECT max(depth) AS depth FROM a",
+          [parent],
+        );
+        parentDepth = depth.rows[0].depth;
+      }
+      if (parentDepth + 1 + Math.max(...descendants.map((d) => d.depth)) > 63)
+        fail(400, "Page hierarchy exceeds 64 levels");
+      // Freeze the old audience on the moved root so a new parent cannot broaden access.
+      const audience = await c.query(
+        "SELECT m.user_id,m.role,orvyn_page_role($1,m.user_id) AS rank FROM space_members m WHERE m.space_id=$2",
+        [p.id, p.space_id],
+      );
+      await c.query("DELETE FROM page_permissions WHERE page_id=$1", [p.id]);
+      for (const member of audience.rows.filter((m) => m.rank >= 10)) {
+        const role = Object.entries(roleRanks).find(
+          ([, rank]) => rank === member.rank,
+        )![0];
+        await c.query("INSERT INTO page_permissions VALUES($1,$2,$3)", [
+          p.id,
+          member.user_id,
+          role,
+        ]);
+      }
+      const r = await c.query(
+        "UPDATE pages SET parent_id=$1,sort_order=$2,visibility='restricted',version=version+1 WHERE id=$3 RETURNING *",
+        [parent, body.sortOrder, p.id],
+      );
+      await audit(c, uid, "page.moved");
+      return pageAccess(c, uid, p.id);
+    });
+  }
+  @Delete("pages/:id") async trash(
+    @Req() req: any,
+    @Param("id") id: string,
+    @Body() body: any,
+  ) {
+    mutation(req);
+    const uid = await user(req);
+    return transaction(async (c) => {
+      const p = await pageWrite(c, uid, id),
+        descendants = await subtree(c, p.id);
+      if (descendants.length > 1 && body?.confirm !== true)
+        fail(400, "Confirm moving this hierarchy to trash");
+      const denied = await c.query(
+        "SELECT id FROM pages WHERE id=ANY($1::uuid[]) AND orvyn_page_role(id,$2,true)<30",
+        [descendants.map((d) => d.id), uid],
+      );
+      if (denied.rowCount)
+        fail(
+          403,
+          "Deleting this hierarchy requires edit access to every descendant",
+        );
+      await c.query(
+        "UPDATE pages SET deleted_at=now(),version=version+1 WHERE id=$1",
+        [p.id],
+      );
+      await audit(c, uid, "page.trashed");
+      return { ok: true };
+    });
+  }
+  @Get("spaces/:id/trash") async listTrash(
+    @Req() req: any,
+    @Param("id") id: string,
+  ) {
+    const uid = await user(req);
+    return (
+      await db.query(
+        "SELECT p.id,p.title,p.parent_id,p.deleted_at,orvyn_page_role(p.id,$2,true) AS access_rank FROM pages p WHERE p.space_id::text=$1 AND p.deleted_at IS NOT NULL AND orvyn_page_role(p.id,$2,true)>=10 ORDER BY p.deleted_at DESC LIMIT 200",
+        [id, uid],
+      )
+    ).rows;
+  }
+  @Post("pages/:id/restore") async restore(
+    @Req() req: any,
+    @Param("id") id: string,
+  ) {
+    mutation(req);
+    const uid = await user(req);
+    return transaction(async (c) => {
+      const p = await pageWrite(c, uid, id, 30, true);
+      if (!p.deleted_at) fail(409, "Page is not in trash");
+      if (p.parent_id) await pageAccess(c, uid, p.parent_id, 30);
+      const r = await c.query(
+        "UPDATE pages SET deleted_at=NULL,version=version+1 WHERE id=$1 RETURNING *",
+        [p.id],
+      );
+      await audit(c, uid, "page.restored");
+      return r.rows[0];
+    });
+  }
+  @Get("pages/:id/history") async history(
+    @Req() req: any,
+    @Param("id") id: string,
+  ) {
+    const uid = await user(req),
+      p = await pageAccess(db, uid, id);
+    return (
+      await db.query(
+        "SELECT version,title,created_at FROM page_revisions WHERE page_id=$1 ORDER BY version DESC LIMIT 100",
+        [p.id],
+      )
+    ).rows;
+  }
+  @Get("pages/:id/history/:version") async revision(
+    @Req() req: any,
+    @Param("id") id: string,
+    @Param("version") version: string,
+  ) {
+    const uid = await user(req),
+      p = await pageAccess(db, uid, id);
+    if (!/^\d{1,9}$/.test(version)) fail(400, "Invalid version");
     const r = await db.query(
-      "UPDATE pages p SET title=$1,document=$2,version=version+1 FROM spaces s WHERE s.id=p.space_id AND s.owner_id=$3 AND p.id::text=$4 AND p.version=$5 RETURNING p.*",
-      [text(body.title, 300), body.document, uid, id, body.version],
+      "SELECT version,title,document,created_at FROM page_revisions WHERE page_id=$1 AND version=$2",
+      [p.id, Number(version)],
     );
-    if (!r.rowCount)
-      fail(409, "Page unavailable or changed; reload before saving");
-    return r.rows[0];
+    return r.rows[0] || fail(404, "Revision not found");
   }
 }
 @Module({ controllers: [PagesController] })
