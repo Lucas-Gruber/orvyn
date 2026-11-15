@@ -22,7 +22,13 @@ import { z, queryInput, type Property } from "@orvyn/shared";
 import { db, fail, user, hash } from "../runtime.js";
 import { transaction, audit, origin, rateLimit } from "../auth/security.js";
 import { newPageParent } from "../permissions/access.js";
-import { database, parse, querySql, recordDTO } from "./model.js";
+import {
+  database,
+  parse,
+  querySql,
+  recordDTO,
+  personDirectory,
+} from "./model.js";
 import {
   decodeCsv,
   csvSettings,
@@ -70,6 +76,7 @@ function csvValue(row: any, property: Property) {
   if (value === null || value === undefined) return "";
   if (["Select", "Status"].includes(property.type))
     return property.config.options?.find((o) => o.id === value)?.label || "";
+  if (["Person", "Files"].includes(property.type)) return JSON.stringify(value);
   if (property.type === "MultiSelect")
     return JSON.stringify(
       (value as string[]).map(
@@ -125,7 +132,12 @@ class TransferController {
       };
     }
     const properties = virtualProperties(context.properties, plan),
-      converted = convertCsv(properties, plan, csv.rows);
+      converted = convertCsv(
+        properties,
+        plan,
+        csv.rows,
+        await personDirectory(db, context.page.space_id),
+      );
     let token: string | null = null;
     if (!converted.errors.length) {
       token = randomBytes(32).toString("hex");
@@ -192,7 +204,12 @@ class TransferController {
       if (context.schemaVersion !== plan.schemaVersion)
         fail(409, "Database schema changed; preview the import again");
       const properties = virtualProperties(context.properties, plan),
-        converted = convertCsv(properties, plan, csv.rows);
+        converted = convertCsv(
+          properties,
+          plan,
+          csv.rows,
+          await personDirectory(c, context.page.space_id),
+        );
       if (converted.errors.length)
         fail(400, "CSV contains invalid values; preview it again");
       await newPageParent(c, uid, context.page.space_id, context.page.id);

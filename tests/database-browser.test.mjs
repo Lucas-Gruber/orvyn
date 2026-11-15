@@ -198,6 +198,9 @@ test("Chromium: five database views, live Kanban drag, record documents and save
     }, remote);
     await refresh;
     await expect(
+      page.getByText("Loading records…", { exact: true }),
+    ).toHaveCount(0);
+    await expect(
       row().getByRole("spinbutton", { name: "Estimate", exact: true }),
     ).toHaveValue("1");
     await row()

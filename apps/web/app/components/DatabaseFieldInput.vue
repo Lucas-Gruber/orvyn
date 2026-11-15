@@ -5,7 +5,21 @@ const props = defineProps<{
   modelValue: unknown;
   id?: string;
   disabled?: boolean;
+  people?: { id: string; email: string }[];
 }>();
+const options = computed(() =>
+  props.property.type === "Person"
+    ? [
+        ...(props.people || []).map((person) => ({
+          id: person.id,
+          label: person.email,
+        })),
+        ...(Array.isArray(props.modelValue) ? props.modelValue : [])
+          .filter((id) => !props.people?.some((p) => p.id === id))
+          .map((id) => ({ id, label: "Former member" })),
+      ]
+    : props.property.config.options || [],
+);
 const focused = ref(false),
   editingValue = ref("");
 const emit = defineEmits<{ "update:modelValue": [value: unknown] }>();
@@ -48,19 +62,14 @@ const inputType = computed(
     @change="changed"
   >
     <option value="">Unassigned</option>
-    <option
-      v-for="option in property.config.options || []"
-      :key="option.id"
-      :value="option.id"
-    >
+    <option v-for="option in options" :key="option.id" :value="option.id">
       {{ option.label }}
     </option></select
   ><select
-    v-else-if="property.type === 'MultiSelect'"
+    v-else-if="['MultiSelect', 'Person'].includes(property.type)"
     :id="id"
     :aria-label="property.name"
     multiple
-    :value="Array.isArray(modelValue) ? modelValue : []"
     :disabled="disabled"
     @change="
       emit(
@@ -72,9 +81,10 @@ const inputType = computed(
     "
   >
     <option
-      v-for="option in property.config.options || []"
+      v-for="option in options"
       :key="option.id"
       :value="option.id"
+      :selected="Array.isArray(modelValue) && modelValue.includes(option.id)"
     >
       {{ option.label }}
     </option></select

@@ -32,6 +32,8 @@ export const writablePropertyTypes = [
   "URL",
   "Email",
   "Phone",
+  "Person",
+  "Files",
 ] as const;
 export const computedPropertyTypes = [
   "CreatedTime",
@@ -137,5 +139,6 @@ export interface DatabaseRecord {
   createdBy: { id: string; email: string } | null;
   lastEditedBy: { id: string; email: string } | null;
   coverFileId: string | null;
+  files?: { id: string; filename: string; mediaType: string; size: number }[];
 }
 export { z };

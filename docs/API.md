@@ -60,3 +60,5 @@ Database transfer routes (all authenticated):
 - `POST /api/v1/databases/:id/import/csv/confirm`: same multipart file and JSON `settings: {token}`; atomic creation, schema conflict 409, idempotent retry 200.
 - `GET /api/v1/databases/:id/export.csv`: authorized attachment download; optional `viewId`, `spreadsheetSafe=true` default.
 - `GET /api/v1/databases/:id/export.json`: exact typed values, schema/views/documents and attachment metadata; optional `viewId`.
+
+Person values are UUID arrays (up to 50); new references require current space membership. Files values are UUID arrays (up to 50) of ready attachments on the same record. Empty arrays clear a field. Neither assignment grants access. Queries and exports return sanitized file references and file choices only for projected Files properties. Person/Files support exact sets, contains and empty filters; list sorting is rejected. CSV Person cells accept member email/UUID lists; CSV Files columns must be skipped.

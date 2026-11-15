@@ -13,7 +13,9 @@ export const csvMapping = z
     column: z.number().int().min(0).max(49),
     propertyId: z.uuid().optional(),
     name: z.string().trim().min(1).max(80).optional(),
-    type: z.enum(writablePropertyTypes).optional(),
+    type: z
+      .enum(writablePropertyTypes.filter((type) => type !== "Files"))
+      .optional(),
     skip: z.boolean().default(false),
   })
   .strict();
@@ -73,9 +75,8 @@ export function suggest(properties: Property[], headers: string[]) {
     );
     if (property) {
       used.add(property.id);
-      return (computedPropertyTypes as readonly string[]).includes(
-        property.type,
-      )
+      return property.type === "Files" ||
+        (computedPropertyTypes as readonly string[]).includes(property.type)
         ? { column, skip: true }
         : { column, propertyId: property.id, skip: false };
     }
@@ -173,6 +174,11 @@ export function buildCsvPlan(
       };
       plan.newProperties.push(property);
     }
+    if (property!.type === "Files")
+      fail(
+        400,
+        "Skip file columns and upload attachments on each record after import",
+      );
     if (used.has(property!.id)) fail(400, "A property can only be mapped once");
     used.add(property!.id);
     plan.fields.push({ column: item.column, propertyId: property!.id });
@@ -234,7 +240,11 @@ export function virtualProperties(
     ...plan.newProperties,
   ];
 }
-function fromCell(property: Property, cell: string): unknown {
+function fromCell(
+  property: Property,
+  cell: string,
+  people: { id: string; email: string }[],
+): unknown {
   if (property.type === "Title") return cell.trim();
   if (property.type === "Text") return cell;
   if (cell.trim() === "") return null;
@@ -249,6 +259,15 @@ function fromCell(property: Property, cell: string): unknown {
     if (["false", "no", "0", "unchecked"].includes(normalized)) return false;
     return fail(400, "Use true/false, yes/no or 1/0");
   }
+  if (property.type === "Person")
+    return labels(cell, "MultiSelect").map(
+      (label) =>
+        people.find(
+          (p) =>
+            p.id === label.toLowerCase() ||
+            p.email.toLowerCase() === label.toLowerCase(),
+        )?.id || fail(400, "Choose current space members by email or user ID"),
+    );
   if (["Select", "Status", "MultiSelect"].includes(property.type)) {
     const ids = labels(cell, property.type).map(
       (label) =>
@@ -264,6 +283,7 @@ export function convertCsv(
   properties: Property[],
   plan: CsvPlan,
   rows: string[][],
+  people: { id: string; email: string }[] = [],
 ) {
   const output: { title: string; values: Record<string, unknown> }[] = [],
     errors: { row: number; column: string; message: string }[] = [];
@@ -273,7 +293,7 @@ export function convertCsv(
     for (const field of plan.fields) {
       const property = properties.find((p) => p.id === field.propertyId)!;
       try {
-        const value = fromCell(property, row[field.column]);
+        const value = fromCell(property, row[field.column], people);
         if (property.type === "Title") {
           if (typeof value !== "string" || !value || value.length > 300)
             fail(400, "A non-empty title up to 300 characters is required");

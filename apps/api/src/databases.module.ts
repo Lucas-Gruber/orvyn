@@ -32,6 +32,8 @@ import {
   propertyConfig,
   propertyOptions,
   valuesFor,
+  checkPeople,
+  checkFiles,
   checkedView,
   querySql,
   recordDTO,
@@ -316,6 +318,8 @@ class DatabasesController {
     return transaction(async (c) => {
       const context = await database(c, uid, id, 30, true),
         values = valuesFor(context.properties, input.values);
+      await checkPeople(c, context.page.space_id, context.properties, values);
+      await checkFiles(c, null, context.properties, values);
       await newPageParent(c, uid, context.page.space_id, context.page.id);
       const p = (
         await c.query(
@@ -367,6 +371,21 @@ class DatabasesController {
       const context = await database(c, uid, id, 30, true),
         page = await pageAccess(c, uid, record, 30),
         values = valuesFor(context.properties, input.values);
+      const previous = (
+        await c.query(
+          "SELECT values FROM database_records WHERE page_id=$1 AND database_id=$2",
+          [page.id, context.page.id],
+        )
+      ).rows[0];
+      if (!previous) fail(404, "Record not found");
+      await checkPeople(
+        c,
+        context.page.space_id,
+        context.properties,
+        values,
+        previous.values,
+      );
+      await checkFiles(c, page.id, context.properties, values);
       const r = await c.query(
         "UPDATE database_records SET values=values||$1::jsonb,version=version+1 WHERE page_id=$2 AND database_id=$3 AND version=$4 RETURNING page_id",
         [values, page.id, context.page.id, input.version],

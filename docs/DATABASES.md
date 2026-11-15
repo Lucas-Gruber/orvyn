@@ -6,9 +6,9 @@ A database is a regular page of kind database. A record is a regular page of kin
 
 Database properties and views have their own tables. Record values use validated JSONB keyed by stable property UUID, with database and JSONB indexes. Schema/property IDs and API contracts are shared between web and backend in @orvyn/shared using Zod 4.6.7 (MIT). Adding or renaming properties does not rename record value keys.
 
-Working property types: Title (managed by the page), Text, Number, Select, MultiSelect, Status, Date, Checkbox, URL, Email, Phone, CreatedTime, CreatedBy, LastEditedTime and LastEditedBy. Metadata is read-only. Date values are canonical ISO dates; metadata timestamps are UTC ISO instants. Legacy page timestamps/actors are backfilled from the first/last known content revisions, falling back to the space owner and migration time where older evidence is absent.
+Working property types: Title (managed by the page), Text, Number, Select, MultiSelect, Status, Date, Checkbox, URL, Email, Phone, Person, Files, CreatedTime, CreatedBy, LastEditedTime and LastEditedBy. Metadata is read-only. Date values are canonical ISO dates; metadata timestamps are UTC ISO instants. Legacy page timestamps/actors are backfilled from the first/last known content revisions, falling back to the space owner and migration time where older evidence is absent.
 
-Person, Files as a structured property, Relation, Formula and Rollup are reserved in the model but not implemented or offered as working properties. Option editing/deletion, property deletion/restore, templates and portable JSON restore are not implemented yet. Reserved property types return a validation error; no placeholder computation is returned.
+Relation, Formula and Rollup are reserved in the model but not implemented or offered as working properties. Option editing/deletion, property deletion/restore, templates and portable JSON restore are not implemented yet. Reserved property types return a validation error; no placeholder computation is returned.
 
 ## Views and editing
 
@@ -47,3 +47,17 @@ CSV and JSON exports evaluate per-record access inside a repeatable-read transac
 CSV uses readable select labels and JSON arrays for multiselect. By default text starting with spreadsheet formula control characters is prefixed with an apostrophe; numeric cells remain numeric. The API supports `spreadsheetSafe=false` for exact CSV text when required. JSON always preserves exact values and includes schema, saved views, page document projections and ready attachment metadata. It does not package attachment bytes or constitute a full application backup; use the backup/recovery workflow for that.
 
 Transfer tests cover preview isolation, typed failures, file/schema changes, idempotency, private-record filtering, saved-view projection, spreadsheet safety, and the real browser mapping/confirm/download flow. Embedded browser tests cover independent views, persistence, original record navigation, denied source privacy and re-granted access.
+
+## People properties
+
+Person values are unique arrays of up to 50 user UUIDs. The UI offers current space members (including the owner), with contains, exact-set equality and empty filters. Person lists do not have arbitrary text sorting. Assignment never creates membership or page permissions.
+
+New assignments must reference current space members. Writes share the space lock used by membership administration, so revocation cannot race a new assignment. Existing references to former members may be kept or removed while editing; they cannot be assigned anew. The UI uses a generic former-member label when a UUID is absent from the authorized directory and does not look up global accounts. JSON and CSV preserve stable user IDs; CSV import also accepts member emails separated by semicolons or a JSON string array. Confirmation resolves current membership again, including after a valid preview.
+
+## File properties
+
+Files values contain up to 50 unique attachment UUIDs belonging to that record page. Create the record, open it to upload attachments through private S3 storage, then select attachments in the table. Multiple Files properties may reference the same attachment. Field choices and downloads remain protected by record access; selecting an ID never copies or grants access to files from another page.
+
+The API accepts only ready attachments of the target record. New records cannot start with arbitrary external file references. Table fields offer multiple selection and authorized downloads; cards display selected filenames. Removing an attachment hides its IDs and metadata from field projections, filters and exports immediately, while stored references remain available for audit/history. Attachment state changes advance the record revision and deliver the normal privacy-checked live invalidation. Filtering uses the same sanitized projection, so deleted files cannot be discovered by contains/equality/empty filters.
+
+CSV exports file UUID arrays, but imports skip file columns and reject explicit mapping to Files fields. Importing attachment bytes requires the separate file upload workflow; opaque IDs in an imported spreadsheet cannot link to existing private files. JSON export includes only ready attachment metadata, never object-storage credentials or signed public links. File fields currently support empty/not-empty filtering in the UI and UUID-set/contains filters in the API; sorting file lists is intentionally rejected.

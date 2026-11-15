@@ -172,10 +172,11 @@ async function upload(confirm = false) {
                       <option
                         v-for="property in properties.filter(
                           (p) =>
-                            p.type === 'Title' ||
-                            (
-                              writablePropertyTypes as readonly string[]
-                            ).includes(p.type),
+                            p.type !== 'Files' &&
+                            (p.type === 'Title' ||
+                              (
+                                writablePropertyTypes as readonly string[]
+                              ).includes(p.type)),
                         )"
                         :key="property.id"
                         :value="property.id"
@@ -200,7 +201,12 @@ async function upload(confirm = false) {
                       :disabled="busy"
                       @change="dirty = true"
                     >
-                      <option v-for="type in writablePropertyTypes" :key="type">
+                      <option
+                        v-for="type in writablePropertyTypes.filter(
+                          (t) => t !== 'Files',
+                        )"
+                        :key="type"
+                      >
                         {{ type }}
                       </option>
                     </select>

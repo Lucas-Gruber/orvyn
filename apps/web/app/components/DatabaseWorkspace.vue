@@ -45,8 +45,10 @@ const currentView = computed(() =>
   canEdit = computed(() => metadata.value?.accessRank >= 30);
 const editableProperties = computed<Property[]>(
   () =>
-    metadata.value?.properties.filter((p: Property) =>
-      (writablePropertyTypes as readonly string[]).includes(p.type),
+    metadata.value?.properties.filter(
+      (p: Property) =>
+        (writablePropertyTypes as readonly string[]).includes(p.type) &&
+        p.type !== "Files",
     ) || [],
 );
 const groupProperty = computed<Property | undefined>(() =>
@@ -252,6 +254,23 @@ function format(record: DatabaseRecord, property: Property) {
       property.config.options?.find((o) => o.id === value)?.label ||
       "Unknown option"
     );
+  if (property.type === "Files")
+    return (
+      ((value as string[]) || [])
+        .map((id) => record.files?.find((file) => file.id === id)?.filename)
+        .filter(Boolean)
+        .join(", ") || "—"
+    );
+  if (property.type === "Person")
+    return (
+      (value as string[])
+        .map(
+          (id) =>
+            directory.value.find((person) => person.id === id)?.email ||
+            "Former member",
+        )
+        .join(", ") || "—"
+    );
   if (property.type === "MultiSelect")
     return (value as string[])
       .map(
@@ -287,10 +306,17 @@ function propertyById(id: string): Property | undefined {
 function filterOperators(filter: any) {
   const type = propertyById(filter.propertyId)?.type,
     operators = ["eq", "neq", "empty", "notEmpty"];
+  if (type === "Files") return ["empty", "notEmpty"];
   if (
-    ["Title", "Text", "URL", "Email", "Phone", "MultiSelect"].includes(
-      type || "",
-    )
+    [
+      "Title",
+      "Text",
+      "URL",
+      "Email",
+      "Phone",
+      "MultiSelect",
+      "Person",
+    ].includes(type || "")
   )
     operators.push("contains");
   if (["Number", "Date", "CreatedTime", "LastEditedTime"].includes(type || ""))
@@ -301,6 +327,18 @@ function filterOperators(filter: any) {
 function filterProperty(filter: any): Property | undefined {
   const property = propertyById(filter.propertyId);
   if (!property) return;
+  if (property.type === "Person" && filter.operator === "contains")
+    return {
+      ...property,
+      type: "Select",
+      config: {
+        options: directory.value.map((person) => ({
+          id: person.id,
+          label: person.email,
+          color: "neutral",
+        })),
+      },
+    };
   if (filter.operator === "in") return { ...property, type: "MultiSelect" };
   if (property.type === "MultiSelect" && filter.operator === "contains")
     return { ...property, type: "Select" };
@@ -515,11 +553,16 @@ onBeforeUnmount(() => {
             property.name
           }}</label
           ><DatabaseFieldInput
+            :people="directory"
             :id="'record-value-' + domId + '-' + property.id"
             :property="property"
             :model-value="draft[property.id]"
             @update:model-value="draft[property.id] = $event"
         /></template>
+        <p v-if="metadata.properties.some((p: Property) => p.type === 'Files')">
+          Create the record first, then open it to upload attachments and select
+          them in its file fields.
+        </p>
         <label
           ><input
             v-model="restrictedRecord"
@@ -551,7 +594,19 @@ onBeforeUnmount(() => {
                   v-if="property.type === 'Title'"
                   @click="emit('open', record.pageId)"
                 >
-                  {{ record.title }}</button><DatabaseFieldInput
+                  {{ record.title }}</button><DatabaseFilesField
+                  v-else-if="property.type === 'Files'"
+                  :name="property.name"
+                  :files="record.files || []"
+                  :model-value="record.values[property.id]"
+                  :can-edit="canEdit && record.accessRank >= 30"
+                  :disabled="busy"
+                  @update:model-value="
+                    patchRecord(record, { [property.id]: $event })
+                  "
+                  @manage="emit('open', record.pageId)"
+                /><DatabaseFieldInput
+                  :people="directory"
                   v-else-if="
                     (writablePropertyTypes as readonly string[]).includes(
                       property.type,
@@ -606,6 +661,7 @@ onBeforeUnmount(() => {
             </button>
             <button @click="emit('open', record.pageId)">
               {{ record.title }}</button><DatabaseFieldInput
+              :people="directory"
               v-if="canEdit && record.accessRank >= 30"
               :property="groupProperty"
               :model-value="record.values[groupProperty.id]"
@@ -842,7 +898,10 @@ onBeforeUnmount(() => {
             aria-label="Filter property"
             @change="
               filter.value = null;
-              filter.operator = 'eq';
+              filter.operator =
+                propertyById(filter.propertyId)?.type === 'Files'
+                  ? 'notEmpty'
+                  : 'eq';
             "
           >
             <option
@@ -877,6 +936,7 @@ onBeforeUnmount(() => {
               {{ person.email }}
             </option></select
           ><DatabaseFieldInput
+            :people="directory"
             v-if="
               !propertyById(filter.propertyId)?.type.endsWith('By') &&
               !['empty', 'notEmpty'].includes(filter.operator) &&
@@ -914,7 +974,8 @@ onBeforeUnmount(() => {
           <select v-model="sort.propertyId" aria-label="Sort property">
             <option
               v-for="property in metadata.properties.filter(
-                (p: Property) => p.type !== 'MultiSelect',
+                (p: Property) =>
+                  !['MultiSelect', 'Person', 'Files'].includes(p.type),
               )"
               :key="property.id"
               :value="property.id"

@@ -103,6 +103,17 @@ export function valueFor(
       return invalid();
     return value;
   }
+  if (["Person", "Files"].includes(property.type)) {
+    if (
+      !Array.isArray(value) ||
+      value.length > 50 ||
+      value.some((v) => !z.uuid().safeParse(v).success)
+    )
+      return invalid();
+    const normalized = value.map((v: string) => v.toLowerCase()).sort();
+    if (new Set(normalized).size !== normalized.length) return invalid();
+    return normalized;
+  }
   if (property.type === "MultiSelect") {
     if (
       !Array.isArray(value) ||
@@ -227,11 +238,13 @@ export function querySql(
     properties.find((p) => p.id === id) || fail(400, "Unknown query property");
   function field(property: Property) {
     if (property.type === "Title") return "p.title";
+    if (property.type === "Files")
+      return `orvyn_record_file_values(p.id,${bind(property.id)}::uuid)`;
     if (property.type === "CreatedTime") return "p.created_at";
     if (property.type === "LastEditedTime") return "p.updated_at";
     if (property.type === "CreatedBy") return "p.created_by::text";
     if (property.type === "LastEditedBy") return "p.last_edited_by::text";
-    if (property.type === "MultiSelect")
+    if (["MultiSelect", "Person", "Files"].includes(property.type))
       return `(r.values->${bind(property.id)})`;
     const raw = `(r.values->>${bind(property.id)})`;
     if (property.type === "Number") return `(${raw})::numeric`;
@@ -258,13 +271,17 @@ export function querySql(
       continue;
     }
     if (op === "contains") {
-      if (property.type === "MultiSelect") {
+      if (["MultiSelect", "Person", "Files"].includes(property.type)) {
         if (
           typeof filter.value !== "string" ||
-          !property.config.options?.some((o) => o.id === filter.value)
+          (["Person", "Files"].includes(property.type)
+            ? !z.uuid().safeParse(filter.value).success
+            : !property.config.options?.some((o) => o.id === filter.value))
         )
           fail(400, "Invalid option filter");
-        conditions.push(`${expression} ? ${bind(filter.value)}`);
+        conditions.push(
+          `${expression} ? ${bind(["Person", "Files"].includes(property.type) ? (filter.value as string).toLowerCase() : filter.value)}`,
+        );
       } else {
         if (
           !["Title", "Text", "URL", "Email", "Phone"].includes(property.type) ||
@@ -291,9 +308,8 @@ export function querySql(
       continue;
     }
     const value = valueFor(property, filter.value, true);
-    if (property.type === "MultiSelect") {
-      if (!["eq", "neq"].includes(op))
-        fail(400, "Invalid multi-select comparison");
+    if (["MultiSelect", "Person", "Files"].includes(property.type)) {
+      if (!["eq", "neq"].includes(op)) fail(400, "Invalid list comparison");
       conditions.push(
         `coalesce(${expression},'null'::jsonb) ${op === "eq" ? "=" : "<>"} ${bind(JSON.stringify(value))}::jsonb`,
       );
@@ -341,8 +357,8 @@ export function querySql(
   }
   const sorts = (input.sorts || config.sorts).map((sort) => {
     const property = find(sort.propertyId);
-    if (property.type === "MultiSelect")
-      fail(400, "Multi-select sorting is not supported");
+    if (["MultiSelect", "Person", "Files"].includes(property.type))
+      fail(400, "List property sorting is not supported");
     let expression = field(property);
     if (["Select", "Status"].includes(property.type))
       expression = `array_position(${bind(property.config.options?.map((o) => o.id) || [])}::text[],${expression})`;
@@ -359,12 +375,16 @@ export function querySql(
 export const recordFrom =
   "FROM database_records r JOIN pages p ON p.id=r.page_id LEFT JOIN users creator ON creator.id=p.created_by LEFT JOIN users editor ON editor.id=p.last_edited_by";
 export function recordColumns(actor: string) {
-  return `p.id,p.title,p.title_version,p.created_at,p.updated_at,p.created_by,p.last_edited_by,creator.email AS creator_email,editor.email AS editor_email,r.values,r.version,orvyn_page_role(p.id,${actor}) AS access_rank,(SELECT id FROM files WHERE page_id=p.id AND state='ready' AND media_type IN ('image/png','image/jpeg','image/gif','image/webp') ORDER BY created_at LIMIT 1) AS cover_file_id`;
+  const files = `(SELECT coalesce(jsonb_object_agg(dp.id,orvyn_record_file_values(p.id,dp.id)),'{}'::jsonb) FROM database_properties dp WHERE dp.database_id=r.database_id AND dp.type='Files' AND dp.deleted_at IS NULL) AS file_values,(SELECT coalesce(jsonb_agg(jsonb_build_object('id',f.id,'filename',f.filename,'mediaType',f.media_type,'size',f.size) ORDER BY f.created_at),'[]'::jsonb) FROM files f WHERE f.page_id=p.id AND f.state='ready' AND EXISTS(SELECT 1 FROM database_properties dp WHERE dp.database_id=r.database_id AND dp.type='Files' AND dp.deleted_at IS NULL)) AS file_choices`;
+  return `${files},p.id,p.title,p.title_version,p.created_at,p.updated_at,p.created_by,p.last_edited_by,creator.email AS creator_email,editor.email AS editor_email,r.values,r.version,orvyn_page_role(p.id,${actor}) AS access_rank,(SELECT id FROM files WHERE page_id=p.id AND state='ready' AND media_type IN ('image/png','image/jpeg','image/gif','image/webp') ORDER BY created_at LIMIT 1) AS cover_file_id`;
 }
 export function recordDTO(row: any, properties: Property[]) {
   const values: Record<string, unknown> = {};
   for (const property of properties) {
     switch (property.type) {
+      case "Files":
+        values[property.id] = row.file_values?.[property.id] || [];
+        break;
       case "Title":
         values[property.id] = row.title;
         break;
@@ -400,6 +420,9 @@ export function recordDTO(row: any, properties: Property[]) {
       ? { id: row.last_edited_by, email: row.editor_email }
       : null,
     coverFileId: row.cover_file_id || null,
+    ...(properties.some((p) => p.type === "Files")
+      ? { files: row.file_choices || [] }
+      : {}),
   };
 }
 export async function recordSnapshot(
@@ -415,4 +438,69 @@ export async function recordSnapshot(
   );
   if (!r.rowCount) return fail(404, "Record not found");
   return recordDTO(r.rows[0], properties);
+}
+
+// Callers must authorize the space/page before resolving this directory.
+export async function personDirectory(
+  c: Pool | PoolClient,
+  spaceId: string,
+): Promise<{ id: string; email: string }[]> {
+  return (
+    await c.query(
+      "SELECT u.id,u.email FROM users u JOIN spaces s ON s.id=$1 LEFT JOIN space_members m ON m.space_id=s.id AND m.user_id=u.id WHERE u.id=s.owner_id OR m.user_id=u.id ORDER BY u.email",
+      [spaceId],
+    )
+  ).rows;
+}
+export async function checkPeople(
+  c: PoolClient,
+  spaceId: string,
+  properties: Property[],
+  values: Record<string, unknown>,
+  previous: Record<string, unknown> = {},
+) {
+  const ids = new Set<string>();
+  for (const property of properties.filter((p) => p.type === "Person")) {
+    const before = Array.isArray(previous[property.id])
+      ? (previous[property.id] as string[])
+      : [];
+    for (const id of (values[property.id] as string[] | null | undefined) || [])
+      if (!before.includes(id)) ids.add(id);
+  }
+  if (!ids.size) return;
+  const allowed = (
+    await c.query(
+      "SELECT u.id FROM users u JOIN spaces s ON s.id=$1 LEFT JOIN space_members m ON m.space_id=s.id AND m.user_id=u.id WHERE u.id=ANY($2::uuid[]) AND (u.id=s.owner_id OR m.user_id=u.id)",
+      [spaceId, [...ids]],
+    )
+  ).rows;
+  if (allowed.length !== ids.size)
+    fail(400, "New person assignments must be current members of this space");
+}
+
+export async function checkFiles(
+  c: PoolClient,
+  pageId: string | null,
+  properties: Property[],
+  values: Record<string, unknown>,
+) {
+  const ids = new Set(
+    properties
+      .filter((p) => p.type === "Files")
+      .flatMap((p) => (values[p.id] as string[] | null | undefined) || []),
+  );
+  if (!ids.size) return;
+  if (!pageId)
+    return fail(
+      400,
+      "Create the record first, then upload and select its attachments",
+    );
+  const ready = (
+    await c.query(
+      "SELECT id FROM files WHERE page_id=$1 AND id=ANY($2::uuid[]) AND state='ready'",
+      [pageId, [...ids]],
+    )
+  ).rows;
+  if (ready.length !== ids.size)
+    fail(400, "Select ready attachments belonging to this record");
 }

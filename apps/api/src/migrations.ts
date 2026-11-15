@@ -277,6 +277,28 @@ BEGIN
 END $$;
 `,
   },
+  {
+    version: 13,
+    sql: `
+CREATE FUNCTION orvyn_record_file_values(record_id uuid,property_id uuid) RETURNS jsonb LANGUAGE sql STABLE AS $$
+ SELECT coalesce(jsonb_agg(f.id::text ORDER BY f.id),'[]'::jsonb)
+ FROM database_records r
+ CROSS JOIN LATERAL jsonb_array_elements_text(CASE WHEN jsonb_typeof(r.values->property_id::text)='array' THEN r.values->property_id::text ELSE '[]'::jsonb END) chosen(id)
+ JOIN files f ON f.id::text=chosen.id AND f.page_id=r.page_id AND f.state='ready'
+ WHERE r.page_id=record_id;
+$$;
+CREATE FUNCTION orvyn_record_file_notify() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE record_id uuid;
+BEGIN
+ record_id=coalesce(NEW.page_id,OLD.page_id);
+ IF (TG_OP='INSERT' AND NEW.state='ready') OR (TG_OP='UPDATE' AND (NEW.state='ready' OR OLD.state='ready')) OR (TG_OP='DELETE' AND OLD.state='ready') THEN
+  UPDATE database_records SET version=version+1 WHERE page_id=record_id;
+ END IF;
+ RETURN NULL;
+END $$;
+CREATE TRIGGER record_file_notify AFTER INSERT OR UPDATE OR DELETE ON files FOR EACH ROW EXECUTE FUNCTION orvyn_record_file_notify();
+`,
+  },
 ] as const;
 
 export async function migrate(pool: Pool, target = migrations.at(-1)!.version) {
