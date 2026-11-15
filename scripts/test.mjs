@@ -1,3 +1,4 @@
+import { removeTestBucket } from "./s3-cleanup.mjs";
 import { createRequire } from "node:module";
 import { randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
@@ -7,11 +8,36 @@ const require = createRequire(
   new URL("../apps/api/package.json", import.meta.url),
 );
 const { Pool } = require("pg");
+const {
+  S3Client,
+  CreateBucketCommand,
+  ListObjectsV2Command,
+  DeleteObjectsCommand,
+  DeleteObjectCommand,
+  DeleteBucketCommand,
+} = require("@aws-sdk/client-s3");
+if (
+  !["localhost", "127.0.0.1", "[::1]"].includes(
+    new URL(process.env.S3_ENDPOINT).hostname,
+  )
+)
+  throw Error("Use local disposable S3 storage for tests");
+const s3 = new S3Client({
+  endpoint: process.env.S3_ENDPOINT,
+  region: process.env.S3_REGION || "us-east-1",
+  forcePathStyle: process.env.S3_FORCE_PATH_STYLE === "true",
+  credentials: {
+    accessKeyId: process.env.S3_ACCESS_KEY_ID,
+    secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
+  },
+});
+let bucketCreated = false;
 const url = new URL(process.env.DATABASE_URL);
 if (!["localhost", "127.0.0.1", "[::1]"].includes(url.hostname))
   throw Error("Use a local disposable PostgreSQL instance for tests");
 const root = new Pool({ connectionString: url.toString() }),
   name = "orvyn_suite_" + randomBytes(8).toString("hex");
+const storageBucket = name.replaceAll("_", "-");
 const children = [];
 const port = async () => {
   const server = createServer();
@@ -48,12 +74,15 @@ try {
   await root.query("CREATE DATABASE " + name);
   created = true;
   url.pathname = "/" + name;
+  await s3.send(new CreateBucketCommand({ Bucket: storageBucket }));
+  bucketCreated = true;
   const apiPort = await port(),
     webPort = await port(),
     base = `http://127.0.0.1:${webPort}`;
   const common = {
     ...process.env,
     DATABASE_URL: url.toString(),
+    S3_BUCKET: storageBucket,
     ORVYN_ORIGIN: base,
     NODE_ENV: "test",
     ORVYN_OIDC_ALLOW_HTTP_LOCAL: "true",
@@ -97,6 +126,8 @@ try {
           "tests/permissions.test.mjs",
           "tests/collaboration.test.mjs",
           "tests/editor.test.mjs",
+          "tests/files.test.mjs",
+          "tests/restore.test.mjs",
         ];
   const tests = spawn(
     process.execPath,
@@ -126,4 +157,6 @@ try {
   );
   if (created) await root.query("DROP DATABASE " + name + " WITH (FORCE)");
   await root.end();
+  if (bucketCreated) await removeTestBucket(s3, storageBucket);
+  s3.destroy();
 }

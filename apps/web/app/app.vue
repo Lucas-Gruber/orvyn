@@ -557,6 +557,7 @@ onMounted(async () => {
             <button v-if="page.access_rank >= 30" @click="save">
               Save title
             </button>
+            <PageAttachments :key="page.id" :page="page" />
             <div class="actions">
               <button @click="openHistory">Version history</button
               ><button

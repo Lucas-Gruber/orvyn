@@ -6,3 +6,5 @@ Passwords use salted scrypt. Browser sessions use HttpOnly/SameSite=Strict cooki
 Never publish credentials or sensitive documents in public issue reports. Report vulnerabilities privately to the repository maintainers; a dedicated contact is not yet configured.
 
 See docs/AUTHENTICATION.md for one-use tokens, encrypted outbox delivery, signed OIDC tokens, provider revocation and explicit remaining limitations.
+
+Attachment storage is private by default and downloads are authorized through the API. HTML/SVG are not served inline. See docs/FILES.md for limits, lifecycle, preview behavior and remaining scanning/processing work, and docs/BACKUP.md for key handling and recovery limits.

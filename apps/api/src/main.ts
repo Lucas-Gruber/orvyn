@@ -4,18 +4,28 @@ import { Module } from "@nestjs/common";
 import { migrate, db } from "./runtime.js";
 import { encryptionKey } from "./auth/security.js";
 import { OidcModule } from "./oidc.module.js";
+import { FilesModule } from "./files.module.js";
+import { storageHealth } from "./files/storage.js";
 import { AuthModule } from "./auth.module.js";
 import { SpacesModule } from "./spaces.module.js";
 import { PagesModule } from "./pages.module.js";
 import { HealthModule } from "./health.module.js";
 @Module({
-  imports: [OidcModule, AuthModule, SpacesModule, PagesModule, HealthModule],
+  imports: [
+    FilesModule,
+    OidcModule,
+    AuthModule,
+    SpacesModule,
+    PagesModule,
+    HealthModule,
+  ],
 })
 class App {}
 async function main() {
   if (!process.env.DATABASE_URL) throw Error("DATABASE_URL required");
   encryptionKey();
   await migrate(db);
+  await storageHealth();
   const app = await NestFactory.create(App);
   app.use((req: any, res: any, next: any) => {
     res.setHeader("X-Content-Type-Options", "nosniff");

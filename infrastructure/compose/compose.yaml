@@ -12,6 +12,26 @@ services:
       interval: 2s
       timeout: 3s
       retries: 30
+  storage:
+    image: chrislusf/seaweedfs@sha256:8779e14fbb8c76c607bc2ed934aeeb61e5319016f0ac1ba4667eae8f40fe623b
+    command:
+      [
+        "mini",
+        "-dir=/data",
+        "-ip=127.0.0.1",
+        "-ip.bind=0.0.0.0",
+        "-webdav=false",
+        "-admin.ui=false",
+        "-s3.config=/etc/orvyn/s3.json",
+        "-s3.allowDeleteBucketNotEmpty=false",
+      ]
+    ports: ["127.0.0.1:8333:8333"]
+    volumes: ["objects:/data", "../../.local/s3.json:/etc/orvyn/s3.json:ro"]
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "8333"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
   redis:
     image: redis@sha256:7958cfbb9d152f87dadfbc89f1b0b15938f0b81ff8982feb327476f4911935c3
     command: ["redis-server", "--save", "", "--appendonly", "no"]
@@ -25,4 +45,5 @@ services:
     image: axllent/mailpit@sha256:aef2aacc11f075ec0fb6874275ee4a421e688e11a96ebb296134d1735c7761ce
     ports: ["127.0.0.1:1025:1025", "127.0.0.1:8025:8025"]
 volumes:
+  objects:
   postgres:

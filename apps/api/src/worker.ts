@@ -1,3 +1,4 @@
+import { cleanupFiles } from "./files/cleanup.js";
 import { db } from "./runtime.js";
 import { deliverMailBatch, cleanupAuth } from "./auth/mail.js";
 import { encryptionKey } from "./auth/security.js";
@@ -14,6 +15,7 @@ async function run() {
     try {
       await deliverMailBatch();
       await cleanupAuth();
+      await cleanupFiles();
     } catch {
       console.error("Background authentication maintenance failed");
     }

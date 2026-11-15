@@ -9,6 +9,7 @@ pnpm install --frozen-lockfile
 pnpm setup:local
 pnpm infra:up
 pnpm build
+pnpm storage:init
 pnpm dev:api
 # separate terminals, same working directory:
 pnpm dev:worker
@@ -25,10 +26,12 @@ pnpm typecheck
 pnpm test
 ```
 
-The test runner creates its own temporary database, API, worker and Nuxt processes against the local PostgreSQL/Redis/Mailpit services. It exercises both the proxy and real Chromium. PostgreSQL credentials must be able to create/drop test databases on the **local development instance**. Database names are randomized and the runner drops only its own database. Remote database URLs are rejected. Tests never intentionally remove your application database or volumes. CHROMIUM_PATH overrides /usr/bin/chromium.
+The test runner creates its own temporary database, API, worker and Nuxt processes against the local PostgreSQL/Redis/S3/Mailpit services. It exercises both the proxy and real Chromium. PostgreSQL credentials must be able to create/drop test databases on the **local development instance**. Database names are randomized and the runner drops only its own database. Remote database URLs are rejected. Tests never intentionally remove your application database or volumes. CHROMIUM_PATH overrides /usr/bin/chromium.
 
 `pnpm db:migrate` applies versioned migrations after a build. API startup also applies them atomically under a PostgreSQL advisory lock. Upgrade, concurrent execution, data preservation and failed-migration rollback are covered by tests.
 
 Stop infrastructure with `docker compose --env-file .env -f infrastructure/compose/compose.yaml stop`. Do not remove volumes containing useful data. See docs/AUTHENTICATION.md for SMTP, OIDC and administrator bootstrap.
 
 Shared packages must be built before starting development processes. Collaboration health runs on port 3002; do not assume live processes survive environment snapshots. For another browser origin, update both ORVYN_ORIGIN and NUXT_PUBLIC_COLLABORATION_URL.
+
+S3 credentials and the local identity file are generated without printing values. Do not delete .local/s3.json or .env while retaining storage data unless you have preserved their configuration securely. Storage initialization verifies anonymous rejection. The test runner creates its own S3 bucket and restores a separate database/bucket for recovery checks.

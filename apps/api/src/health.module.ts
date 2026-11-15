@@ -1,3 +1,4 @@
+import { storageHealth } from "./files/storage.js";
 import {
   Module,
   Controller,
@@ -15,6 +16,7 @@ import { db, derive, hash, fail, text, mutation, user } from "./runtime.js";
 class HealthController {
   @Get("health") async health() {
     await db.query("SELECT 1");
+    await storageHealth();
     return { status: "ok" };
   }
 }

@@ -160,6 +160,19 @@ END
 $$;
 `,
   },
+  {
+    version: 8,
+    sql: `
+CREATE TABLE files (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(),page_id uuid NOT NULL REFERENCES pages(id),
+ object_key text UNIQUE NOT NULL,filename text NOT NULL,media_type text NOT NULL,size integer NOT NULL CHECK(size>=0),
+ uploaded_by uuid NOT NULL REFERENCES users(id),state text NOT NULL DEFAULT 'pending' CHECK(state IN ('pending','ready','deleted')),
+ created_at timestamptz NOT NULL DEFAULT now(),deleted_at timestamptz
+);
+CREATE INDEX files_page ON files(page_id) WHERE state='ready';
+CREATE INDEX files_pending ON files(created_at) WHERE state='pending';
+`,
+  },
 ] as const;
 
 export async function migrate(pool: Pool, target = migrations.at(-1)!.version) {

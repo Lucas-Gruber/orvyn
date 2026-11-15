@@ -50,3 +50,5 @@ Additional authenticated routes:
 Page creation accepts parentId. Page listing accepts q, after and limit (1–200) and exposes X-Next-Cursor when more records exist. Direct inaccessible resources return 404; stale versions return 409. See docs/PERMISSIONS.md for inheritance and conversion semantics.
 
 PATCH /pages/:id/title accepts title and titleVersion. REST content updates normalize legacy paragraph input but reject replacements once editor_documents contains a CRDT for the page. Use the authenticated collaboration service for subsequent content changes.
+
+File routes: GET /files/limits; GET/POST /pages/:id/files (POST is authenticated multipart/form-data with one file field, Origin required); GET /files/:id/download; GET /files/:id/preview for detected raster images; DELETE /files/:id with JSON body. All file resources inherit page permissions.

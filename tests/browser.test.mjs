@@ -53,6 +53,29 @@ test("Chromium: account, persisted page, verification, session settings and OIDC
     await expect(
       page.getByRole("textbox", { name: "Document", exact: true }),
     ).toHaveText("Written through the browser.");
+    await page.getByLabel("Choose attachment", { exact: true }).setInputFiles({
+      name: "browser-attachment.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from("Uploaded from Chromium"),
+    });
+    await page
+      .getByRole("button", { name: "Upload attachment", exact: true })
+      .click();
+    await expect(
+      page.getByRole("link", {
+        name: "Download browser-attachment.txt",
+        exact: true,
+      }),
+    ).toBeVisible();
+    const downloadPromise = page.waitForEvent("download");
+    await page
+      .getByRole("link", {
+        name: "Download browser-attachment.txt",
+        exact: true,
+      })
+      .click();
+    const download = await downloadPromise;
+    assert.equal(download.suggestedFilename(), "browser-attachment.txt");
     await page
       .getByRole("button", { name: "Space settings", exact: true })
       .click();
