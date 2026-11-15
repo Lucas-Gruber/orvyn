@@ -20,7 +20,8 @@
     "dev:collaboration": "node --env-file=.env apps/collaboration/node_modules/tsx/dist/cli.mjs --tsconfig apps/collaboration/tsconfig.json apps/collaboration/src/main.ts",
     "storage:init": "node --env-file=.env scripts/storage-init.mjs",
     "backup:db": "node --env-file=.env scripts/db-backup.mjs",
-    "restore:db": "node --env-file=.env scripts/db-restore.mjs"
+    "restore:db": "node --env-file=.env scripts/db-restore.mjs",
+    "preview:local": "node scripts/preview-local.mjs"
   },
   "devDependencies": {
     "@hocuspocus/provider": "4.8.0",

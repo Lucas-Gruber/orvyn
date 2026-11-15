@@ -139,6 +139,7 @@ try {
           "tests/database-files.test.mjs",
           "tests/worker.test.mjs",
           "tests/preview.test.mjs",
+          "tests/local-preview.test.mjs",
         ];
   const tests = spawn(
     process.execPath,

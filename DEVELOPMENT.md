@@ -2,6 +2,15 @@
 
 Requirements: Node >=22.12 (validated with 24.22.1), pnpm (validated with 11.25.0), Docker Compose, and Chromium for the browser test. The checked-in lockfile records the dependency versions.
 
+For a local preview on your own computer, clone the repository and run:
+
+```sh
+pnpm install --frozen-lockfile
+pnpm preview:local
+```
+
+Keep Docker Desktop running. The command prepares local configuration, starts the existing infrastructure, builds the application, checks storage/migrations and starts all four app services. When it prints `ORVYN_LOCAL_PREVIEW_READY`, open `http://localhost:5000` on that same computer. Create an account to try the application. Use `--port 5001` if 5000 is already occupied. Ctrl+C stops the app processes; infrastructure volumes and services are preserved. `--skip-setup` is intended for an already prepared checkout. The preview uses loopback-only web access and dynamically selected API/collaboration ports; it does not create a tunnel from the Cloud machine to your computer.
+
 From the repository root:
 
 ```sh
