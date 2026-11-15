@@ -90,6 +90,29 @@ async function save() {
 function documentText(node: any): string {
   return node.text || (node.content || []).map(documentText).join(" ");
 }
+const databaseName = ref(""),
+  showDatabaseCreate = ref(false),
+  includeDatabaseDefaults = ref(true);
+async function createDatabase() {
+  await run(async () => {
+    const result = await api(
+      "spaces/" + space.value.id + "/databases",
+      "POST",
+      {
+        name: databaseName.value,
+        includeDefaults: includeDatabaseDefaults.value,
+      },
+    );
+    databaseName.value = "";
+    showDatabaseCreate.value = false;
+    await loadPages();
+    edit(result.page);
+  });
+}
+async function openPage(id: string) {
+  edit(await api("pages/" + id));
+  view.value = "workspace";
+}
 const createParent = ref(""),
   moveParent = ref(""),
   showPermissions = ref(false),
@@ -483,7 +506,13 @@ onMounted(async () => {
               @click="view = 'space-settings'"
             >
               Space settings</button
-            ><button @click="openTrash">Trash</button>
+            ><button @click="openTrash">Trash</button
+            ><button
+              v-if="canCreate"
+              @click="showDatabaseCreate = !showDatabaseCreate"
+            >
+              New database
+            </button>
           </div>
           <form
             class="newpage"
@@ -540,7 +569,40 @@ onMounted(async () => {
               </option></select
             ><button>Create page</button>
           </form>
-          <section v-if="page">
+          <form
+            v-if="showDatabaseCreate && canCreate"
+            class="newpage"
+            @submit.prevent="createDatabase"
+          >
+            <label for="database-name">Database name</label
+            ><input
+              id="database-name"
+              v-model="databaseName"
+              required
+              maxlength="120"
+            /><label
+              ><input
+                v-model="includeDatabaseDefaults"
+                type="checkbox"
+                style="width: auto"
+              />
+              Include status and date properties</label
+            ><button>Create database</button>
+          </form>
+          <LazyDatabaseWorkspace
+            v-if="page?.kind === 'database'"
+            :key="page.id"
+            :database-id="page.id"
+            @open="run(() => openPage($event))"
+            @changed="run(refreshSpace)"
+          />
+          <section v-else-if="page">
+            <button
+              v-if="page.kind === 'record' && page.parent_id"
+              @click="run(() => openPage(page.parent_id))"
+            >
+              Back to database
+            </button>
             <label for="title">Page title</label
             ><input
               id="title"

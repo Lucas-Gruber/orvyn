@@ -15,7 +15,8 @@
     "@tiptap/extension-collaboration": "3.34.0",
     "@tiptap/extension-collaboration-caret": "3.34.0",
     "@hocuspocus/provider": "4.8.0",
-    "yjs": "13.6.33"
+    "yjs": "13.6.33",
+    "@orvyn/shared": "workspace:*"
   },
   "type": "module",
   "devDependencies": {

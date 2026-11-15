@@ -4,6 +4,7 @@ import { Module } from "@nestjs/common";
 import { migrate, db } from "./runtime.js";
 import { encryptionKey } from "./auth/security.js";
 import { OidcModule } from "./oidc.module.js";
+import { DatabasesModule } from "./databases.module.js";
 import { FilesModule } from "./files.module.js";
 import { storageHealth } from "./files/storage.js";
 import { AuthModule } from "./auth.module.js";
@@ -12,6 +13,7 @@ import { PagesModule } from "./pages.module.js";
 import { HealthModule } from "./health.module.js";
 @Module({
   imports: [
+    DatabasesModule,
     FilesModule,
     OidcModule,
     AuthModule,

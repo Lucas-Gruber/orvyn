@@ -69,10 +69,12 @@ class AuthController {
     @Body() body: any,
   ) {
     mutation(req);
-    await rateLimit("credentials:" + req.ip);
+    await rateLimit("credentials-peer:" + req.ip, 500);
     const email = emailInput(body?.email),
-      password = passwordInput(body?.password),
-      digest = await passwordHash(password);
+      password = passwordInput(body?.password);
+    await rateLimit("credentials-account-peer:" + req.ip + ":" + email, 30);
+    await rateLimit("credentials-account:" + email, 100);
+    const digest = await passwordHash(password);
     return transaction(async (c) => {
       const r = await c.query(
         "INSERT INTO users(email,password_hash) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING id",
@@ -93,9 +95,11 @@ class AuthController {
     @Body() body: any,
   ) {
     mutation(req);
-    await rateLimit("credentials:" + req.ip);
+    await rateLimit("credentials-peer:" + req.ip, 500);
     const email = emailInput(body?.email),
       password = passwordInput(body?.password);
+    await rateLimit("credentials-account-peer:" + req.ip + ":" + email, 30);
+    await rateLimit("credentials-account:" + email, 100);
     return transaction(async (c) => {
       const r = await c.query(
         "SELECT id,password_hash,email_verified FROM users WHERE email=$1 FOR NO KEY UPDATE",

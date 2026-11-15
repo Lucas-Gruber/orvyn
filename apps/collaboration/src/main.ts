@@ -17,9 +17,11 @@ type Identity = {
   email: string;
   sessionHash: string;
   spaceId: string;
+  visibleRecords: Set<string>;
 };
 const db = new Pool({ connectionString: process.env.DATABASE_URL });
 const live = new Set<Connection<Identity>>();
+let notificationsReady = false;
 let stopping = false,
   poisoned = false,
   revalidating = false;
@@ -37,6 +39,7 @@ const extension = new RedisExtension({
 });
 function ready() {
   return (
+    notificationsReady &&
     !stopping &&
     !poisoned &&
     extension.pub?.status === "ready" &&
@@ -189,7 +192,11 @@ const server = new Server<Identity>({
     );
     if (!p.rowCount || p.rows[0].rank < 10) deny();
     connectionConfig.readOnly = p.rows[0].rank < 30;
-    return { ...identity, spaceId: p.rows[0].space_id };
+    return {
+      ...identity,
+      spaceId: p.rows[0].space_id,
+      visibleRecords: new Set<string>(),
+    };
   },
   async connected({ connection }) {
     live.add(connection);
@@ -274,8 +281,8 @@ const server = new Server<Identity>({
         );
         const p = (
           await c.query(
-            "UPDATE pages SET document=$2,version=version+1 WHERE id=$1 RETURNING id,version,title,document",
-            [documentName, json],
+            "UPDATE pages SET document=$2,version=version+1,last_edited_by=$3 WHERE id=$1 RETURNING id,version,title,document",
+            [documentName, json, connection.context.userId],
           )
         ).rows[0];
         await c.query(
@@ -286,6 +293,41 @@ const server = new Server<Identity>({
         candidate.destroy();
       }
     });
+  },
+  async onStateless({ connection, documentName, payload }) {
+    if (payload.length > 100000) deny();
+    let data: any;
+    try {
+      data = JSON.parse(payload);
+    } catch {
+      return;
+    }
+    if (data.type !== "watch-records") return;
+    if (
+      !Array.isArray(data.recordIds) ||
+      data.recordIds.length > 2000 ||
+      data.recordIds.some(
+        (id: any) =>
+          typeof id !== "string" ||
+          !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(
+            id,
+          ),
+      )
+    )
+      deny();
+    const ids = [...new Set(data.recordIds)];
+    const rows = await db.query(
+      "SELECT r.page_id FROM database_records r WHERE r.database_id=$1 AND r.page_id=ANY($2::uuid[]) AND orvyn_page_role(r.page_id,$3)>=10",
+      [documentName, ids, connection.context.userId],
+    );
+    connection.context.visibleRecords = new Set(
+      rows.rows.map((r) => r.page_id),
+    );
+    if (rows.rows.length !== ids.length)
+      connection.sendStateless(JSON.stringify({ type: "database-changed" }));
+    connection.sendStateless(
+      JSON.stringify({ type: "records-watched", count: rows.rows.length }),
+    );
   },
   async beforeHandleAwareness({ states, removedClients, awareness, context }) {
     if (!context) return;
@@ -344,6 +386,67 @@ function redisLost() {
 async function main() {
   if (!process.env.DATABASE_URL) throw Error("DATABASE_URL required");
   await redis.ping();
+  const listener = await db.connect();
+  await listener.query("LISTEN orvyn_database_changed");
+  notificationsReady = true;
+  listener.on("notification", (message) => {
+    void (async () => {
+      let data: any;
+      try {
+        data = JSON.parse(message.payload || "");
+      } catch {
+        return;
+      }
+      if (
+        typeof data.databaseId !== "string" ||
+        !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(
+          data.databaseId,
+        )
+      )
+        return;
+      for (const connection of live) {
+        if (connection.document.name !== data.databaseId) continue;
+        try {
+          if (data.recordId) {
+            if (
+              typeof data.recordId !== "string" ||
+              !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(
+                data.recordId,
+              )
+            )
+              continue;
+            const r = await db.query(
+              "SELECT orvyn_page_role($1,$2,true) AS rank",
+              [data.recordId, connection.context.userId],
+            );
+            if (r.rows[0].rank < 10) {
+              if (!connection.context.visibleRecords.has(data.recordId))
+                continue;
+              connection.context.visibleRecords.delete(data.recordId);
+            }
+          }
+          connection.sendStateless(
+            JSON.stringify({ type: "database-changed" }),
+          );
+        } catch {
+          connection.close({
+            code: 1013,
+            reason: "Database coordination unavailable",
+          });
+        }
+      }
+    })();
+  });
+  listener.on("error", () => {
+    if (stopping) return;
+    notificationsReady = false;
+    for (const connection of live)
+      connection.close({
+        code: 1013,
+        reason: "Database coordination unavailable",
+      });
+    setTimeout(() => process.exit(1), 50);
+  });
   await server.listen();
   extension.pub.on("error", () => {});
   extension.sub.on("error", () => {});
@@ -356,6 +459,7 @@ async function main() {
     clearInterval(interval);
     await server.destroy();
     await redis.quit();
+    listener.release();
     await db.end();
   };
   process.on("SIGTERM", () => void stop());

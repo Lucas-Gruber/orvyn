@@ -14,3 +14,5 @@ Accepted: openid-client 6.9.0 performs discovery, code exchange, PKCE and signed
 PostgreSQL versioned migrations run transactionally with an advisory lock. Email delivery runs in a separate process using FOR UPDATE SKIP LOCKED outbox claims; it is at least once. Multi-process worker delivery and password reset concurrency require further dedicated stress tests; do not infer complete distributed collaboration readiness from these account tests.
 
 See docs/PERMISSIONS.md for ADR 003: team conversion, inherited deny rules, privacy-preserving moves and authorization-sensitive write serialization.
+
+See docs/DATABASES.md for ADR 005: record-pages, shared schemas, typed JSONB values, SQL view queries and permission-aware live invalidations.

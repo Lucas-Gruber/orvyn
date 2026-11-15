@@ -1,3 +1,4 @@
+import { peer, waitFor } from "./collaboration-peer.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -5,11 +6,7 @@ import { createServer, connect as tcpConnect } from "node:net";
 import { once } from "node:events";
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
-import WS from "ws";
-import {
-  HocuspocusProvider,
-  HocuspocusProviderWebsocket,
-} from "@hocuspocus/provider";
+
 import * as Y from "yjs";
 import { request, sessionCookie, Pool } from "./helpers.mjs";
 import { yDocToDocument } from "../packages/editor/dist/index.js";
@@ -17,14 +14,7 @@ const text = (doc) => {
   const visit = (n) => n.text || (n.content || []).map(visit).join("");
   return visit(yDocToDocument(doc));
 };
-async function waitFor(check, label) {
-  const end = Date.now() + 12000;
-  while (Date.now() < end) {
-    if (await check()) return;
-    await new Promise((r) => setTimeout(r, 25));
-  }
-  assert.fail(label);
-}
+
 function append(doc, value) {
   doc.transact(() => {
     const paragraph = doc.getXmlFragment("default").get(0);
@@ -36,61 +26,7 @@ function append(doc, value) {
     node.insert(node.length, value);
   });
 }
-function peer(url, pageId, cookie, origin = process.env.TEST_ORIGIN) {
-  const doc = new Y.Doc();
-  let rejected = false,
-    closed = false,
-    reason = "";
-  class AuthenticatedSocket extends WS {
-    constructor(url, protocols) {
-      super(url, protocols, {
-        headers: { Origin: origin, ...(cookie ? { Cookie: cookie } : {}) },
-      });
-    }
-  }
-  const socket = new HocuspocusProviderWebsocket({
-    url,
-    WebSocketPolyfill: AuthenticatedSocket,
-    delay: 50,
-    minDelay: 20,
-    maxDelay: 200,
-  });
-  const provider = new HocuspocusProvider({
-    websocketProvider: socket,
-    name: pageId,
-    document: doc,
-    token: "cookie",
-    onAuthenticationFailed(event) {
-      reason = event.reason;
-      rejected = true;
-    },
-    onClose(event) {
-      reason = event.event.reason;
-      closed = true;
-    },
-  });
-  provider.attach();
 
-  return {
-    doc,
-    provider,
-    socket,
-    get reason() {
-      return reason;
-    },
-    get rejected() {
-      return rejected;
-    },
-    get closed() {
-      return closed;
-    },
-    destroy() {
-      provider.destroy();
-      socket.destroy();
-      doc.destroy();
-    },
-  };
-}
 test("Yjs: concurrent replicas, durable acknowledgement, reconnect, read-only and active revocation", async () => {
   const urls = JSON.parse(process.env.COLLABORATION_TEST_URLS),
     db = new Pool({ connectionString: process.env.DATABASE_URL }),

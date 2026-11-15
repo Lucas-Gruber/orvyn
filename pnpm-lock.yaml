@@ -44,6 +44,9 @@ importers:
       '@orvyn/editor':
         specifier: workspace:*
         version: link:../../packages/editor
+      '@orvyn/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       nodemailer:
         specifier: 10.5.0
         version: 10.5.0
@@ -127,6 +130,9 @@ importers:
       '@orvyn/editor':
         specifier: workspace:*
         version: link:../../packages/editor
+      '@orvyn/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@tiptap/extension-collaboration':
         specifier: 3.34.0
         version: 3.34.0(@tiptap/core@3.34.0(@tiptap/pm@3.34.0))(@tiptap/pm@3.34.0)(@tiptap/y-tiptap@3.3.0(prosemirror-model@1.25.13)(prosemirror-state@1.4.4)(prosemirror-view@1.42.9)(y-protocols@1.0.7(yjs@13.6.33))(yjs@13.6.33))(yjs@13.6.33)
@@ -199,6 +205,16 @@ importers:
       '@types/node':
         specifier: ^24.0.0
         version: 24.19.2
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/shared:
+    dependencies:
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
+    devDependencies:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -3988,6 +4004,9 @@ packages:
   zip-stream@7.0.5:
     resolution: {integrity: sha512-dSvYKdvLsAHCDqPOhIwk/q5CvuWtTB3Dgpoe0uVEFjTzIOAmsQpprX25InCvrvJsirEbu1OHyy67n/kAj1Sw/w==}
     engines: {node: '>=18'}
+
+  zod@4.6.7:
+    resolution: {integrity: sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==}
 
 snapshots:
 
@@ -8262,3 +8281,5 @@ snapshots:
       compress-commons: 7.0.1
       normalize-path: 3.0.0
       readable-stream: 4.8.0
+
+  zod@4.6.7: {}

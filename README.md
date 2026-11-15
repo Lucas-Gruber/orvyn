@@ -14,3 +14,5 @@ Permission rules and current limits: [docs/PERMISSIONS.md](docs/PERMISSIONS.md).
 Editor, replicas and tested limits: [docs/COLLABORATION.md](docs/COLLABORATION.md).
 
 Private attachments: [docs/FILES.md](docs/FILES.md). Recovery evidence and remaining limits: [docs/BACKUP.md](docs/BACKUP.md).
+
+Structured databases and tested view behavior: [docs/DATABASES.md](docs/DATABASES.md).

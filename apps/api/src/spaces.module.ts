@@ -80,6 +80,19 @@ class SpacesController {
       return { ...r.rows[0], role: "Owner" };
     });
   }
+  @Get("spaces/:id/directory") async directory(
+    @Req() req: any,
+    @Param("id") id: string,
+  ) {
+    const uid = await user(req),
+      s = await spaceAccess(db, uid, id);
+    return (
+      await db.query(
+        "SELECT u.id,u.email FROM users u LEFT JOIN space_members m ON m.user_id=u.id AND m.space_id=$1 WHERE u.id=$2 OR m.space_id=$1 ORDER BY u.email",
+        [s.id, s.owner_id],
+      )
+    ).rows;
+  }
   @Get("spaces/:id/members") async members(
     @Req() req: any,
     @Param("id") id: string,

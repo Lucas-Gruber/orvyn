@@ -15,7 +15,7 @@
     "dev:worker": "node --env-file=.env apps/api/node_modules/tsx/dist/cli.mjs --tsconfig apps/api/tsconfig.json apps/api/src/worker.ts",
     "db:migrate": "node --env-file=.env scripts/migrate.mjs",
     "admin:grant": "node --env-file=.env scripts/admin.mjs",
-    "typecheck": "pnpm --filter @orvyn/auth build && pnpm --filter @orvyn/editor build && pnpm --filter @orvyn/api build && pnpm --filter @orvyn/collaboration build && pnpm --filter @orvyn/web typecheck",
+    "typecheck": "pnpm --filter @orvyn/shared build && pnpm --filter @orvyn/auth build && pnpm --filter @orvyn/editor build && pnpm --filter @orvyn/api build && pnpm --filter @orvyn/collaboration build && pnpm --filter @orvyn/web typecheck",
     "format": "prettier --write apps packages scripts tests package.json pnpm-workspace.yaml infrastructure",
     "dev:collaboration": "node --env-file=.env apps/collaboration/node_modules/tsx/dist/cli.mjs --tsconfig apps/collaboration/tsconfig.json apps/collaboration/src/main.ts",
     "storage:init": "node --env-file=.env scripts/storage-init.mjs",

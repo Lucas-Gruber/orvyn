@@ -72,3 +72,23 @@ export async function subtree(c: PoolClient, id: string) {
     )
   ).rows as { id: string; depth: number }[];
 }
+export async function newPageParent(
+  c: PoolClient,
+  uid: string,
+  spaceId: string,
+  parentId: unknown,
+  extraDepth = 0,
+) {
+  if (parentId === null || parentId === undefined) return null;
+  if (typeof parentId !== "string") return fail(400, "Invalid parent page");
+  const parent = await pageAccess(c, uid, parentId, 30);
+  if (parent.space_id !== spaceId)
+    return fail(400, "Parent must belong to this space");
+  const d = await c.query(
+    "WITH RECURSIVE a AS(SELECT id,parent_id,0 AS depth FROM pages WHERE id=$1 UNION ALL SELECT p.id,p.parent_id,a.depth+1 FROM pages p JOIN a ON a.parent_id=p.id WHERE a.depth<64) SELECT max(depth) AS depth FROM a",
+    [parent.id],
+  );
+  if (d.rows[0].depth + 1 + extraDepth > 63)
+    return fail(400, "Page hierarchy exceeds 64 levels");
+  return parent.id as string;
+}

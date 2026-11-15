@@ -128,6 +128,10 @@ try {
           "tests/editor.test.mjs",
           "tests/files.test.mjs",
           "tests/restore.test.mjs",
+          "tests/databases.test.mjs",
+          "tests/database-events.test.mjs",
+          "tests/database-browser.test.mjs",
+          "tests/rate-limit.test.mjs",
         ];
   const tests = spawn(
     process.execPath,

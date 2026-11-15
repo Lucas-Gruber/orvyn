@@ -22,6 +22,7 @@ import {
   subtree,
   memberRole,
   roleRanks,
+  newPageParent,
 } from "./permissions/access.js";
 function documentInput(body: any) {
   if (!Number.isSafeInteger(body?.version))
@@ -77,21 +78,10 @@ class PagesController {
       title = text(body?.title, 300);
     return transaction(async (c) => {
       const s = await spaceAccess(c, uid, id, 30, true);
-      let parent = null;
-      if (body.parentId !== undefined && body.parentId !== null) {
-        const p = await pageAccess(c, uid, String(body.parentId), 30);
-        if (p.space_id !== s.id) fail(400, "Parent must belong to this space");
-        parent = p.id;
-        const d = await c.query(
-          "WITH RECURSIVE a AS(SELECT id,parent_id,0 AS depth FROM pages WHERE id=$1 UNION ALL SELECT p.id,p.parent_id,a.depth+1 FROM pages p JOIN a ON a.parent_id=p.id WHERE a.depth<64) SELECT max(depth) AS depth FROM a",
-          [parent],
-        );
-        if (d.rows[0].depth >= 63)
-          fail(400, "Page hierarchy exceeds 64 levels");
-      }
+      const parent = await newPageParent(c, uid, s.id, body.parentId);
       const r = await c.query(
-        "INSERT INTO pages(space_id,title,parent_id) VALUES($1,$2,$3) RETURNING *",
-        [s.id, title, parent],
+        "INSERT INTO pages(space_id,title,parent_id,created_by,last_edited_by) VALUES($1,$2,$3,$4,$4) RETURNING *",
+        [s.id, title, parent, uid],
       );
       const p = r.rows[0];
       await c.query(
@@ -121,8 +111,8 @@ class PagesController {
       if (p.version !== input.version)
         fail(409, "Page changed; reload before saving");
       const r = await c.query(
-        "UPDATE pages SET title=$1,document=$2,version=version+1 WHERE id=$3 RETURNING *",
-        [input.title, input.document, p.id],
+        "UPDATE pages SET title=$1,document=$2,version=version+1,last_edited_by=$4 WHERE id=$3 RETURNING *",
+        [input.title, input.document, p.id, uid],
       );
       const saved = r.rows[0];
       await c.query(
@@ -148,8 +138,8 @@ class PagesController {
       if (p.title_version !== body.titleVersion)
         fail(409, "Title changed; reload first");
       const r = await c.query(
-        "UPDATE pages SET title=$1,title_version=title_version+1,version=version+1 WHERE id=$2 RETURNING title,title_version",
-        [title, p.id],
+        "UPDATE pages SET title=$1,title_version=title_version+1,version=version+1,last_edited_by=$3 WHERE id=$2 RETURNING title,title_version",
+        [title, p.id, uid],
       );
       await audit(c, uid, "page.title_updated");
       return r.rows[0];
@@ -243,6 +233,8 @@ class PagesController {
     return transaction(async (c) => {
       const p = await pageWrite(c, uid, id),
         descendants = await subtree(c, p.id);
+      if (p.kind === "record" && body.parentId !== p.parent_id)
+        fail(400, "Record pages must remain in their database");
       if (p.version !== body.version) fail(409, "Page changed; reload first");
       const denied = await c.query(
         "SELECT id FROM pages WHERE id=ANY($1::uuid[]) AND orvyn_page_role(id,$2,true)<30",

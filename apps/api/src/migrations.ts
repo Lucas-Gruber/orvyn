@@ -173,6 +173,87 @@ CREATE INDEX files_page ON files(page_id) WHERE state='ready';
 CREATE INDEX files_pending ON files(created_at) WHERE state='pending';
 `,
   },
+  {
+    version: 9,
+    sql: `
+ALTER TABLE pages ADD COLUMN kind text NOT NULL DEFAULT 'page' CHECK(kind IN ('page','database','record','whiteboard'));
+ALTER TABLE pages ADD COLUMN created_at timestamptz NOT NULL DEFAULT now();
+ALTER TABLE pages ADD COLUMN updated_at timestamptz NOT NULL DEFAULT now();
+ALTER TABLE pages ADD COLUMN created_by uuid REFERENCES users(id);
+ALTER TABLE pages ADD COLUMN last_edited_by uuid REFERENCES users(id);
+UPDATE pages p SET created_at=coalesce((SELECT min(created_at) FROM page_revisions r WHERE r.page_id=p.id),now()),updated_at=coalesce((SELECT max(created_at) FROM page_revisions r WHERE r.page_id=p.id),now()),created_by=coalesce((SELECT author_id FROM page_revisions r WHERE r.page_id=p.id AND author_id IS NOT NULL ORDER BY version LIMIT 1),(SELECT owner_id FROM spaces s WHERE s.id=p.space_id)),last_edited_by=coalesce((SELECT author_id FROM page_revisions r WHERE r.page_id=p.id AND author_id IS NOT NULL ORDER BY version DESC LIMIT 1),(SELECT owner_id FROM spaces s WHERE s.id=p.space_id));
+CREATE FUNCTION orvyn_page_timestamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN NEW.updated_at=now(); RETURN NEW; END $$;
+CREATE TRIGGER pages_timestamp BEFORE UPDATE ON pages FOR EACH ROW EXECUTE FUNCTION orvyn_page_timestamp();
+CREATE TABLE databases (
+ page_id uuid PRIMARY KEY REFERENCES pages(id),schema_version integer NOT NULL DEFAULT 1
+);
+CREATE TABLE database_properties (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(),database_id uuid NOT NULL REFERENCES databases(page_id),
+ name text NOT NULL,type text NOT NULL CHECK(type IN ('Title','Text','Number','Select','MultiSelect','Status','Date','Checkbox','URL','Email','Phone','Person','Files','Relation','Formula','Rollup','CreatedTime','CreatedBy','LastEditedTime','LastEditedBy')),
+ config jsonb NOT NULL DEFAULT '{}',position integer NOT NULL DEFAULT 0,deleted_at timestamptz,
+ UNIQUE(database_id,id)
+);
+CREATE UNIQUE INDEX database_one_title ON database_properties(database_id) WHERE type='Title' AND deleted_at IS NULL;
+CREATE INDEX database_properties_database ON database_properties(database_id,position);
+CREATE TABLE database_views (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(),database_id uuid NOT NULL REFERENCES databases(page_id),
+ name text NOT NULL,type text NOT NULL CHECK(type IN ('Table','Board','List','Calendar','Gallery','Timeline')),
+ config jsonb NOT NULL DEFAULT '{}',version integer NOT NULL DEFAULT 1,position integer NOT NULL DEFAULT 0
+);
+ALTER TABLE pages ADD CONSTRAINT pages_parent_id_unique UNIQUE(parent_id,id);
+CREATE TABLE database_records (
+ page_id uuid PRIMARY KEY REFERENCES pages(id),database_id uuid NOT NULL REFERENCES databases(page_id),
+ values jsonb NOT NULL DEFAULT '{}' CHECK(jsonb_typeof(values)='object'),version integer NOT NULL DEFAULT 1,
+ FOREIGN KEY(database_id,page_id) REFERENCES pages(parent_id,id)
+);
+CREATE INDEX database_records_database ON database_records(database_id,page_id);
+CREATE INDEX database_records_values ON database_records USING gin(values jsonb_path_ops);
+CREATE FUNCTION orvyn_database_notify() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE target uuid;
+BEGIN
+ target=coalesce(NEW.database_id,OLD.database_id);
+ IF TG_TABLE_NAME='database_properties' THEN UPDATE databases SET schema_version=schema_version+1 WHERE page_id=target; END IF;
+ PERFORM pg_notify('orvyn_database_changed',target::text);RETURN NULL;
+END $$;
+CREATE TRIGGER records_notify AFTER INSERT OR UPDATE OR DELETE ON database_records FOR EACH ROW EXECUTE FUNCTION orvyn_database_notify();
+CREATE TRIGGER properties_notify AFTER INSERT OR UPDATE OR DELETE ON database_properties FOR EACH ROW EXECUTE FUNCTION orvyn_database_notify();
+CREATE TRIGGER views_notify AFTER INSERT OR UPDATE OR DELETE ON database_views FOR EACH ROW EXECUTE FUNCTION orvyn_database_notify();
+CREATE FUNCTION orvyn_record_page_notify() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE target uuid;
+BEGIN
+ IF NEW.kind='record' THEN
+  SELECT database_id INTO target FROM database_records WHERE page_id=NEW.id;
+  IF NEW.title IS DISTINCT FROM OLD.title OR NEW.deleted_at IS DISTINCT FROM OLD.deleted_at THEN UPDATE database_records SET version=version+1 WHERE page_id=NEW.id; END IF;
+  IF target IS NOT NULL THEN PERFORM pg_notify('orvyn_database_changed',target::text); END IF;
+ END IF;
+ RETURN NULL;
+END $$;
+CREATE TRIGGER record_page_notify AFTER UPDATE ON pages FOR EACH ROW EXECUTE FUNCTION orvyn_record_page_notify();
+`,
+  },
+  {
+    version: 10,
+    sql: `
+CREATE OR REPLACE FUNCTION orvyn_database_notify() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE target uuid; record_id uuid;
+BEGIN
+ target=coalesce(NEW.database_id,OLD.database_id);
+ IF TG_TABLE_NAME='database_properties' THEN UPDATE databases SET schema_version=schema_version+1 WHERE page_id=target; END IF;
+ IF TG_TABLE_NAME='database_records' THEN record_id=coalesce(NEW.page_id,OLD.page_id); END IF;
+ PERFORM pg_notify('orvyn_database_changed',json_build_object('databaseId',target,'recordId',record_id)::text);RETURN NULL;
+END $$;
+CREATE OR REPLACE FUNCTION orvyn_record_page_notify() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE target uuid;
+BEGIN
+ IF NEW.kind='record' THEN
+  SELECT database_id INTO target FROM database_records WHERE page_id=NEW.id;
+  IF NEW.title IS DISTINCT FROM OLD.title OR NEW.deleted_at IS DISTINCT FROM OLD.deleted_at THEN UPDATE database_records SET version=version+1 WHERE page_id=NEW.id; END IF;
+  IF target IS NOT NULL THEN PERFORM pg_notify('orvyn_database_changed',json_build_object('databaseId',target,'recordId',NEW.id)::text); END IF;
+ END IF;
+ RETURN NULL;
+END $$;
+`,
+  },
 ] as const;
 
 export async function migrate(pool: Pool, target = migrations.at(-1)!.version) {
