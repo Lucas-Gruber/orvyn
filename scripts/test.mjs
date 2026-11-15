@@ -107,7 +107,8 @@ try {
     collaborationUrls.push(`ws://127.0.0.1:${p}`);
   }
   common.COLLABORATION_TEST_URLS = JSON.stringify(collaborationUrls);
-  common.NUXT_PUBLIC_COLLABORATION_URL = collaborationUrls[0];
+  common.NUXT_PUBLIC_COLLABORATION_URL = "";
+  common.NUXT_COLLABORATION_UPSTREAM = collaborationUrls[0];
   const web = start(["apps/web/.output/server/index.mjs"], {
     ...common,
     NITRO_PORT: String(webPort),
@@ -137,6 +138,7 @@ try {
           "tests/database-person.test.mjs",
           "tests/database-files.test.mjs",
           "tests/worker.test.mjs",
+          "tests/preview.test.mjs",
         ];
   const tests = spawn(
     process.execPath,

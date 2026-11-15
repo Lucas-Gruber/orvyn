@@ -35,3 +35,9 @@ Stop infrastructure with `docker compose --env-file .env -f infrastructure/compo
 Shared packages must be built before starting development processes. Collaboration health runs on port 3002; do not assume live processes survive environment snapshots. For another browser origin, update both ORVYN_ORIGIN and NUXT_PUBLIC_COLLABORATION_URL.
 
 S3 credentials and the local identity file are generated without printing values. Do not delete .local/s3.json or .env while retaining storage data unless you have preserved their configuration securely. Storage initialization verifies anonymous rejection. The test runner creates its own S3 bucket and restores a separate database/bucket for recovery checks.
+
+## Forwarded browser ports
+
+The browser-facing port may differ from the Cloud server's listening port. For example, if your browser opens `http://localhost:5000` while the web service listens internally on 3000, set `ORVYN_ORIGIN=http://localhost:5000` in the ignored `.env` and leave `NUXT_PUBLIC_COLLABORATION_URL=` empty. Restart API, collaboration and web processes. Keep the internal API and collaboration addresses on ports 3001/3002.
+
+The web service proxies authenticated WebSockets at `/collaboration` to private `NUXT_COLLABORATION_UPSTREAM` (default `ws://127.0.0.1:3002`). Only the web port needs forwarding; the browser derives `ws` or `wss` from its actual URL. The forwarding layer must support WebSocket upgrades. An explicit public collaboration override is still supported for other deployments. Both the proxy and upstream require the configured exact Origin; forwarded-host headers do not grant trust. Nitro's WebSocket support is enabled and integration-tested against the pinned Nuxt/Nitro versions.

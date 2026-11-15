@@ -32,7 +32,7 @@ if (!/^SMTP_URL=/m.test(current))
 if (!/^REDIS_URL=/m.test(current))
   appendFileSync(".env", "\nREDIS_URL=redis://127.0.0.1:6379\n");
 if (!/^NUXT_PUBLIC_COLLABORATION_URL=/m.test(current))
-  appendFileSync(".env", "NUXT_PUBLIC_COLLABORATION_URL=ws://localhost:3002\n");
+  appendFileSync(".env", "NUXT_PUBLIC_COLLABORATION_URL=\n");
 
 const storageEnv = parseEnv(readFileSync(".env", "utf8"));
 const accessKey = storageEnv.S3_ACCESS_KEY_ID || "orvyn-development";

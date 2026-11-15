@@ -7,19 +7,21 @@
     "typecheck": "nuxt typecheck"
   },
   "dependencies": {
+    "@hocuspocus/provider": "4.8.0",
+    "@orvyn/editor": "workspace:*",
+    "@orvyn/shared": "workspace:*",
+    "@tiptap/extension-collaboration": "3.34.0",
+    "@tiptap/extension-collaboration-caret": "3.34.0",
+    "@tiptap/vue-3": "3.34.0",
     "nuxt": "4.6.4",
     "vue": "3.5.45",
     "vue-router": "^4.6.4",
-    "@orvyn/editor": "workspace:*",
-    "@tiptap/vue-3": "3.34.0",
-    "@tiptap/extension-collaboration": "3.34.0",
-    "@tiptap/extension-collaboration-caret": "3.34.0",
-    "@hocuspocus/provider": "4.8.0",
-    "yjs": "13.6.33",
-    "@orvyn/shared": "workspace:*"
+    "ws": "8.23.0",
+    "yjs": "13.6.33"
   },
   "type": "module",
   "devDependencies": {
+    "@types/ws": "8.18.1",
     "typescript": "^5.9.3",
     "vue-tsc": "^3.3.14"
   }

@@ -19,4 +19,6 @@
 | REDIS_URL | Redis coordination URL; may include credentials; required by collaboration. |
 | COLLABORATION_PORT | Collaboration service port, default 3002. |
 | COLLABORATION_NAMESPACE | Shared Redis key namespace; use one value per deployment. |
-| NUXT_PUBLIC_COLLABORATION_URL | Browser WebSocket endpoint; local setup supplies ws://localhost:3002; use wss in production. |
+| NUXT_PUBLIC_COLLABORATION_URL | Optional browser WebSocket override; leave empty to use the browser origin with /collaboration (including forwarded ports and HTTPS/WSS). |
+
+| NUXT_COLLABORATION_UPSTREAM | Private Nuxt WebSocket upstream; default ws://127.0.0.1:3002. Never point this at the public /collaboration route itself. |
