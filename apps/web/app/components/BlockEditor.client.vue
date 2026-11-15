@@ -6,7 +6,12 @@ import { HocuspocusProvider } from "@hocuspocus/provider";
 import EmbeddedDatabaseNode from "./EmbeddedDatabaseNode.vue";
 import { editorExtensions } from "@orvyn/editor";
 import * as Y from "yjs";
-const props = defineProps<{ pageId: string; spaceId: string; user: any }>();
+const props = defineProps<{
+  pageId: string;
+  spaceId: string;
+  user: any;
+  paused?: boolean;
+}>();
 const document = new Y.Doc(),
   editor = shallowRef<Editor>(),
   status = ref("connecting"),
@@ -361,15 +366,43 @@ const provider = new HocuspocusProvider({
     }
   },
 });
-watch([status, synced, readOnly, editor, denied], () =>
+async function flush() {
+  if (!unsynced.value) return;
+  await new Promise<void>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      stop();
+      reject(
+        new Error(
+          "Document changes are still waiting to save. Reconnect before leaving this page.",
+        ),
+      );
+    }, 8000);
+    const stop = watch(unsynced, (count) => {
+      if (count) return;
+      clearTimeout(timeout);
+      stop();
+      resolve();
+    });
+  });
+}
+defineExpose({ flush });
+function beforeUnload(event: BeforeUnloadEvent) {
+  if (!unsynced.value) return;
+  event.preventDefault();
+  event.returnValue = "";
+}
+onMounted(() => window.addEventListener("beforeunload", beforeUnload));
+watch([status, synced, readOnly, editor, denied, () => props.paused], () =>
   editor.value?.setEditable(
     status.value === "connected" &&
       synced.value &&
       !readOnly.value &&
-      !denied.value,
+      !denied.value &&
+      !props.paused,
   ),
 );
 onBeforeUnmount(() => {
+  window.removeEventListener("beforeunload", beforeUnload);
   editor.value?.destroy();
   provider.destroy();
   document.destroy();
@@ -382,9 +415,19 @@ onBeforeUnmount(() => {
         >{{ peers.length }} present</span
       >
     </div>
-    <p v-if="peers.length" class="presence">
-      {{ peers.map((p) => p.name).join(" · ") }}
-    </p>
+    <div
+      v-if="peers.length > 1"
+      class="presence"
+      aria-label="People on this page"
+    >
+      <span
+        v-for="peer in peers.slice(0, 5)"
+        :key="peer.id"
+        class="presence-avatar"
+        :title="peer.name"
+        >{{ peer.name.slice(0, 2).toUpperCase() }}</span
+      >
+    </div>
     <dialog
       ref="linkDialog"
       aria-labelledby="link-database-title"
@@ -467,51 +510,77 @@ onBeforeUnmount(() => {
     </dialog>
     <template v-if="editor"
       ><div class="editor-toolbar" aria-label="Text formatting">
-        <button :disabled="!editor.isEditable" @click="openLinkPicker">
-          Link database
+        <button
+          title="Link a database"
+          :disabled="!editor.isEditable"
+          @click="openLinkPicker"
+        >
+          <AppIcon name="database" :size="16" /><span>Link database</span>
         </button>
         <button
+          title="Bold · Ctrl+B"
           :disabled="!editor.isEditable"
           :aria-pressed="editor.isActive('bold')"
           @click="editor.chain().focus().toggleBold().run()"
         >
-          Bold</button
+          <AppIcon name="bold" :size="16" /><span class="sr-only"
+            >Bold</span
+          ></button
         ><button
+          title="Italic · Ctrl+I"
           :disabled="!editor.isEditable"
           :aria-pressed="editor.isActive('italic')"
           @click="editor.chain().focus().toggleItalic().run()"
         >
-          Italic</button
+          <AppIcon name="italic" :size="16" /><span class="sr-only"
+            >Italic</span
+          ></button
         ><button
+          title="Heading"
           :disabled="!editor.isEditable"
           @click="editor.chain().focus().toggleHeading({ level: 2 }).run()"
         >
-          Heading</button
+          <AppIcon name="heading" :size="16" /><span class="sr-only"
+            >Heading</span
+          ></button
         ><button
+          title="Bullet list"
           :disabled="!editor.isEditable"
           @click="editor.chain().focus().toggleBulletList().run()"
         >
-          List</button
+          <AppIcon name="list" :size="16" /><span class="sr-only"
+            >List</span
+          ></button
         ><button
+          title="Checklist"
           :disabled="!editor.isEditable"
           @click="editor.chain().focus().toggleTaskList().run()"
         >
-          Checklist</button
+          <AppIcon name="checklist" :size="16" /><span class="sr-only"
+            >Checklist</span
+          ></button
         ><button
+          title="Code block"
           :disabled="!editor.isEditable"
           @click="editor.chain().focus().toggleCodeBlock().run()"
         >
-          Code</button
+          <AppIcon name="code" :size="16" /><span class="sr-only"
+            >Code</span
+          ></button
         ><button
+          title="Undo · Ctrl+Z"
           :disabled="!editor.isEditable"
           @click="editor.chain().focus().undo().run()"
         >
-          Undo</button
+          <AppIcon name="undo" :size="16" /><span class="sr-only"
+            >Undo</span
+          ></button
         ><button
+          title="Redo · Ctrl+Shift+Z"
           :disabled="!editor.isEditable"
           @click="editor.chain().focus().redo().run()"
         >
-          Redo
+          <AppIcon name="redo" :size="16" /><span class="sr-only">Redo</span>
         </button>
       </div>
       <div
@@ -686,5 +755,204 @@ button:disabled {
 }
 .link-database-dialog form {
   margin: 1rem 0;
+}
+
+.block-editor {
+  border: 0;
+  padding: 0;
+  margin: 4px 0 0;
+  position: relative;
+}
+.editor-status {
+  font-size: 0.72rem;
+  color: var(--faint);
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  margin-bottom: 6px;
+  min-height: 19px;
+}
+.editor-status > span:last-child {
+  display: none;
+}
+.editor-toolbar {
+  gap: 2px;
+  align-items: center;
+  padding: 5px 6px;
+  margin: 0 0 22px;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: var(--surface);
+  width: fit-content;
+  max-width: 100%;
+}
+.editor-toolbar button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 5px 7px;
+  min-width: 29px;
+  min-height: 29px;
+  border-radius: 4px;
+}
+.editor-toolbar button:hover,
+.editor-toolbar button[aria-pressed="true"] {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+.editor-toolbar button:first-child {
+  border-right: 1px solid var(--line);
+  border-radius: 0;
+  padding-right: 12px;
+  margin-right: 4px;
+  font-size: 0.75rem;
+}
+.block-editor .tiptap {
+  padding: 0;
+  min-height: calc(100dvh - 430px);
+  font-size: 1rem;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.block-editor .tiptap:focus-visible {
+  outline: 0;
+  border-radius: 0;
+}
+.block-editor .tiptap p {
+  color: var(--text);
+  margin: 0 0 0.65em;
+  line-height: 1.8;
+}
+.block-editor .tiptap p:only-child:empty:before,
+.block-editor .tiptap p:only-child:has(> br:only-child):before {
+  content: "Start writing, or type / to insert a block…";
+  color: var(--faint);
+  float: left;
+  pointer-events: none;
+  height: 0;
+}
+.block-editor .tiptap h1 {
+  font-size: 1.8rem;
+  margin: 1.4em 0 0.4em;
+  font-weight: 650;
+}
+.block-editor .tiptap h2 {
+  font-size: 1.4rem;
+  margin: 1.5em 0 0.5em;
+  font-weight: 600;
+}
+.block-editor .tiptap h3 {
+  font-size: 1.15rem;
+  margin: 1.4em 0 0.4em;
+  font-weight: 600;
+}
+.block-editor .tiptap ul,
+.block-editor .tiptap ol {
+  padding-left: 1.6em;
+  line-height: 1.8;
+}
+.block-editor .tiptap li p {
+  margin-bottom: 0.25em;
+}
+.block-editor .tiptap blockquote {
+  border-left: 3px solid var(--muted);
+  padding-left: 1em;
+  margin: 1em 0;
+  font-size: 1.03rem;
+}
+.block-editor .tiptap pre {
+  font:
+    0.83rem/1.75 "JetBrains Mono Variable",
+    monospace;
+  border: 1px solid var(--line);
+  padding: 18px;
+  border-radius: 7px;
+}
+.block-editor .tiptap code {
+  font-family: "JetBrains Mono Variable", monospace;
+  font-size: 0.85em;
+  background: var(--surface);
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+.block-editor .tiptap pre code {
+  padding: 0;
+  background: transparent;
+}
+.block-editor .hint {
+  font-size: 0.71rem;
+  color: var(--faint);
+  margin: 20px 0 0;
+  opacity: 0.7;
+}
+.slash-menu {
+  position: absolute;
+  z-index: 20;
+  left: 0;
+  top: 105px;
+  width: 280px;
+  max-height: 350px;
+  overflow: auto;
+  background: var(--elevated);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  padding: 6px;
+  border-radius: 9px;
+}
+.slash-menu button {
+  justify-content: flex-start;
+  background: transparent;
+  border: 0;
+  font-size: 0.83rem;
+  padding: 8px 10px;
+}
+.slash-menu button[aria-selected="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.presence {
+  position: absolute;
+  right: 0;
+  top: -2px;
+  display: flex;
+  gap: 3px;
+}
+.presence-avatar {
+  width: 23px;
+  height: 23px;
+  border: 2px solid var(--bg);
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  display: grid;
+  place-items: center;
+  font-size: 0.6rem;
+}
+.link-database-dialog {
+  background: var(--elevated);
+  padding: 24px;
+  border-radius: 12px;
+}
+.link-database-dialog h2 {
+  font-size: 1.1rem;
+  color: var(--text);
+}
+@media (max-width: 760px) {
+  .editor-toolbar {
+    margin-bottom: 20px;
+    gap: 0;
+  }
+  .editor-toolbar button {
+    padding: 4px 6px;
+  }
+  .editor-toolbar button:first-child span {
+    display: none;
+  }
+  .block-editor .tiptap {
+    min-height: calc(100dvh - 370px);
+  }
+  .editor-status {
+    font-size: 0.68rem;
+  }
 }
 </style>

@@ -55,7 +55,6 @@ const roles = ["Admin", "Editor", "Commenter", "Viewer"],
 </script>
 <template>
   <div class="permissions">
-    <h2>Page permissions</h2>
     <p v-if="error" role="alert" class="error">{{ error }}</p>
     <label for="page-visibility">Access</label
     ><select id="page-visibility" v-model="visibility">
@@ -84,10 +83,7 @@ const roles = ["Admin", "Editor", "Commenter", "Viewer"],
 </template>
 <style scoped>
 .permissions {
-  margin: 2rem 0;
-  border: 1px solid var(--line);
-  border-radius: 0.5rem;
-  padding: 1.5rem;
+  margin: 0;
 }
 label {
   display: flex;

@@ -20,3 +20,5 @@ Editor, replicas and tested limits: [docs/COLLABORATION.md](docs/COLLABORATION.m
 Private attachments: [docs/FILES.md](docs/FILES.md). Recovery evidence and remaining limits: [docs/BACKUP.md](docs/BACKUP.md).
 
 Structured databases and tested view behavior: [docs/DATABASES.md](docs/DATABASES.md).
+
+Workspace navigation, themes, keyboard behavior and UI verification: [docs/UI.md](docs/UI.md).

@@ -20,38 +20,32 @@ const selected = computed(() =>
       <li v-for="file in linked" :key="file.id">
         <a :href="'/api/v1/files/' + file.id + '/download'">{{
           file.filename
-        }}</a
-        ><small> · {{ Intl.NumberFormat().format(file.size) }} bytes</small>
+        }}</a><small>
+          · {{ Intl.NumberFormat().format(file.size) }} bytes</small
+        >
       </li>
     </ul>
-    <span v-else>No files selected</span>
-    <label v-if="canEdit"
-      >{{ name
-      }}<select
-        :aria-label="name"
-        multiple
-        :disabled="disabled"
-        @change="
-          emit(
-            'update:modelValue',
-            Array.from(
-              ($event.target as HTMLSelectElement).selectedOptions,
-            ).map((o) => o.value),
-          )
-        "
-      >
-        <option
-          v-for="file in files"
-          :key="file.id"
-          :value="file.id"
-          :selected="selected.includes(file.id)"
-        >
-          {{ file.filename }}
-        </option>
-      </select></label
+    <UiMultiSelect
+      v-if="canEdit"
+      :label="name"
+      :options="files.map((file) => ({ id: file.id, label: file.filename }))"
+      :model-value="selected"
+      :disabled="disabled"
+      @update:model-value="emit('update:modelValue', $event)"
+    />
+    <span v-else-if="!linked.length" class="field-empty">Empty</span>
+    <button
+      class="ghost attachment-action"
+      type="button"
+      :disabled="disabled"
+      :aria-label="
+        canEdit ? 'Manage record attachments' : 'Open record attachments'
+      "
+      @click="emit('manage')"
     >
-    <button type="button" :disabled="disabled" @click="emit('manage')">
-      {{ canEdit ? "Manage record attachments" : "Open record attachments" }}
+      <AppIcon name="paperclip" :size="13" />{{
+        canEdit ? "Attachments" : "Open attachments"
+      }}
     </button>
   </div>
 </template>
@@ -72,5 +66,24 @@ const selected = computed(() =>
 }
 .record-files small {
   color: var(--muted);
+}
+.record-files {
+  min-width: 10rem;
+  gap: 3px;
+}
+.record-files a {
+  color: var(--text);
+  font-size: 12px;
+}
+.record-files small {
+  display: none;
+}
+.attachment-action {
+  font-size: 11px;
+  color: var(--muted);
+  justify-content: flex-start;
+  padding: 3px 6px;
+  min-height: 25px;
+  width: fit-content;
 }
 </style>

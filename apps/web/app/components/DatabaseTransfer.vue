@@ -5,11 +5,13 @@ const props = defineProps<{
     viewId: string;
     properties: Property[];
     canEdit: boolean;
+    hideTrigger?: boolean;
   }>(),
   emit = defineEmits<{ imported: [] }>();
 const domId = useId(),
   opened = ref(false),
   file = ref<File>(),
+  fileInput = ref<HTMLInputElement>(),
   preview = ref<any>(),
   mapping = ref<any[]>([]),
   allowNewOptions = ref(true),
@@ -68,6 +70,7 @@ async function upload(confirm = false) {
       preview.value = undefined;
       mapping.value = [];
       file.value = undefined;
+      if (fileInput.value) fileInput.value.value = "";
       emit("imported");
     } else {
       preview.value = result;
@@ -81,12 +84,19 @@ async function upload(confirm = false) {
     busy.value = false;
   }
 }
+defineExpose({ open: () => (opened.value = true) });
 </script>
 <template>
   <section class="database-transfer">
-    <button @click="opened = !opened">Import / export</button>
-    <div v-if="opened" class="database-form">
-      <h2>Import / export database</h2>
+    <button v-if="!hideTrigger" @click="opened = !opened">
+      Import / export
+    </button>
+    <UiDialog
+      :open="opened"
+      title="Import / export database"
+      wide
+      @close="opened = false"
+    >
       <p>
         Exports include records you can access. Current-view exports use its
         saved filters and columns; the search box and calendar month do not
@@ -118,6 +128,7 @@ async function upload(confirm = false) {
         <label :for="domId + '-csv'">CSV file</label
         ><input
           :id="domId + '-csv'"
+          ref="fileInput"
           type="file"
           accept=".csv,text/csv"
           :disabled="busy"
@@ -268,6 +279,6 @@ async function upload(confirm = false) {
       </template>
       <p v-if="error" role="alert">{{ error }}</p>
       <p v-if="notice" role="status">{{ notice }}</p>
-    </div>
+    </UiDialog>
   </section>
 </template>

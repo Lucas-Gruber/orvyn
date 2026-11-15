@@ -2,6 +2,12 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { chromium, expect } from "@playwright/test";
+import {
+  chooseSpace,
+  openPageFromSidebar,
+  accountSettings,
+  showAttachments,
+} from "./ui-helpers.mjs";
 import { Pool, base, waitForMail, emailToken } from "./helpers.mjs";
 test("Chromium: account, persisted page, verification, session settings and OIDC administration", async () => {
   const browser = await chromium.launch({
@@ -26,33 +32,31 @@ test("Chromium: account, persisted page, verification, session settings and OIDC
       .getByRole("button", { name: "Create account", exact: true })
       .click();
     await expect(
-      page.getByRole("button", { name: "Account & security" }),
+      page.getByRole("button", { name: "Account menu" }),
     ).toBeVisible();
     await page.getByLabel("New private space", { exact: true }).fill(space);
     await page
       .getByRole("button", { name: "Create space", exact: true })
       .click();
+    await page.getByRole("button", { name: "New page", exact: true }).click();
     await page
-      .getByLabel("New page", { exact: true })
+      .getByLabel("Page title", { exact: true })
       .fill("A real persisted page");
-    await page
-      .getByRole("button", { name: "Create page", exact: true })
-      .click();
+    await page.getByLabel("Page title", { exact: true }).press("Tab");
+    await expect(page.getByText("Title saved", { exact: true })).toBeVisible();
     await page
       .getByRole("textbox", { name: "Document", exact: true })
       .fill("Written through the browser.");
-    await page.getByRole("button", { name: "Save title", exact: true }).click();
     await expect(
       page.getByText("All changes saved", { exact: true }),
     ).toBeVisible();
     await page.reload();
-    await page.getByRole("button", { name: space, exact: true }).click();
-    await page
-      .getByRole("button", { name: "A real persisted page", exact: true })
-      .click();
+    await chooseSpace(page, space);
+    await openPageFromSidebar(page, "A real persisted page");
     await expect(
       page.getByRole("textbox", { name: "Document", exact: true }),
     ).toHaveText("Written through the browser.");
+    await showAttachments(page);
     await page.getByLabel("Choose attachment", { exact: true }).setInputFiles({
       name: "browser-attachment.txt",
       mimeType: "text/plain",
@@ -105,9 +109,7 @@ test("Chromium: account, persisted page, verification, session settings and OIDC
     await page
       .getByRole("button", { name: "Confirm email address", exact: true })
       .click();
-    await page
-      .getByRole("button", { name: "Account & security", exact: true })
-      .click();
+    await accountSettings(page);
     await expect(
       page.getByText("Email verified", { exact: true }),
     ).toBeVisible();

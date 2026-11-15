@@ -7,8 +7,36 @@ import {
   type DatabaseRecord,
   type ViewConfig,
 } from "@orvyn/shared";
-const props = defineProps<{ databaseId: string; initialViewId?: string }>(),
+const props = defineProps<{
+    databaseId: string;
+    initialViewId?: string;
+    initialTitle?: string;
+  }>(),
   emit = defineEmits<{ open: [pageId: string]; changed: [] }>();
+const transfer = ref<{ open: () => void }>();
+const viewIcons: Record<string, string> = {
+  Table: "table",
+  Board: "board",
+  List: "list",
+  Calendar: "calendar",
+  Gallery: "gallery",
+};
+function tabKeys(event: KeyboardEvent, index: number) {
+  if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+  event.preventDefault();
+  const views = metadata.value.views,
+    next =
+      event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? views.length - 1
+          : (index + (event.key === "ArrowRight" ? 1 : -1) + views.length) %
+            views.length;
+  void chooseView(views[next].id);
+  (event.currentTarget as HTMLElement).parentElement
+    ?.querySelectorAll<HTMLButtonElement>("[role=tab]")
+    [next]?.focus();
+}
 const domId = useId();
 const directory = ref<any[]>([]),
   restrictedRecord = ref(false),
@@ -37,6 +65,8 @@ const month = ref(new Date().toISOString().slice(0, 7)),
   viewDraft = ref<any>();
 let generation = 0,
   timer: ReturnType<typeof setTimeout> | undefined,
+  noticeTimer: ReturnType<typeof setTimeout> | undefined,
+  searchTimer: ReturnType<typeof setTimeout> | undefined,
   interval: ReturnType<typeof setInterval> | undefined,
   disposed = false;
 const currentView = computed(() =>
@@ -429,6 +459,17 @@ function shiftMonth(delta: number) {
   offset.value = 0;
   void load();
 }
+watch(search, () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => {
+    offset.value = 0;
+    void load();
+  }, 250);
+});
+watch(notice, (value) => {
+  clearTimeout(noticeTimer);
+  if (value) noticeTimer = setTimeout(() => (notice.value = ""), 4000);
+});
 onMounted(() => {
   void load();
   interval = setInterval(() => {
@@ -439,143 +480,240 @@ onBeforeUnmount(() => {
   disposed = true;
   generation++;
   clearTimeout(timer);
+  clearTimeout(searchTimer);
+  clearTimeout(noticeTimer);
   clearInterval(interval);
 });
 </script>
 <template>
   <div class="database-workspace">
-    <p v-if="error" role="alert" class="error">{{ error }}</p>
+    <p
+      v-if="error && !showCreate && !showSettings && !showRename"
+      role="alert"
+      class="error"
+    >
+      {{ error }}
+    </p>
     <p v-if="loadError" role="alert" class="error">{{ loadError }}</p>
-    <p v-if="notice" role="status">{{ notice }}</p>
+    <div v-if="notice" role="status" class="database-notice">
+      <AppIcon name="check" :size="15" />{{ notice
+      }}<button
+        class="icon-button"
+        aria-label="Dismiss notification"
+        @click="notice = ''"
+      >
+        <AppIcon name="x" :size="13" />
+      </button>
+    </div>
     <template v-if="metadata"
-      ><div class="database-heading">
+      ><div class="database-page-symbol">
+        <AppIcon name="database" :size="40" />
+      </div>
+      <div class="database-heading">
         <h1>{{ metadata.title }}</h1>
-        <small>{{
-          events.live.value
-            ? "Live updates connected"
-            : "Live updates reconnecting"
-        }}</small>
+        <small class="database-live"
+          ><span :class="{ connected: events.live.value }" />{{
+            events.live.value
+              ? "Live updates connected"
+              : "Live updates reconnecting"
+          }}</small
+        >
       </div>
-      <div role="tablist" aria-label="Database views" class="database-tabs">
-        <button
-          v-for="view in metadata.views"
-          :key="view.id"
-          role="tab"
-          :aria-selected="viewId === view.id"
-          @click="chooseView(view.id)"
-        >
-          {{ view.name }}
-        </button>
+      <div class="database-controls">
+        <div role="tablist" aria-label="Database views" class="database-tabs">
+          <button
+            v-for="(item, index) in metadata.views"
+            :key="item.id"
+            role="tab"
+            :aria-selected="viewId === item.id"
+            :tabindex="viewId === item.id ? 0 : -1"
+            @click="chooseView(item.id)"
+            @keydown="tabKeys($event, Number(index))"
+          >
+            <AppIcon :name="viewIcons[item.type] || 'table'" :size="15" />{{
+              item.name
+            }}</button
+          ><button
+            v-if="canEdit"
+            class="icon-button add-view"
+            aria-label="New view"
+            title="New view"
+            @click="openSettings(true)"
+          >
+            <AppIcon name="plus" :size="15" />
+          </button>
+        </div>
+        <div class="database-tools">
+          <button
+            v-if="canEdit"
+            class="ghost"
+            aria-label="View settings"
+            title="Filters and sorting"
+            @click="openSettings()"
+          >
+            <AppIcon name="filter" :size="15" /><span>Filter</span
+            ><span
+              v-if="currentView?.config.filters.length"
+              class="filter-count"
+              >{{ currentView.config.filters.length }}</span
+            ></button
+          ><button
+            class="icon-button"
+            aria-label="Refresh records"
+            title="Refresh records"
+            @click="load()"
+          >
+            <AppIcon
+              name="history"
+              :size="15"
+              :class="{ spinner: loading }"
+            /></button
+          ><UiMenu label="Database options"
+            ><button
+              v-if="canEdit"
+              role="menuitem"
+              @click="
+                rename = metadata.title;
+                showRename = true;
+              "
+            >
+              <AppIcon name="file" :size="16" />Rename database</button
+            ><button
+              v-if="metadata.accessRank >= 40"
+              role="menuitem"
+              @click="showPermissions = true"
+            >
+              <AppIcon name="users" :size="16" />Database access</button
+            ><button role="menuitem" @click="transfer?.open()">
+              <AppIcon name="download" :size="16" />Import / export
+            </button></UiMenu
+          ><button v-if="canEdit" class="primary" @click="beginRecord()">
+            <AppIcon name="plus" :size="15" />New record
+          </button>
+        </div>
       </div>
-      <div class="actions">
-        <form
-          class="database-search"
-          @submit.prevent="
-            offset = 0;
-            load();
-          "
-        >
-          <label :for="'db-search-' + domId">Search records</label
-          ><input
-            :id="'db-search-' + domId"
-            v-model="search"
-            type="search"
-            maxlength="200"
-          /><button>Search records</button>
-        </form>
-        <button v-if="canEdit" @click="beginRecord()">New record</button
-        ><button
-          v-if="canEdit"
-          @click="
-            rename = metadata.title;
-            showRename = !showRename;
-          "
-        >
-          Rename database</button
-        ><button v-if="canEdit" @click="openSettings()">View settings</button
-        ><button v-if="canEdit" @click="openSettings(true)">New view</button
-        ><button
-          v-if="metadata.accessRank >= 40"
-          @click="showPermissions = !showPermissions"
-        >
-          Database access</button
-        ><button @click="load()">Refresh records</button>
-      </div>
+      <form
+        class="database-search"
+        @submit.prevent="
+          offset = 0;
+          load();
+        "
+      >
+        <AppIcon name="search" :size="15" /><label
+          class="sr-only"
+          :for="'db-search-' + domId"
+          >Search records</label
+        ><input
+          :id="'db-search-' + domId"
+          v-model="search"
+          type="search"
+          maxlength="200"
+          placeholder="Search this database…"
+        /><button class="sr-only">Search records</button>
+      </form>
       <DatabaseTransfer
+        ref="transfer"
         :database-id="databaseId"
         :view-id="viewId"
         :properties="metadata.properties"
         :can-edit="canEdit"
+        hide-trigger
         @imported="
           offset = 0;
           load();
         "
       />
-      <form
-        v-if="showRename && canEdit"
-        class="database-form"
-        @submit.prevent="renameDatabase"
+      <UiDialog
+        :open="showRename && canEdit"
+        title="Rename database"
+        @close="showRename = false"
       >
-        <label :for="'database-title-' + domId">Database title</label
-        ><input
-          :id="'database-title-' + domId"
-          v-model="rename"
-          required
-          maxlength="300"
-        /><button :disabled="busy">Save database title</button>
-      </form>
-      <PagePermissions
-        v-if="showPermissions && metadata.accessRank >= 40"
-        :page="{
-          id: databaseId,
-          space_id: metadata.spaceId,
-          version: metadata.pageVersion,
-        }"
-        @changed="
-          showPermissions = false;
-          load();
-        "
-      />
-      <form
-        v-if="showCreate && canEdit"
-        class="database-form"
-        @submit.prevent="createRecord"
-      >
-        <h2>New record</h2>
-        <label :for="'record-title-' + domId">Record name</label
-        ><input
-          :id="'record-title-' + domId"
-          v-model="title"
-          required
-          maxlength="300"
-        /><template v-for="property in editableProperties" :key="property.id"
-          ><label :for="'record-value-' + domId + '-' + property.id">{{
-            property.name
-          }}</label
-          ><DatabaseFieldInput
-            :people="directory"
-            :id="'record-value-' + domId + '-' + property.id"
-            :property="property"
-            :model-value="draft[property.id]"
-            @update:model-value="draft[property.id] = $event"
-        /></template>
-        <p v-if="metadata.properties.some((p: Property) => p.type === 'Files')">
-          Create the record first, then open it to upload attachments and select
-          them in its file fields.
-        </p>
-        <label
-          ><input
-            v-model="restrictedRecord"
-            type="checkbox"
-            style="width: auto"
-          />Restrict this record to you and the space owner</label
+        <form
+          v-if="showRename && canEdit"
+          class="database-form"
+          @submit.prevent="renameDatabase"
         >
-        <div class="actions">
-          <button :disabled="busy">Create record</button
-          ><button type="button" @click="showCreate = false">Cancel</button>
-        </div>
-      </form>
-      <div v-if="currentView?.type === 'Table'" class="database-table">
+          <p v-if="error" role="alert" class="error">{{ error }}</p>
+          <label :for="'database-title-' + domId">Database title</label
+          ><input
+            :id="'database-title-' + domId"
+            v-model="rename"
+            required
+            maxlength="300"
+          /><button :disabled="busy">Save database title</button>
+        </form>
+      </UiDialog>
+      <UiDialog
+        :open="showPermissions && metadata.accessRank >= 40"
+        title="Database access"
+        drawer
+        @close="showPermissions = false"
+      >
+        <PagePermissions
+          v-if="showPermissions && metadata.accessRank >= 40"
+          :page="{
+            id: databaseId,
+            space_id: metadata.spaceId,
+            version: metadata.pageVersion,
+          }"
+          @changed="
+            showPermissions = false;
+            load();
+          "
+        />
+      </UiDialog>
+      <UiDialog
+        :open="showCreate && canEdit"
+        title="New record"
+        @close="showCreate = false"
+      >
+        <form
+          v-if="showCreate && canEdit"
+          class="database-form"
+          @submit.prevent="createRecord"
+        >
+          <p v-if="error" role="alert" class="error">{{ error }}</p>
+          <label :for="'record-title-' + domId">Record name</label
+          ><input
+            :id="'record-title-' + domId"
+            v-model="title"
+            required
+            maxlength="300"
+          /><template v-for="property in editableProperties" :key="property.id"
+            ><label :for="'record-value-' + domId + '-' + property.id">{{
+              property.name
+            }}</label
+            ><DatabaseFieldInput
+              :people="directory"
+              :id="'record-value-' + domId + '-' + property.id"
+              :property="property"
+              :model-value="draft[property.id]"
+              @update:model-value="draft[property.id] = $event"
+          /></template>
+          <p
+            v-if="metadata.properties.some((p: Property) => p.type === 'Files')"
+          >
+            Create the record first, then open it to upload attachments and
+            select them in its file fields.
+          </p>
+          <label
+            ><input
+              v-model="restrictedRecord"
+              type="checkbox"
+              style="width: auto"
+            />Restrict this record to you and the space owner</label
+          >
+          <div class="actions">
+            <button class="primary" :disabled="busy">Create record</button
+            ><button type="button" @click="showCreate = false">Cancel</button>
+          </div>
+        </form>
+      </UiDialog>
+      <div
+        v-if="currentView?.type === 'Table'"
+        class="database-table"
+        :aria-busy="loading"
+      >
         <table>
           <thead>
             <tr>
@@ -589,12 +727,18 @@ onBeforeUnmount(() => {
               <th :colspan="columns.length">{{ group.label }}</th>
             </tr>
             <tr v-for="record in group.records" :key="record.pageId">
-              <td v-for="property in columns" :key="property.id">
+              <td
+                v-for="property in columns"
+                :key="property.id"
+                :class="'property-' + property.type.toLowerCase()"
+              >
                 <button
+                  class="record-title"
                   v-if="property.type === 'Title'"
                   @click="emit('open', record.pageId)"
                 >
-                  {{ record.title }}</button><DatabaseFilesField
+                  <AppIcon name="file" :size="14" />{{ record.title }}</button
+                ><DatabaseFilesField
                   v-else-if="property.type === 'Files'"
                   :name="property.name"
                   :files="record.files || []"
@@ -767,9 +911,41 @@ onBeforeUnmount(() => {
           </li></template
         >
       </ul>
-      <p v-if="!records.length && !loading">No records match this view.</p>
-      <div class="actions">
+      <div
+        v-if="
+          !records.length &&
+          !loading &&
+          currentView?.type !== 'Board' &&
+          currentView?.type !== 'Calendar'
+        "
+        class="database-empty"
+      >
+        <AppIcon :name="viewIcons[currentView?.type] || 'table'" :size="27" />
+        <h2>
+          {{
+            search || currentView?.config.filters.length
+              ? "No matching records"
+              : "A place for the details"
+          }}
+        </h2>
+        <p>
+          {{
+            search || currentView?.config.filters.length
+              ? "Try a different search or adjust this view’s filters."
+              : "Add your first record. Every entry is a page with room for notes, files and more."
+          }}
+        </p>
         <button
+          v-if="canEdit && !search && !currentView?.config.filters.length"
+          class="ghost"
+          @click="beginRecord()"
+        >
+          <AppIcon name="plus" :size="15" />Create first record
+        </button>
+      </div>
+      <div class="database-pagination">
+        <button
+          v-if="nextOffset !== null || offset > 0"
           :disabled="offset === 0 || loading"
           @click="
             offset = Math.max(0, offset - 100);
@@ -783,6 +959,7 @@ onBeforeUnmount(() => {
           }}
           shown</span
         ><button
+          v-if="nextOffset !== null || offset > 0"
           :disabled="nextOffset === null || loading"
           @click="
             offset = nextOffset || 0;
@@ -792,7 +969,7 @@ onBeforeUnmount(() => {
           Next records</button
         ><span v-if="loading" role="status">Loading records…</span>
       </div>
-      <details v-if="canEdit" class="database-form">
+      <details v-if="canEdit" class="database-form property-builder">
         <summary>Add a property</summary>
         <form @submit.prevent="addProperty">
           <label :for="'property-name-' + domId">Property name</label
@@ -824,193 +1001,215 @@ onBeforeUnmount(() => {
           ><button :disabled="busy">Add property</button>
         </form>
       </details>
-      <form
-        v-if="showSettings && viewDraft && canEdit"
-        class="database-form"
-        @submit.prevent="saveView"
+      <UiDialog
+        :open="showSettings && !!viewDraft && canEdit"
+        :title="newView ? 'Create view' : 'View settings'"
+        wide
+        @close="showSettings = false"
       >
-        <h2>{{ newView ? "Create view" : "View settings" }}</h2>
-        <label :for="'view-name-' + domId">View name</label
-        ><input
-          :id="'view-name-' + domId"
-          v-model="viewDraft.name"
-          required
-          maxlength="80"
-        /><label :for="'view-type-' + domId">View type</label
-        ><select :id="'view-type-' + domId" v-model="viewDraft.type">
-          <option v-for="type in viewTypes" :key="type">
-            {{ type }}
-          </option></select
-        ><label :for="'view-group-' + domId">Group by</label
-        ><select
-          :id="'view-group-' + domId"
-          v-model="viewDraft.config.groupBy"
-          :disabled="viewDraft.type === 'Calendar'"
+        <form
+          v-if="showSettings && viewDraft && canEdit"
+          class="database-form"
+          @submit.prevent="saveView"
         >
-          <option :value="null">No grouping</option>
-          <option
-            v-for="property in metadata.properties.filter((p: Property) =>
-              ['Status', 'Select'].includes(p.type),
-            )"
-            :key="property.id"
-            :value="property.id"
-          >
-            {{ property.name }}
-          </option></select
-        ><label :for="'view-date-' + domId">Calendar date property</label
-        ><select
-          :id="'view-date-' + domId"
-          v-model="viewDraft.config.dateProperty"
-        >
-          <option :value="null">No date property</option>
-          <option
-            v-for="property in metadata.properties.filter(
-              (p: Property) => p.type === 'Date',
-            )"
-            :key="property.id"
-            :value="property.id"
-          >
-            {{ property.name }}
-          </option>
-        </select>
-        <fieldset>
-          <legend>Visible properties · empty selection means all</legend>
-          <label
-            v-for="property in metadata.properties.filter(
-              (p: Property) => p.type !== 'Title',
-            )"
-            :key="property.id"
-            ><input
-              v-model="viewDraft.config.visibleProperties"
-              type="checkbox"
-              :value="property.id"
-            />{{ property.name }}</label
-          >
-        </fieldset>
-        <h3>Filters</h3>
-        <div
-          v-for="(filter, index) in viewDraft.config.filters"
-          :key="index"
-          class="database-filter"
-        >
-          <select
-            v-model="filter.propertyId"
-            aria-label="Filter property"
-            @change="
-              filter.value = null;
-              filter.operator =
-                propertyById(filter.propertyId)?.type === 'Files'
-                  ? 'notEmpty'
-                  : 'eq';
-            "
-          >
-            <option
-              v-for="property in metadata.properties"
-              :key="property.id"
-              :value="property.id"
-            >
-              {{ property.name }}
+          <p v-if="error" role="alert" class="error">{{ error }}</p>
+          <label :for="'view-name-' + domId">View name</label
+          ><input
+            :id="'view-name-' + domId"
+            v-model="viewDraft.name"
+            required
+            maxlength="80"
+          /><label :for="'view-type-' + domId">View type</label
+          ><select :id="'view-type-' + domId" v-model="viewDraft.type">
+            <option v-for="type in viewTypes" :key="type">
+              {{ type }}
             </option></select
-          ><select v-model="filter.operator" aria-label="Filter comparison">
-            <option
-              v-for="operator in filterOperators(filter)"
-              :key="operator"
-              :value="operator"
-            >
-              {{ operatorNames[operator] }}
-            </option></select
+          ><label :for="'view-group-' + domId">Group by</label
           ><select
-            v-if="
-              propertyById(filter.propertyId)?.type.endsWith('By') &&
-              !['empty', 'notEmpty'].includes(filter.operator)
-            "
-            v-model="filter.value"
-            aria-label="Filter account"
+            :id="'view-group-' + domId"
+            v-model="viewDraft.config.groupBy"
+            :disabled="viewDraft.type === 'Calendar'"
           >
-            <option :value="null">No account</option>
+            <option :value="null">No grouping</option>
             <option
-              v-for="person in directory"
-              :key="person.id"
-              :value="person.id"
-            >
-              {{ person.email }}
-            </option></select
-          ><DatabaseFieldInput
-            :people="directory"
-            v-if="
-              !propertyById(filter.propertyId)?.type.endsWith('By') &&
-              !['empty', 'notEmpty'].includes(filter.operator) &&
-              filterProperty(filter)
-            "
-            :property="filterProperty(filter)!"
-            :model-value="filter.value"
-            @update:model-value="filter.value = $event"
-          /><button
-            type="button"
-            @click="viewDraft.config.filters.splice(index, 1)"
-          >
-            Remove filter
-          </button>
-        </div>
-        <button
-          type="button"
-          :disabled="viewDraft.config.filters.length >= 20"
-          @click="
-            viewDraft.config.filters.push({
-              propertyId: metadata.properties[0].id,
-              operator: 'eq',
-              value: '',
-            })
-          "
-        >
-          Add filter
-        </button>
-        <h3>Sort</h3>
-        <div
-          v-for="(sort, index) in viewDraft.config.sorts"
-          :key="index"
-          class="database-filter"
-        >
-          <select v-model="sort.propertyId" aria-label="Sort property">
-            <option
-              v-for="property in metadata.properties.filter(
-                (p: Property) =>
-                  !['MultiSelect', 'Person', 'Files'].includes(p.type),
+              v-for="property in metadata.properties.filter((p: Property) =>
+                ['Status', 'Select'].includes(p.type),
               )"
               :key="property.id"
               :value="property.id"
             >
               {{ property.name }}
             </option></select
-          ><select v-model="sort.direction" aria-label="Sort direction">
-            <option value="asc">Ascending</option>
-            <option value="desc">Descending</option></select
-          ><button
-            type="button"
-            @click="viewDraft.config.sorts.splice(index, 1)"
+          ><label :for="'view-date-' + domId">Calendar date property</label
+          ><select
+            :id="'view-date-' + domId"
+            v-model="viewDraft.config.dateProperty"
           >
-            Remove sort
+            <option :value="null">No date property</option>
+            <option
+              v-for="property in metadata.properties.filter(
+                (p: Property) => p.type === 'Date',
+              )"
+              :key="property.id"
+              :value="property.id"
+            >
+              {{ property.name }}
+            </option>
+          </select>
+          <fieldset>
+            <legend>Visible properties · empty selection means all</legend>
+            <label
+              v-for="property in metadata.properties.filter(
+                (p: Property) => p.type !== 'Title',
+              )"
+              :key="property.id"
+              ><input
+                v-model="viewDraft.config.visibleProperties"
+                type="checkbox"
+                :value="property.id"
+              />{{ property.name }}</label
+            >
+          </fieldset>
+          <h3>Filters</h3>
+          <div
+            v-for="(filter, index) in viewDraft.config.filters"
+            :key="index"
+            class="database-filter"
+          >
+            <select
+              v-model="filter.propertyId"
+              aria-label="Filter property"
+              @change="
+                filter.value = null;
+                filter.operator =
+                  propertyById(filter.propertyId)?.type === 'Files'
+                    ? 'notEmpty'
+                    : 'eq';
+              "
+            >
+              <option
+                v-for="property in metadata.properties"
+                :key="property.id"
+                :value="property.id"
+              >
+                {{ property.name }}
+              </option></select
+            ><select v-model="filter.operator" aria-label="Filter comparison">
+              <option
+                v-for="operator in filterOperators(filter)"
+                :key="operator"
+                :value="operator"
+              >
+                {{ operatorNames[operator] }}
+              </option></select
+            ><select
+              v-if="
+                propertyById(filter.propertyId)?.type.endsWith('By') &&
+                !['empty', 'notEmpty'].includes(filter.operator)
+              "
+              v-model="filter.value"
+              aria-label="Filter account"
+            >
+              <option :value="null">No account</option>
+              <option
+                v-for="person in directory"
+                :key="person.id"
+                :value="person.id"
+              >
+                {{ person.email }}
+              </option></select
+            ><DatabaseFieldInput
+              :people="directory"
+              v-if="
+                !propertyById(filter.propertyId)?.type.endsWith('By') &&
+                !['empty', 'notEmpty'].includes(filter.operator) &&
+                filterProperty(filter)
+              "
+              :property="filterProperty(filter)!"
+              :model-value="filter.value"
+              @update:model-value="filter.value = $event"
+            /><button
+              type="button"
+              @click="viewDraft.config.filters.splice(index, 1)"
+            >
+              Remove filter
+            </button>
+          </div>
+          <button
+            type="button"
+            :disabled="viewDraft.config.filters.length >= 20"
+            @click="
+              viewDraft.config.filters.push({
+                propertyId: metadata.properties[0].id,
+                operator: 'eq',
+                value: '',
+              })
+            "
+          >
+            Add filter
           </button>
-        </div>
-        <button
-          type="button"
-          :disabled="viewDraft.config.sorts.length >= 3"
-          @click="
-            viewDraft.config.sorts.push({
-              propertyId: metadata.properties[0].id,
-              direction: 'asc',
-            })
-          "
-        >
-          Add sort
-        </button>
-        <div class="actions">
-          <button :disabled="busy">Save view</button
-          ><button type="button" @click="showSettings = false">Cancel</button>
-        </div>
-      </form>
+          <h3>Sort</h3>
+          <div
+            v-for="(sort, index) in viewDraft.config.sorts"
+            :key="index"
+            class="database-filter"
+          >
+            <select v-model="sort.propertyId" aria-label="Sort property">
+              <option
+                v-for="property in metadata.properties.filter(
+                  (p: Property) =>
+                    !['MultiSelect', 'Person', 'Files'].includes(p.type),
+                )"
+                :key="property.id"
+                :value="property.id"
+              >
+                {{ property.name }}
+              </option></select
+            ><select v-model="sort.direction" aria-label="Sort direction">
+              <option value="asc">Ascending</option>
+              <option value="desc">Descending</option></select
+            ><button
+              type="button"
+              @click="viewDraft.config.sorts.splice(index, 1)"
+            >
+              Remove sort
+            </button>
+          </div>
+          <button
+            type="button"
+            :disabled="viewDraft.config.sorts.length >= 3"
+            @click="
+              viewDraft.config.sorts.push({
+                propertyId: metadata.properties[0].id,
+                direction: 'asc',
+              })
+            "
+          >
+            Add sort
+          </button>
+          <div class="actions">
+            <button class="primary" :disabled="busy">Save view</button
+            ><button type="button" @click="showSettings = false">Cancel</button>
+          </div>
+        </form>
+      </UiDialog>
     </template>
-    <p v-else-if="loading">Loading database…</p>
+    <div v-else-if="loading" aria-busy="true">
+      <div class="database-page-symbol">
+        <AppIcon name="database" :size="40" />
+      </div>
+      <div class="database-heading">
+        <h1>{{ initialTitle || "Opening database…" }}</h1>
+      </div>
+      <p class="hint" role="status">Loading database…</p>
+      <div class="skeleton skeleton-row" />
+      <div
+        v-for="i in 4"
+        :key="i"
+        class="skeleton skeleton-line"
+        :style="{ width: 95 - i * 6 + '%' }"
+      />
+    </div>
   </div>
 </template>
 <style scoped>
@@ -1200,5 +1399,514 @@ small {
 .card-drag-handle {
   cursor: grab;
   float: right;
+}
+
+.database-workspace {
+  padding: 48px 48px 45px;
+  max-width: 1600px;
+  margin: auto;
+  min-width: 0;
+}
+.database-page-symbol {
+  color: var(--muted);
+  height: 48px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+}
+.database-heading {
+  margin-bottom: 28px;
+  align-items: flex-end;
+}
+.database-heading h1 {
+  margin: 0;
+  font-size: 2.6rem;
+  letter-spacing: -0.045em;
+  font-weight: 650;
+}
+.database-live {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.7rem;
+  white-space: nowrap;
+  margin-bottom: 5px;
+}
+.database-live > span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--faint);
+}
+.database-live > span.connected {
+  background: var(--success);
+}
+.database-controls {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--line);
+  min-width: 0;
+}
+.database-tabs {
+  padding: 0;
+  border: 0;
+  gap: 3px;
+  overflow: auto;
+  margin-bottom: -1px;
+  align-items: center;
+}
+.database-tabs button[role="tab"] {
+  padding: 10px 9px;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 0.82rem;
+  gap: 6px;
+}
+.database-tabs button[role="tab"][aria-selected="true"] {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+.database-tabs .add-view {
+  color: var(--faint);
+  margin-left: 4px;
+}
+.database-tools {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  padding-bottom: 5px;
+  flex: none;
+  font-size: 0.8rem;
+}
+.database-tools > .ghost {
+  font-size: 0.78rem;
+  min-height: 29px;
+  padding: 4px 6px;
+  color: var(--muted);
+}
+.database-tools > .primary {
+  font-size: 0.8rem;
+  min-height: 30px;
+  padding: 5px 10px;
+  margin-left: 4px;
+}
+.filter-count {
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-size: 0.7rem;
+  border-radius: 4px;
+  padding: 0 4px;
+}
+.database-search {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 7px;
+  color: var(--faint);
+  margin: 12px 0 15px;
+  max-width: 310px;
+}
+.database-search input {
+  border: 0;
+  background: transparent;
+  padding: 5px 2px;
+  min-height: 28px;
+  font-size: 0.8rem;
+  box-shadow: none;
+}
+.database-table {
+  border-top: 1px solid var(--line);
+  min-height: 70px;
+}
+.database-table th {
+  font-size: 0.76rem;
+  font-weight: 500;
+  color: var(--muted);
+  background: var(--panel);
+  padding: 9px 10px;
+  border-right: 1px solid var(--line-soft);
+}
+.database-table td {
+  padding: 4px 8px;
+  border-right: 1px solid var(--line-soft);
+  min-width: 150px;
+  height: 40px;
+  font-size: 0.86rem;
+}
+.database-table th:last-child,
+.database-table td:last-child {
+  border-right: 0;
+}
+.database-table tbody tr:hover {
+  background: var(--surface);
+}
+.database-table td:first-child {
+  min-width: 210px;
+}
+.database-table .record-title {
+  justify-content: flex-start;
+  max-width: 100%;
+  padding: 5px 2px;
+  background: transparent;
+  border: 0;
+  gap: 8px;
+  text-align: left;
+  font-weight: 500;
+}
+.database-table .record-title > .app-icon {
+  color: var(--faint);
+}
+.database-table input,
+.database-table select {
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  font-size: 0.83rem;
+  padding: 5px 4px;
+  min-height: 29px;
+  min-width: 90px;
+  width: 100%;
+  box-shadow: none;
+}
+.database-table input:hover,
+.database-table select:hover {
+  background: var(--surface-hover);
+}
+.database-table input:focus,
+.database-table select:focus {
+  border-color: var(--accent);
+  background: var(--bg);
+}
+.database-table select:not([multiple]) {
+  appearance: none;
+  color: var(--muted);
+}
+.database-table select option {
+  color: var(--text);
+  background: var(--elevated);
+}
+.database-table .property-status select,
+.database-table .property-select select {
+  color: var(--accent);
+  background: var(--accent-soft);
+  width: auto;
+  min-width: 90px;
+  max-width: 100%;
+  font-size: 0.76rem;
+  padding: 4px 7px;
+  min-height: 25px;
+  border-radius: 4px;
+}
+.database-table input[type="checkbox"] {
+  min-width: 0;
+  width: 14px;
+  height: 14px;
+  min-height: 0;
+  margin-left: 5px;
+}
+.database-pagination {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--faint);
+  font-size: 0.72rem;
+  padding: 13px 0;
+}
+.database-pagination button {
+  font-size: 0.72rem;
+  min-height: 25px;
+  padding: 3px 7px;
+  background: transparent;
+}
+.database-pagination > span[role="status"] {
+  margin-left: auto;
+}
+.database-form {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  max-width: none;
+}
+.property-builder {
+  margin-top: 15px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 0.8rem;
+  max-width: 440px;
+}
+.property-builder > summary {
+  cursor: pointer;
+  color: var(--muted);
+  padding: 5px 0;
+  font-size: 0.8rem;
+}
+.property-builder > form {
+  padding: 18px 0;
+}
+.database-empty {
+  padding: 40px 20px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: var(--faint);
+  gap: 10px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.database-empty h2 {
+  margin: 3px 0 0;
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 550;
+}
+.database-empty p {
+  margin: 0;
+  max-width: 360px;
+  font-size: 0.82rem;
+}
+.database-empty .ghost {
+  font-size: 0.8rem;
+}
+.database-board {
+  gap: 14px;
+  padding: 3px 0 15px;
+}
+.board-column {
+  padding: 11px;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  min-width: 235px;
+}
+.board-column h2 {
+  font-size: 0.82rem;
+  font-weight: 550;
+  margin: 3px 0 16px;
+  color: var(--muted);
+}
+.board-column h2 small {
+  font-size: 0.68rem;
+  background: var(--bg);
+  padding: 2px 5px;
+  border-radius: 4px;
+  color: var(--faint);
+}
+.board-column article,
+.database-gallery article {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  margin: 9px 0;
+  padding: 13px;
+  background: var(--bg);
+  box-shadow: 0 2px 4px #0001;
+}
+.board-column article:hover,
+.database-gallery article:hover {
+  border-color: var(--faint);
+}
+.board-column article > button:not(.card-drag-handle),
+.database-gallery article > button {
+  background: transparent;
+  border: 0;
+  font-size: 0.86rem;
+  font-weight: 550;
+  padding: 3px 0;
+  justify-content: flex-start;
+  min-height: 24px;
+  text-align: left;
+}
+.board-column article p,
+.database-gallery article p {
+  font-size: 0.74rem;
+  margin: 9px 0 0;
+  color: var(--faint);
+}
+.board-column article select {
+  margin-top: 9px;
+  padding: 3px 6px;
+  min-height: 25px;
+  font-size: 0.74rem;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 0;
+}
+.card-drag-handle {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  min-height: 22px;
+  min-width: 17px;
+  opacity: 0.45;
+  color: var(--muted);
+}
+.board-column .actions {
+  margin: 14px 0 0;
+}
+.board-column .actions button {
+  font-size: 0.74rem;
+  background: transparent;
+  border-color: var(--line);
+  padding: 4px 6px;
+}
+.database-list li {
+  padding: 11px 8px;
+  gap: 20px;
+}
+.database-list li > button {
+  background: transparent;
+  border: 0;
+  font-size: 0.9rem;
+  font-weight: 500;
+  justify-content: flex-start;
+  padding: 2px;
+  min-width: 180px;
+  text-align: left;
+}
+.database-list li > span {
+  font-size: 0.76rem;
+  color: var(--faint);
+}
+.database-gallery {
+  gap: 15px;
+}
+.database-gallery article {
+  margin: 0;
+  min-height: 150px;
+}
+.database-gallery img {
+  border-radius: 4px;
+  object-fit: cover;
+  max-height: 150px;
+}
+.database-calendar > .actions {
+  gap: 10px;
+  margin: 4px 0 15px;
+}
+.database-calendar > .actions h2 {
+  margin: 0 8px;
+  font-size: 1rem;
+}
+.database-calendar > .actions button {
+  font-size: 0.75rem;
+  background: transparent;
+}
+.database-calendar input[type="month"] {
+  max-width: 160px;
+  min-height: 30px;
+  font-size: 0.8rem;
+}
+.calendar-grid {
+  border-top: 1px solid var(--line);
+  border-left: 1px solid var(--line);
+}
+.calendar-grid > div {
+  border-top: 0;
+  border-left: 0;
+  min-height: 115px;
+  padding: 10px;
+}
+.calendar-grid strong {
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-weight: 500;
+}
+.calendar-grid > div.outside {
+  background: var(--surface);
+}
+.calendar-grid > div > button:not(.calendar-record) {
+  float: right;
+  padding: 0;
+  min-width: 18px;
+  min-height: 18px;
+  font-size: 0.9rem;
+  border: 0;
+  background: transparent;
+  color: var(--faint);
+}
+.calendar-record {
+  border: 0;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.72rem;
+  padding: 5px 7px;
+  min-height: 25px;
+  margin-top: 9px;
+}
+@media (max-width: 1050px) {
+  .database-workspace {
+    padding: 40px 30px;
+  }
+  .database-controls {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .database-tools {
+    margin-left: auto;
+  }
+  .database-live {
+    display: none;
+  }
+}
+@media (max-width: 760px) {
+  .database-workspace {
+    padding: 30px 20px;
+  }
+  .database-page-symbol {
+    height: 35px;
+    margin-bottom: 12px;
+  }
+  .database-heading {
+    margin-bottom: 20px;
+  }
+  .database-heading h1 {
+    font-size: 2rem;
+  }
+  .database-controls {
+    gap: 7px;
+  }
+  .database-tabs {
+    width: 100%;
+    border-bottom: 1px solid var(--line);
+  }
+  .database-tools {
+    width: 100%;
+    justify-content: flex-end;
+    padding-top: 6px;
+  }
+  .database-search {
+    margin-top: 8px;
+  }
+  .database-tabs button[role="tab"] {
+    font-size: 0.76rem;
+    padding: 8px 7px;
+  }
+  .database-calendar > .actions label {
+    display: none;
+  }
+}
+</style>
+
+<style scoped>
+.database-notice {
+  position: fixed;
+  z-index: 60;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px 8px 14px;
+  background: var(--elevated);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  font-size: 13px;
 }
 </style>

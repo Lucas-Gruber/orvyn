@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { request, sessionCookie, Pool, base } from "./helpers.mjs";
+import { databaseAction } from "./ui-helpers.mjs";
 test("CSV preview/atomic confirmation and scoped CSV/JSON exports preserve real typed records", async () => {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   const account = async () => {
@@ -264,16 +265,12 @@ test("Chromium: CSV mapping preview requires review before import and exports th
     await page
       .getByRole("button", { name: "Create database", exact: true })
       .click();
-    await page
-      .getByRole("button", { name: "Import / export", exact: true })
-      .click();
-    await page
-      .getByLabel("CSV file", { exact: true })
-      .setInputFiles({
-        name: "records.csv",
-        mimeType: "text/csv",
-        buffer: Buffer.from("Name,Estimate\nImported through browser,12.5"),
-      });
+    await databaseAction(page, "Import / export");
+    await page.getByLabel("CSV file", { exact: true }).setInputFiles({
+      name: "records.csv",
+      mimeType: "text/csv",
+      buffer: Buffer.from("Name,Estimate\nImported through browser,12.5"),
+    });
     await page
       .getByRole("button", { name: "Preview CSV", exact: true })
       .click();

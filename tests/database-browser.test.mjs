@@ -1,15 +1,20 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { mkdir } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { chromium, expect } from "@playwright/test";
 import { base } from "./helpers.mjs";
+import { chooseSpace, openPageFromSidebar } from "./ui-helpers.mjs";
 test("Chromium: five database views, live Kanban drag, record documents and saved filters", async () => {
   const browser = await chromium.launch({
       executablePath: process.env.CHROMIUM_PATH || "/usr/bin/chromium",
       headless: true,
       args: ["--no-sandbox"],
     }),
-    context = await browser.newContext(),
+    context = await browser.newContext({
+      reducedMotion: "reduce",
+      viewport: { width: 1440, height: 980 },
+    }),
     page = await context.newPage(),
     errors = [];
   const space = "Data space " + randomUUID().slice(0, 8),
@@ -17,6 +22,7 @@ test("Chromium: five database views, live Kanban drag, record documents and save
     title = "Build foundation";
   page.on("pageerror", (e) => errors.push(e.message));
   try {
+    await mkdir(".local/ui-review", { recursive: true });
     await page.goto(base);
     await page
       .getByLabel("Email", { exact: true })
@@ -56,11 +62,17 @@ test("Chromium: five database views, live Kanban drag, record documents and save
     await expect(
       page.getByText("Live updates connected", { exact: true }),
     ).toBeVisible();
+    await expect(
+      page.getByText("Loading records…", { exact: true }),
+    ).toHaveCount(0);
+    await page.screenshot({
+      path: ".local/ui-review/after-database-table.png",
+    });
     const observer = await context.newPage();
     observer.on("pageerror", (e) => errors.push(e.message));
     await observer.goto(base);
-    await observer.getByRole("button", { name: space, exact: true }).click();
-    await observer.getByRole("button", { name: database, exact: true }).click();
+    await chooseSpace(observer, space);
+    await openPageFromSidebar(observer, database);
     await expect(
       observer.getByText("Live updates connected", { exact: true }),
     ).toBeVisible();
@@ -75,6 +87,12 @@ test("Chromium: five database views, live Kanban drag, record documents and save
     await expect(
       destination.getByRole("button", { name: title, exact: true }),
     ).toBeVisible();
+    await expect(
+      page.getByText("Loading records…", { exact: true }),
+    ).toHaveCount(0);
+    await page.screenshot({
+      path: ".local/ui-review/after-database-board.png",
+    });
     const observerRow = observer.getByRole("row").filter({
       has: observer.getByRole("button", { name: title, exact: true }),
     });
@@ -96,6 +114,9 @@ test("Chromium: five database views, live Kanban drag, record documents and save
         .getByRole("gridcell", { name: "2026-11-20", exact: true })
         .getByRole("button", { name: title, exact: true }),
     ).toBeVisible();
+    await page.screenshot({
+      path: ".local/ui-review/after-database-calendar.png",
+    });
     await page.getByRole("tab", { name: "Table", exact: true }).click();
     await page.getByRole("button", { name: title, exact: true }).click();
     await page
@@ -131,8 +152,9 @@ test("Chromium: five database views, live Kanban drag, record documents and save
     await page
       .getByRole("button", { name: "View settings", exact: true })
       .click();
-    const settings = page.locator("form.database-form").filter({
-      has: page.getByRole("heading", { name: "View settings", exact: true }),
+    const settings = page.getByRole("dialog", {
+      name: "View settings",
+      exact: true,
     });
     await settings
       .getByRole("button", { name: "Add filter", exact: true })

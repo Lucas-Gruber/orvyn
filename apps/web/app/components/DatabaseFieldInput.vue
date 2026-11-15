@@ -65,30 +65,16 @@ const inputType = computed(
     <option v-for="option in options" :key="option.id" :value="option.id">
       {{ option.label }}
     </option></select
-  ><select
+  ><UiMultiSelect
     v-else-if="['MultiSelect', 'Person'].includes(property.type)"
     :id="id"
-    :aria-label="property.name"
-    multiple
+    :label="property.name"
+    :options="options"
+    :person="property.type === 'Person'"
+    :model-value="Array.isArray(modelValue) ? modelValue : []"
     :disabled="disabled"
-    @change="
-      emit(
-        'update:modelValue',
-        Array.from(($event.target as HTMLSelectElement).selectedOptions).map(
-          (o) => o.value,
-        ),
-      )
-    "
-  >
-    <option
-      v-for="option in options"
-      :key="option.id"
-      :value="option.id"
-      :selected="Array.isArray(modelValue) && modelValue.includes(option.id)"
-    >
-      {{ option.label }}
-    </option></select
-  ><input
+    @update:model-value="emit('update:modelValue', $event)"
+  /><input
     v-else
     :id="id"
     :aria-label="property.name"

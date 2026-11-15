@@ -37,6 +37,26 @@ function documentInput(body: any) {
 }
 @Controller("api/v1")
 class PagesController {
+  @Get("search") async search(
+    @Req() req: any,
+    @Query("q") input: unknown = "",
+  ) {
+    const uid = await user(req);
+    if (typeof input !== "string" || input.length > 200)
+      fail(400, "Invalid search query");
+    const query = (input as string).trim();
+    return (
+      await db.query(
+        `SELECT p.id,p.title,p.parent_id,p.kind,p.space_id,s.name AS space_name,p.updated_at
+      FROM pages p JOIN spaces s ON s.id=p.space_id
+      WHERE (s.owner_id=$1 OR EXISTS(SELECT 1 FROM space_members m WHERE m.space_id=s.id AND m.user_id=$1))
+      AND orvyn_page_role(p.id,$1)>=10 AND strpos(lower(p.title),lower($2))>0
+      ORDER BY CASE WHEN lower(p.title)=lower($2) THEN 0 ELSE 1 END,p.updated_at DESC,p.id LIMIT 40`,
+        [uid, query],
+      )
+    ).rows;
+  }
+
   @Get("spaces/:id/pages") async list(
     @Req() req: any,
     @Res({ passthrough: true }) res: any,

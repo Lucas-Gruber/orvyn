@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { chromium, expect } from "@playwright/test";
 import { request, sessionCookie, Pool, base } from "./helpers.mjs";
+import { chooseSpace, openPageFromSidebar } from "./ui-helpers.mjs";
 test("linked database blocks persist independent views and never grant access to their source", async () => {
   const db = new Pool({ connectionString: process.env.DATABASE_URL }),
     browser = await chromium.launch({
@@ -88,12 +89,8 @@ test("linked database blocks persist independent views and never grant access to
       errors = [];
     page.on("pageerror", (e) => errors.push(e.message));
     await page.goto(base);
-    await page
-      .getByRole("button", { name: "Team · Linked spaces", exact: true })
-      .click();
-    await page
-      .getByRole("button", { name: "Document with linked data", exact: true })
-      .click();
+    await chooseSpace(page, "Linked spaces");
+    await openPageFromSidebar(page, "Document with linked data");
     await page
       .getByRole("button", { name: "Link database", exact: true })
       .click();
@@ -158,9 +155,7 @@ test("linked database blocks persist independent views and never grant access to
     await expect(
       page.getByText("All changes saved", { exact: true }),
     ).toBeVisible();
-    await page
-      .getByRole("button", { name: "Document with linked data", exact: true })
-      .click();
+    await openPageFromSidebar(page, "Document with linked data");
     await expect(
       page
         .locator(".embedded-database")
@@ -169,12 +164,8 @@ test("linked database blocks persist independent views and never grant access to
     const observer = await session(viewer);
     observer.on("pageerror", (e) => errors.push(e.message));
     await observer.goto(base);
-    await observer
-      .getByRole("button", { name: "Team · Linked spaces", exact: true })
-      .click();
-    await observer
-      .getByRole("button", { name: "Document with linked data", exact: true })
-      .click();
+    await chooseSpace(observer, "Linked spaces");
+    await openPageFromSidebar(observer, "Document with linked data");
     await expect(
       observer.locator(".embedded-database").getByRole("alert"),
     ).toHaveText("This database is unavailable or you do not have access.");

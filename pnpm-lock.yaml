@@ -130,9 +130,18 @@ importers:
 
   apps/web:
     dependencies:
+      '@fontsource-variable/inter':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource-variable/jetbrains-mono':
+        specifier: 5.3.0
+        version: 5.3.0
       '@hocuspocus/provider':
         specifier: 4.8.0
         version: 4.8.0(y-protocols@1.0.7(yjs@13.6.33))(yjs@13.6.33)
+      '@lucide/vue':
+        specifier: 1.73.0
+        version: 1.73.0(vue@3.5.45(typescript@5.9.3))
       '@orvyn/editor':
         specifier: workspace:*
         version: link:../../packages/editor
@@ -641,6 +650,12 @@ packages:
   '@floating-ui/utils@0.2.12':
     resolution: {integrity: sha512-HpCo8tmWzLVad5s2d19EhAz5zqrrQ6s69qd6moPMQvkOuSwDT1YgRfWSVuc4ennqrgv3OHppiOGMQ7oC13yIww==}
 
+  '@fontsource-variable/inter@5.3.0':
+    resolution: {integrity: sha512-OupL48va4JNofb97w6NYeF9S7W/kHNKM0Er8Dem5nqi4jeOLrVJDoE8tZEpnMJmtkvNbB1EIPPwHcdkF6b1oUA==}
+
+  '@fontsource-variable/jetbrains-mono@5.3.0':
+    resolution: {integrity: sha512-F32xpS2NsGYoQi2ADSkKTgpJj7ozajsGgDJ8woTnqjmIB+dxDIqImjl4pXZVEExu8UFZ2ndhmX18EBS/hdz3Lw==}
+
   '@hocuspocus/common@4.8.0':
     resolution: {integrity: sha512-UI8Vye3mds2aMUHaWfwkDq0+257JUpvKa0nyAOjXWLfyhYHsAq8eku+ynZc/PaShyOci/VD54cW/rLQJGHHPKg==}
 
@@ -694,6 +709,11 @@ packages:
 
   '@lifeomic/attempt@3.1.0':
     resolution: {integrity: sha512-QZqem4QuAnAyzfz+Gj5/+SLxqwCAw2qmt7732ZXodr6VDWGeYLG6w1i/vYLa55JQM9wRuBKLmXmiZ2P0LtE5rw==}
+
+  '@lucide/vue@1.73.0':
+    resolution: {integrity: sha512-QVVRSgu2rqRX3NAUktT9venW0Bvtr03aCZjhFRLwnV3uqLyR7KCTOx5mMlukhw0aiyjC3D6w2b+fmy4MeM5R3Q==}
+    peerDependencies:
+      vue: '>=3.0.1'
 
   '@lukeed/csprng@1.1.0':
     resolution: {integrity: sha512-Z7C/xXCiGWsg0KuKsHTKJxbWhpI3Vs5GwLfOean7MGyVFGqdRgBbAjOCh6u4bbjPc/8MJ2pZmK/0DLdCbivLDA==}
@@ -4535,6 +4555,10 @@ snapshots:
 
   '@floating-ui/utils@0.2.12': {}
 
+  '@fontsource-variable/inter@5.3.0': {}
+
+  '@fontsource-variable/jetbrains-mono@5.3.0': {}
+
   '@hocuspocus/common@4.8.0':
     dependencies:
       lib0: 0.2.120
@@ -4605,6 +4629,10 @@ snapshots:
       '@jridgewell/sourcemap-codec': 1.6.0
 
   '@lifeomic/attempt@3.1.0': {}
+
+  '@lucide/vue@1.73.0(vue@3.5.45(typescript@5.9.3))':
+    dependencies:
+      vue: 3.5.45(typescript@5.9.3)
 
   '@lukeed/csprng@1.1.0': {}
 

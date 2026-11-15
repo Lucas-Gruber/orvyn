@@ -2,6 +2,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { request, sessionCookie, Pool, base } from "./helpers.mjs";
+import {
+  chooseSpace,
+  openPageFromSidebar,
+  showAttachments,
+} from "./ui-helpers.mjs";
 async function account() {
   const r = await request("auth/register", {
       method: "POST",
@@ -300,13 +305,12 @@ test("Chromium: upload on a record, select in Files property and download origin
       errors = [];
     page.on("pageerror", (e) => errors.push(e.message));
     await page.goto(base);
-    await page.getByRole("button", { name: space.name, exact: true }).click();
-    await page
-      .getByRole("button", { name: database.title, exact: true })
-      .click();
+    await chooseSpace(page, space.name);
+    await openPageFromSidebar(page, database.title);
     await page
       .getByRole("button", { name: "Manage record attachments", exact: true })
       .click();
+    await showAttachments(page);
     await page.getByLabel("Choose attachment", { exact: true }).setInputFiles({
       name: "database-file.txt",
       mimeType: "text/plain",
@@ -329,9 +333,15 @@ test("Chromium: upload on a record, select in Files property and download origin
         r.request().method() === "PATCH" &&
         r.url().endsWith("/records/" + record.pageId),
     );
-    await page
-      .getByLabel("Documents", { exact: true })
-      .selectOption({ label: "database-file.txt" });
+    await page.getByRole("button", { name: "Documents", exact: true }).click();
+    const picker = page.getByRole("dialog", {
+      name: "Documents options",
+      exact: true,
+    });
+    await picker
+      .getByRole("option", { name: "database-file.txt", exact: true })
+      .click();
+    await picker.getByRole("button", { name: "Done", exact: true }).click();
     assert.equal((await saved).status(), 200);
     const link = page.getByRole("link", {
       name: "database-file.txt",

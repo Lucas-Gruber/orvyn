@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { request, sessionCookie, Pool, base } from "./helpers.mjs";
+import { chooseSpace, openPageFromSidebar } from "./ui-helpers.mjs";
 test("Person fields validate membership, retain historical IDs and filter/export without granting access", async () => {
   const db = new Pool({ connectionString: process.env.DATABASE_URL });
   const account = async () => {
@@ -246,12 +247,8 @@ test("Chromium: people property creation, multi-assignment, membership filtering
       errors = [];
     page.on("pageerror", (e) => errors.push(e.message));
     await page.goto(base);
-    await page
-      .getByRole("button", { name: "Team · " + space.name, exact: true })
-      .click();
-    await page
-      .getByRole("button", { name: database.title, exact: true })
-      .click();
+    await chooseSpace(page, space.name);
+    await openPageFromSidebar(page, database.title);
     await page.getByText("Add a property", { exact: true }).click();
     await page.getByLabel("Property name", { exact: true }).fill("Assignees");
     await page
@@ -264,9 +261,26 @@ test("Chromium: people property creation, multi-assignment, membership filtering
     await page
       .getByLabel("Record name", { exact: true })
       .fill("Assigned in browser");
-    await page
-      .getByLabel("Assignees", { exact: true })
-      .selectOption([owner.id, member.id]);
+    await page.getByRole("button", { name: "Assignees", exact: true }).click();
+    const picker = page.getByRole("dialog", {
+      name: "Assignees options",
+      exact: true,
+    });
+    await picker
+      .getByLabel("Search Assignees", { exact: true })
+      .fill(owner.email);
+    await picker
+      .getByLabel("Search Assignees", { exact: true })
+      .press("ArrowDown");
+    await expect(
+      picker.getByRole("option", { name: owner.email, exact: true }),
+    ).toBeFocused();
+    await page.keyboard.press("Space");
+    await picker.getByLabel("Search Assignees", { exact: true }).fill("");
+    await picker
+      .getByRole("option", { name: member.email, exact: true })
+      .click();
+    await picker.getByRole("button", { name: "Done", exact: true }).click();
     await page
       .getByRole("button", { name: "Create record", exact: true })
       .click();
@@ -276,16 +290,18 @@ test("Chromium: people property creation, multi-assignment, membership filtering
         exact: true,
       }),
     });
-    await expect(row.getByLabel("Assignees", { exact: true })).toHaveValues(
-      owner.email.localeCompare(member.email) < 0
-        ? [owner.id, member.id]
-        : [member.id, owner.id],
-    );
+    const assigned = row.getByRole("button", {
+      name: "Assignees",
+      exact: true,
+    });
+    await expect(assigned).toContainText(owner.email);
+    await expect(assigned).toContainText(member.email);
     await page
       .getByRole("button", { name: "View settings", exact: true })
       .click();
-    const form = page.locator("form").filter({
-      has: page.getByRole("heading", { name: "View settings", exact: true }),
+    const form = page.getByRole("dialog", {
+      name: "View settings",
+      exact: true,
     });
     await form.getByRole("button", { name: "Add filter", exact: true }).click();
     await form
@@ -306,11 +322,19 @@ test("Chromium: people property creation, multi-assignment, membership filtering
     await page
       .getByRole("button", { name: "Refresh records", exact: true })
       .click();
+    await expect(assigned).toContainText("Former member");
+    await assigned.click();
+    const former = picker.getByRole("option", {
+      name: "Former member",
+      exact: true,
+    });
+    await expect(former).toHaveAttribute("aria-selected", "true");
     await expect(
-      row
-        .getByLabel("Assignees", { exact: true })
-        .getByRole("option", { name: "Former member", exact: true }),
-    ).toHaveCount(1);
+      picker.getByRole("option", { name: member.email, exact: true }),
+    ).toHaveCount(0);
+    await former.click();
+    await picker.getByRole("button", { name: "Done", exact: true }).click();
+    await expect(row).toHaveCount(0); // The saved membership filter no longer matches.
     assert.deepEqual(errors, []);
   } finally {
     await browser.close();
