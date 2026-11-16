@@ -196,7 +196,7 @@ test("Person fields validate membership, retain historical IDs and filter/export
 });
 
 test("Chromium: people property creation, multi-assignment, membership filtering and former-member display", async () => {
-  const { chromium, expect } = await import("@playwright/test");
+  const { chromium, expect } = await import("./browser-tools.mjs");
   const db = new Pool({ connectionString: process.env.DATABASE_URL }),
     browser = await chromium.launch({
       executablePath: process.env.CHROMIUM_PATH || "/usr/bin/chromium",

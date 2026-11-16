@@ -324,7 +324,7 @@ test("collaboration projects inline mentions atomically across replicas and refu
 });
 
 test("Chromium: type @ and choose an inline person, reload/live readers resolve names, inbox focuses the mention and revoked recipients become unavailable", async () => {
-  const { chromium, expect } = await import("@playwright/test"),
+  const { chromium, expect } = await import("./browser-tools.mjs"),
     { mkdir } = await import("node:fs/promises"),
     { pageLink } = await import("../packages/editor/dist/links.js"),
     db = new Pool({ connectionString: process.env.DATABASE_URL }),

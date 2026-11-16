@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
-import { chromium, expect } from "@playwright/test";
+import { chromium, expect } from "./browser-tools.mjs";
 import { base } from "./helpers.mjs";
 test("workspace UX: immediate pages, autosave, persistent deep links, search, favorites, themes and mobile navigation", async () => {
   const browser = await chromium.launch({

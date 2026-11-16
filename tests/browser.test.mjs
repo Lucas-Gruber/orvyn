@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { chromium, expect } from "@playwright/test";
+import { chromium, expect } from "./browser-tools.mjs";
 import {
   chooseSpace,
   openPageFromSidebar,

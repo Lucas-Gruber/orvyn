@@ -256,7 +256,7 @@ test("Files properties restrict references to owned ready attachments and saniti
 });
 
 test("Chromium: upload on a record, select in Files property and download original bytes", async () => {
-  const { chromium, expect } = await import("@playwright/test"),
+  const { chromium, expect } = await import("./browser-tools.mjs"),
     browser = await chromium.launch({
       executablePath: process.env.CHROMIUM_PATH || "/usr/bin/chromium",
       headless: true,

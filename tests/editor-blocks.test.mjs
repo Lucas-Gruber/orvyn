@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
-import { chromium, expect } from "@playwright/test";
+import { chromium, expect } from "./browser-tools.mjs";
 import { request, sessionCookie, Pool, base } from "./helpers.mjs";
 import { pageLink } from "../packages/editor/dist/links.js";
 test("Chromium: callout, toggle, table of contents and code highlighting persist and collaborate with read-only viewers", async () => {

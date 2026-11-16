@@ -230,7 +230,7 @@ test("CSV preview/atomic confirmation and scoped CSV/JSON exports preserve real 
 });
 
 test("Chromium: CSV mapping preview requires review before import and exports the imported records", async () => {
-  const { chromium, expect } = await import("@playwright/test");
+  const { chromium, expect } = await import("./browser-tools.mjs");
   const browser = await chromium.launch({
     executablePath: process.env.CHROMIUM_PATH || "/usr/bin/chromium",
     headless: true,

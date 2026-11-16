@@ -511,7 +511,7 @@ test("formulas count only readable relations in queries/exports and subscribe th
 });
 
 test("Chromium: create and edit a formula, recalculate inputs, save numeric filters, reload and preserve read-only access", async () => {
-  const { chromium, expect } = await import("@playwright/test"),
+  const { chromium, expect } = await import("./browser-tools.mjs"),
     browser = await chromium.launch({
       executablePath: process.env.CHROMIUM_PATH || "/usr/bin/chromium",
       headless: true,
@@ -594,7 +594,9 @@ test("Chromium: create and edit a formula, recalculate inputs, save numeric filt
     await settings
       .getByLabel("Filter comparison", { exact: true })
       .selectOption("gte");
-    await settings.getByRole("spinbutton", { name: "Estimate", exact: true }).fill("700");
+    await settings
+      .getByRole("spinbutton", { name: "Estimate", exact: true })
+      .fill("700");
     await settings
       .getByRole("button", { name: "Save view", exact: true })
       .click();

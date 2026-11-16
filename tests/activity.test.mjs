@@ -416,7 +416,7 @@ test("collaboration records each actor's durable edits across replicas and rejec
 });
 
 test("Chromium: activity shows real edits/discussions, scopes to a page, opens pages, fits mobile and clears revoked content", async () => {
-  const { chromium, expect } = await import("@playwright/test"),
+  const { chromium, expect } = await import("./browser-tools.mjs"),
     { mkdir } = await import("node:fs/promises"),
     { pageLink } = await import("../packages/editor/dist/links.js"),
     db = new Pool({ connectionString: process.env.DATABASE_URL }),

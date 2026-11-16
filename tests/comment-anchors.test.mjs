@@ -244,7 +244,7 @@ test("text threads validate current page CRDT ranges, preserve idempotency after
 });
 
 test("readonly commenters create selected-text discussions, follow live changes, revisit markers and retain threads after text deletion", async () => {
-  const { chromium, expect } = await import("@playwright/test"),
+  const { chromium, expect } = await import("./browser-tools.mjs"),
     { mkdir } = await import("node:fs/promises"),
     { pageLink } = await import("../packages/editor/dist/links.js"),
     { base } = await import("./helpers.mjs"),

@@ -350,7 +350,7 @@ test("notification counts, pagination and read actions use current permissions a
 });
 
 test("Chromium: @ chooser sends a mention, inbox opens the current discussion, read controls persist and replies notify participants", async () => {
-  const { chromium, expect } = await import("@playwright/test"),
+  const { chromium, expect } = await import("./browser-tools.mjs"),
     { mkdir } = await import("node:fs/promises"),
     { pageLink } = await import("../packages/editor/dist/links.js"),
     db = new Pool({ connectionString: process.env.DATABASE_URL }),
