@@ -1102,6 +1102,17 @@ dialog.link-database-dialog::backdrop {
   width: min(430px, 100vw);
   border-right: 0;
 }
+.ui-dialog.drawer.non-modal {
+  position: fixed;
+  inset: 0 0 0 auto;
+  z-index: 65;
+}
+.workspace-main.comments-inline {
+  margin-right: 430px;
+}
+.workspace-main.comments-inline .desktop-action {
+  display: none;
+}
 .ui-dialog.drawer .dialog-content {
   padding: 22px;
 }

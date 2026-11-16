@@ -1,0 +1,15 @@
+# Page discussions
+
+Open **Comments** on any readable page, record, folder or database. Readers can view discussions; Commenters and higher roles can start threads and reply. Authors can edit their own messages. Authors and page editors can delete messages; deletion removes the text and leaves a tombstone so replies keep their context. A thread's creator or a page editor can resolve/reopen it. Resolved threads must be reopened before another reply is accepted. The panel filters open/resolved/all threads.
+
+Desktop widths of at least 1200px show comments beside the document, leaving the editor and navigation usable. Narrower screens use the shared modal drawer. New-comment and reply drafts stay in memory per page while the user closes the panel or navigates between documents; signing out, switching account or reloading clears them. They are not stored in browser persistent storage. Comment text is plain text, bounded at 10,000 characters, and renders literally rather than as HTML.
+
+Migration 23 creates separate thread/message tables. Comments do not rewrite document CRDT state, title counters or rich-document revisions. Each write uses current inherited page permissions and the space lock; reads hold a shared space lock through authorization and query. Missing and inaccessible discussion IDs use the same not-found responses. Trash and restricted ancestors hide discussions as well as the document. Historical author metadata shows "Former member" after removal from the space.
+
+Messages and thread resolution use optimistic versions. Reply appends serialize while allowing concurrent submissions. A caller-scoped request key makes retries of the same submission idempotent; reusing a key for different content fails instead of replacing the original. Authentication, origin checks, input limits and per-author posting throttling apply to comment mutations. Body deletion also invalidates old edits and cannot restore the removed text through a retry.
+
+Thread lists use creation order and scoped UUID cursors (default 20, max 100). A thread returns its latest 50 messages in reading order, with a cursor to load earlier replies. The UI polls the current first page every five seconds while visible and not editing. Loading older pages suspends automatic refresh for that view; the refresh control returns to current data. Authorization is always rechecked on requests, including when the client has an older view.
+
+This slice implements page discussions and replies. Text-selected anchors, mentions, notifications and user-facing activity follow separately. Thread links, rich comment formatting, comment attachments and persistent/offline drafts are not implemented yet.
+
+API tests cover all roles, author/moderator boundaries, retries, concurrent edits, stale resolution, closed-thread replies, deleted text, scoped pagination, former-member metadata, trash/restore and inherited access changes. Chromium tests cover posting/replies/editing/deletion, resolve/reopen, cross-page draft preservation, literal script text, reader controls, persistence and desktop-to-mobile drawer switching.

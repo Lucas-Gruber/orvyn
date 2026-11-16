@@ -1,28 +1,51 @@
 <script setup lang="ts">
-const props = defineProps<{
-    open: boolean;
-    title: string;
-    wide?: boolean;
-    drawer?: boolean;
-    error?: string;
-  }>(),
+const props = withDefaults(
+    defineProps<{
+      open: boolean;
+      title: string;
+      wide?: boolean;
+      drawer?: boolean;
+      error?: string;
+      modal?: boolean;
+    }>(),
+    { modal: true },
+  ),
   emit = defineEmits<{ close: [] }>(),
   dialog = ref<HTMLDialogElement>(),
   id = useId();
+let openedModal = true,
+  ignoredClosures = 0;
 function synchronize() {
   if (!dialog.value) return;
+  if (props.open && dialog.value.open && props.modal !== openedModal) {
+    ignoredClosures++;
+    dialog.value.close();
+  }
   if (props.open && !dialog.value.open) {
-    dialog.value.showModal();
+    openedModal = props.modal;
+    if (props.modal) dialog.value.showModal();
+    else dialog.value.show();
     dialog.value
       .querySelector<HTMLElement>("input:not([type=hidden]), textarea, select")
       ?.focus();
   } else if (!props.open && dialog.value.open) dialog.value.close();
 }
-watch(
-  () => props.open,
-  () => nextTick(synchronize),
-);
+watch([() => props.open, () => props.modal], () => nextTick(synchronize));
 onMounted(synchronize);
+function closed() {
+  if (ignoredClosures) {
+    ignoredClosures--;
+    return;
+  }
+  emit("close");
+}
+function keys(event: KeyboardEvent) {
+  if (!props.modal && event.key === "Escape") {
+    event.preventDefault();
+    event.stopPropagation();
+    emit("close");
+  }
+}
 function outside(event: MouseEvent) {
   if (event.target !== dialog.value) return;
   const rect = dialog.value.getBoundingClientRect();
@@ -39,8 +62,9 @@ function outside(event: MouseEvent) {
   <dialog
     ref="dialog"
     :aria-labelledby="id + '-title'"
-    :class="['ui-dialog', { wide, drawer }]"
-    @close="emit('close')"
+    :class="['ui-dialog', { wide, drawer, 'non-modal': !modal }]"
+    @close="closed"
+    @keydown="keys"
     @cancel.prevent="emit('close')"
     @click="outside"
   >

@@ -40,3 +40,5 @@ Block selection, drag handles and keyboard movement: [docs/BLOCK_CONTROLS.md](do
 Page and space icons/covers: [docs/PAGE_APPEARANCE.md](docs/PAGE_APPEARANCE.md).
 
 Folders and sidebar hierarchy movement: [docs/PAGE_HIERARCHY.md](docs/PAGE_HIERARCHY.md).
+
+Page comments and discussion threads: [docs/COMMENTS.md](docs/COMMENTS.md).

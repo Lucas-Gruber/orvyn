@@ -13,7 +13,8 @@ Work through these areas in order, preserving working features and committing/pu
    - [x] Page/space emoji icons and preset covers; private image covers for pages.
    - [x] Folders, hierarchy dragging and keyboard reorder/nest/outdent.
 2. Collaboration
-   - [ ] Page/thread/text-anchored comments, resolve/reopen and mentions.
+   - [x] Page discussion threads, replies, author editing, moderation and resolve/reopen.
+   - [ ] Text-anchored comments and mentions.
    - [ ] Notifications and user-visible activity with current permission checks.
 3. Databases
    - [ ] Relations, formulas and rollups with permission-safe queries/exports.

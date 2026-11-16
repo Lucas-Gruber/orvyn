@@ -2,6 +2,12 @@
 import { pageNavigationKey } from "./composables/pageNavigation";
 import { headingFromHash, validHeadingId } from "@orvyn/editor/links";
 import { pageOrder } from "./utils/pageTree";
+import {
+  commentDraftsKey,
+  type CommentDraftState,
+} from "./composables/commentDrafts";
+const commentDrafts = new Map<string, CommentDraftState>();
+provide(commentDraftsKey, commentDrafts);
 const route = useRoute(),
   router = useRouter();
 const booting = ref(true),
@@ -39,6 +45,8 @@ const sidebarOpen = ref(true),
   showDelete = ref(false),
   showAppearance = ref(false),
   showPageAppearance = ref(false),
+  showComments = ref(false),
+  commentsInline = ref(false),
   movingPage = ref(false),
   showAttachments = ref(false),
   fullWidth = ref(false),
@@ -77,7 +85,11 @@ let titleTimer: ReturnType<typeof setTimeout> | undefined,
   noticeTimer: ReturnType<typeof setTimeout> | undefined,
   titleJob: Promise<void> | undefined,
   searchGeneration = 0;
-let viewport: MediaQueryList | undefined;
+let viewport: MediaQueryList | undefined,
+  commentViewport: MediaQueryList | undefined;
+function commentViewportChanged(event: { matches: boolean }) {
+  commentsInline.value = event.matches;
+}
 function viewportChanged(event: { matches: boolean }) {
   mobile.value = event.matches;
   sidebarOpen.value = !event.matches;
@@ -250,6 +262,7 @@ async function updateLocation() {
   });
 }
 function signedOut() {
+  commentDrafts.clear();
   clearTimeout(titleTimer);
   signedIn.value = false;
   spaces.value = [];
@@ -263,6 +276,10 @@ function signedOut() {
   searchOpen.value = false;
   void router.replace({ path: "/", query: {} });
 }
+watch(
+  () => me.value?.id,
+  () => commentDrafts.clear(),
+);
 async function refreshMe() {
   me.value = await api("auth/me");
 }
@@ -324,6 +341,7 @@ async function select(s: any, location = true) {
   if (mobile.value) sidebarOpen.value = false;
 }
 function edit(p: any) {
+  showComments.value = false;
   showPageAppearance.value = false;
   targetHeading.value = "";
   page.value = p;
@@ -771,6 +789,9 @@ onMounted(async () => {
   viewport = window.matchMedia("(max-width: 760px)");
   viewportChanged(viewport);
   viewport.addEventListener("change", viewportChanged);
+  commentViewport = window.matchMedia("(min-width: 1200px)");
+  commentViewportChanged(commentViewport);
+  commentViewport.addEventListener("change", commentViewportChanged);
   try {
     const stored = localStorage.getItem("orvyn.theme");
     if (themes.some((t) => t.id === stored)) theme.value = stored!;
@@ -817,6 +838,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("popstate", fromHistory);
   window.removeEventListener("beforeunload", beforeUnload);
   viewport?.removeEventListener("change", viewportChanged);
+  commentViewport?.removeEventListener("change", commentViewportChanged);
 });
 </script>
 <template>
@@ -1201,7 +1223,11 @@ onBeforeUnmount(() => {
         >
       </div>
     </aside>
-    <main class="workspace-main" :inert="mobile && sidebarOpen">
+    <main
+      class="workspace-main"
+      :class="{ 'comments-inline': showComments && commentsInline }"
+      :inert="mobile && sidebarOpen"
+    >
       <header class="workspace-topbar">
         <button
           class="icon-button"
@@ -1239,7 +1265,9 @@ onBeforeUnmount(() => {
         </nav>
         <div v-if="view === 'workspace' && page" class="topbar-actions">
           <span v-if="page.access_rank < 30" class="badge"
-            ><AppIcon name="lock" :size="12" />Read-only</span
+            ><AppIcon name="lock" :size="12" />{{
+              page.access_rank >= 20 ? "Can comment" : "Read-only"
+            }}</span
           ><button
             class="icon-button"
             :class="{ 'favorite-active': favorites.includes(page.id) }"
@@ -1258,6 +1286,14 @@ onBeforeUnmount(() => {
             @click="showPermissions = true"
           >
             <AppIcon name="users" :size="15" />Page permissions</button
+          ><button
+            class="ghost"
+            aria-label="Comments"
+            @click="showComments = true"
+          >
+            <AppIcon name="comments" :size="16" /><span class="desktop-action"
+              >Comments</span
+            ></button
           ><UiMenu label="Page actions"
             ><button
               v-if="page.access_rank >= 30"
@@ -1828,6 +1864,14 @@ onBeforeUnmount(() => {
       ><span><kbd>Enter</kbd> Open</span><span><kbd>Esc</kbd> Close</span>
     </div></UiDialog
   >
+  <LazyPageComments
+    v-if="page"
+    :key="'comments-' + page.id"
+    :open="showComments"
+    :page-id="page.id"
+    :modal="!commentsInline"
+    @close="showComments = false"
+  />
   <PageAppearanceDialog
     v-if="page"
     :key="page.id"

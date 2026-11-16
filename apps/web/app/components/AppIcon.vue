@@ -2,6 +2,8 @@
 import {
   Info,
   Image,
+  MessageSquare,
+  RefreshCw,
   Lightbulb,
   TriangleAlert,
   Search,
@@ -63,6 +65,8 @@ const props = withDefaults(defineProps<{ name: string; size?: number }>(), {
 const icons: Record<string, any> = {
   info: Info,
   image: Image,
+  comments: MessageSquare,
+  refresh: RefreshCw,
   lightbulb: Lightbulb,
   warning: TriangleAlert,
   search: Search,

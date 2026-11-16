@@ -419,6 +419,26 @@ END $$;
 CREATE TRIGGER page_initial_rank BEFORE INSERT ON pages FOR EACH ROW EXECUTE FUNCTION orvyn_new_page_rank();
 `,
   },
+  {
+    version: 23,
+    sql: `
+CREATE TABLE comment_threads (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(),page_id uuid NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
+ created_by uuid REFERENCES users(id) ON DELETE SET NULL,version integer NOT NULL DEFAULT 1,
+ created_at timestamptz NOT NULL DEFAULT clock_timestamp(),updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+ resolved_at timestamptz,resolved_by uuid REFERENCES users(id) ON DELETE SET NULL,deleted_at timestamptz
+);
+CREATE INDEX threads_page ON comment_threads(page_id,created_at DESC,id DESC) WHERE deleted_at IS NULL;
+CREATE TABLE comments (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(),thread_id uuid NOT NULL REFERENCES comment_threads(id) ON DELETE CASCADE,
+ author_id uuid REFERENCES users(id) ON DELETE SET NULL,body text,request_key uuid NOT NULL,
+ version integer NOT NULL DEFAULT 1,created_at timestamptz NOT NULL DEFAULT clock_timestamp(),edited_at timestamptz,deleted_at timestamptz,
+ UNIQUE(author_id,request_key),CHECK(body IS NULL OR length(body) BETWEEN 1 AND 10000),
+ CHECK((deleted_at IS NULL AND body IS NOT NULL) OR (deleted_at IS NOT NULL AND body IS NULL))
+);
+CREATE INDEX comments_thread ON comments(thread_id,created_at DESC,id DESC);
+`,
+  },
 ] as const;
 
 export async function migrate(pool: Pool, target = migrations.at(-1)!.version) {
