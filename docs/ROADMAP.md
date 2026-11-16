@@ -1,0 +1,35 @@
+# Remaining product work
+
+Work through these areas in order, preserving working features and committing/pushing tested functional changes. PRODUCT.md remains the complete specification; checked entries below describe implemented slices rather than completion of an entire product phase. Include current browser screenshots during substantial UI changes.
+
+1. Editor and pages
+   - [x] Slash commands, permanent document/heading links and backlinks.
+   - [x] Callouts, collapsible sections, dynamic outlines and highlighted code.
+   - [x] Private images/files embedded in document content.
+   - [ ] Document preview cards and supported embeds.
+   - [ ] Columns, floating formatting toolbar and multi-block selection/movement.
+   - [ ] Page/space icons and covers, folders and hierarchy dragging.
+2. Collaboration
+   - [ ] Page/thread/text-anchored comments, resolve/reopen and mentions.
+   - [ ] Notifications and user-visible activity with current permission checks.
+3. Databases
+   - [ ] Relations, formulas and rollups with permission-safe queries/exports.
+   - [ ] Database/record templates.
+4. Search
+   - [ ] Indexed document full-text search, tags/metadata and space/type filters.
+5. Whiteboards
+   - [ ] Drawing/diagram editor, persistence, document embedding and collaboration.
+6. Sharing
+   - [ ] Explicit public publication, view/record scope and hierarchy preview.
+   - [ ] Revocable, expiring and optional password-protected links.
+7. Localization, branding and administration
+   - [ ] Runtime German/English/system language and synchronized preferences.
+   - [ ] Instance/organization/space appearance, complete administration.
+   - [ ] Identity linking, OIDC group mapping, real-provider validation and ownership transfer.
+8. Import/export
+   - [ ] Markdown, page hierarchies, attachment payloads and portable restore.
+   - [ ] Faithful Notion import before claiming migration support.
+9. Desktop and operation
+   - [ ] Tauri clients, releases, update distribution and signing.
+   - [ ] Kubernetes/Helm, observability, automated backup scheduling and production recovery.
+   - [ ] Load testing, object-store deployment policies, accessibility and broader browser validation.

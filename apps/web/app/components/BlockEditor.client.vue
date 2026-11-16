@@ -8,6 +8,7 @@ import CalloutNode from "./CalloutNode.vue";
 import ToggleNode from "./ToggleNode.vue";
 import TableOfContentsNode from "./TableOfContentsNode.vue";
 import CodeBlockNode from "./CodeBlockNode.vue";
+import AssetNode from "./AssetNode.vue";
 import { editorPageKey } from "../composables/editorContext";
 import {
   editorExtensions,
@@ -31,10 +32,12 @@ provide(editorPageKey, () => props.pageId);
 const openPage = inject(pageNavigationKey),
   root = ref<HTMLElement>(),
   showDocumentLink = ref(false),
+  showAsset = ref(false),
+  assetImage = ref(true),
   selectedLinkText = ref(""),
   linkMessage = ref(""),
   headingMessage = ref("");
-let documentLinkRange = { from: 0, to: 0 };
+let insertionRange = { from: 0, to: 0 };
 const document = new Y.Doc(),
   editor = shallowRef<Editor>(),
   status = ref("connecting"),
@@ -48,7 +51,7 @@ const slash = ref(""),
   slashOpen = ref(false),
   slashIndex = ref(0),
   slashStyle = ref<Record<string, string>>({});
-let linkSelectionActive = false;
+let pickerSelectionActive = false;
 let slashRange = { from: 0, to: 0 };
 const config = useRuntimeConfig(),
   url = String(
@@ -77,6 +80,18 @@ interface SlashCommand {
   aliases?: string[];
 }
 const commands: SlashCommand[] = [
+  {
+    label: "Image",
+    aliases: ["bild", "photo"],
+    keepSelection: true,
+    run: () => void openAsset(true),
+  },
+  {
+    label: "File",
+    aliases: ["datei", "attachment"],
+    keepSelection: true,
+    run: () => void openAsset(false),
+  },
   {
     label: "Callout",
     aliases: ["note", "hinweis"],
@@ -192,9 +207,14 @@ function initialize() {
   editor.value = new Editor({
     extensions: [
       ...editorExtensions(true).map((extension) =>
-        ["orvynCallout", "orvynToggle", "orvynToc", "codeBlock"].includes(
-          extension.name,
-        )
+        [
+          "orvynCallout",
+          "orvynToggle",
+          "orvynToc",
+          "codeBlock",
+          "orvynImage",
+          "orvynFile",
+        ].includes(extension.name)
           ? extension.extend({
               addNodeView() {
                 return VueNodeViewRenderer(
@@ -204,6 +224,8 @@ function initialize() {
                       orvynToggle: ToggleNode,
                       orvynToc: TableOfContentsNode,
                       codeBlock: CodeBlockNode,
+                      orvynImage: AssetNode,
+                      orvynFile: AssetNode,
                     } as Record<string, any>
                   )[extension.name],
                 );
@@ -298,13 +320,13 @@ function initialize() {
     },
     onTransaction({ transaction }) {
       tick.value++;
-      if (linkSelectionActive && transaction.docChanged) {
-        documentLinkRange = {
-          from: transaction.mapping.map(documentLinkRange.from, 1),
-          to: transaction.mapping.map(documentLinkRange.to, -1),
+      if (pickerSelectionActive && transaction.docChanged) {
+        insertionRange = {
+          from: transaction.mapping.map(insertionRange.from, 1),
+          to: transaction.mapping.map(insertionRange.to, -1),
         };
-        if (documentLinkRange.to < documentLinkRange.from)
-          documentLinkRange.to = documentLinkRange.from;
+        if (insertionRange.to < insertionRange.from)
+          insertionRange.to = insertionRange.from;
       }
     },
     onUpdate: ({ editor: e }) => updateSlash(e),
@@ -317,7 +339,7 @@ function updateSlash(e: Pick<Editor, "state" | "isEditable">) {
     text = paragraph.textContent;
   if (
     !e.isEditable ||
-    linkSelectionActive ||
+    pickerSelectionActive ||
     paragraph.type.name !== "paragraph" ||
     !/^\/[\p{L}\p{N} -]*$/u.test(text) ||
     selection.$from.parentOffset !== text.length
@@ -393,7 +415,7 @@ async function openDocumentLink(fromSlash = false) {
       to: Math.max(anchor, focus),
     });
   }
-  documentLinkRange = fromSlash
+  insertionRange = fromSlash
     ? { ...slashRange }
     : {
         from: editor.value.state.selection.from,
@@ -402,17 +424,17 @@ async function openDocumentLink(fromSlash = false) {
   selectedLinkText.value = fromSlash
     ? ""
     : editor.value.state.doc.textBetween(
-        documentLinkRange.from,
-        documentLinkRange.to,
+        insertionRange.from,
+        insertionRange.to,
         " ",
       );
   slashOpen.value = false;
-  linkSelectionActive = true;
+  pickerSelectionActive = true;
   try {
     await flush();
     showDocumentLink.value = true;
   } catch {
-    linkSelectionActive = false;
+    pickerSelectionActive = false;
     linkMessage.value = "Save pending changes before adding a link.";
   }
 }
@@ -422,16 +444,16 @@ function insertDocumentLink(target: {
   label: string;
 }) {
   if (!editor.value?.isEditable) return;
-  linkSelectionActive = false;
+  pickerSelectionActive = false;
   if (
-    documentLinkRange.from < documentLinkRange.to &&
+    insertionRange.from < insertionRange.to &&
     selectedLinkText.value &&
     target.label.trim() === selectedLinkText.value.trim()
   ) {
     editor.value
       .chain()
       .focus()
-      .setTextSelection(documentLinkRange)
+      .setTextSelection(insertionRange)
       .setLink({
         href: pageLink(target.pageId, target.headingId),
         target: "_self",
@@ -444,7 +466,7 @@ function insertDocumentLink(target: {
   editor.value
     .chain()
     .focus()
-    .insertContentAt(documentLinkRange, {
+    .insertContentAt(insertionRange, {
       type: "text",
       text: target.label,
       marks: [
@@ -463,7 +485,39 @@ function insertDocumentLink(target: {
 }
 function closeDocumentLink() {
   showDocumentLink.value = false;
-  linkSelectionActive = false;
+  pickerSelectionActive = false;
+  editor.value?.commands.focus();
+}
+async function openAsset(image: boolean) {
+  if (!editor.value?.isEditable) return;
+  insertionRange = { ...slashRange };
+  pickerSelectionActive = true;
+  slashOpen.value = false;
+  try {
+    await flush();
+    assetImage.value = image;
+    showAsset.value = true;
+  } catch {
+    pickerSelectionActive = false;
+    linkMessage.value = "Save pending changes before inserting an attachment.";
+  }
+}
+function insertAsset(file: { fileId: string; label: string }) {
+  if (!editor.value?.isEditable) return;
+  pickerSelectionActive = false;
+  editor.value
+    .chain()
+    .focus()
+    .insertContentAt(insertionRange, [
+      { type: assetImage.value ? "orvynImage" : "orvynFile", attrs: file },
+      { type: "paragraph" },
+    ])
+    .run();
+  showAsset.value = false;
+}
+function closeAsset() {
+  showAsset.value = false;
+  pickerSelectionActive = false;
   editor.value?.commands.focus();
 }
 async function copyHeadingLink(id: string) {
@@ -745,6 +799,13 @@ onBeforeUnmount(() => {
       :selected-text="selectedLinkText"
       @close="closeDocumentLink"
       @select="insertDocumentLink"
+    />
+    <EditorAssetPicker
+      :open="showAsset"
+      :page-id="pageId"
+      :image="assetImage"
+      @close="closeAsset"
+      @select="insertAsset"
     />
     <div class="editor-status">
       <span role="status">{{ saveStatus }}</span>

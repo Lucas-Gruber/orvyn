@@ -14,7 +14,7 @@ import {
   documentSchemaVersion,
 } from "@orvyn/editor";
 import * as Y from "yjs";
-import { documentReferences } from "@orvyn/editor/links";
+import { documentReferences, newDocumentAssets } from "@orvyn/editor/links";
 import { createHash } from "node:crypto";
 
 type Identity = {
@@ -231,7 +231,7 @@ const server = new Server<Identity>({
       ).rows[0];
       if (schema.document_schema_version > documentSchemaVersion) deny();
       const row = await c.query(
-        "SELECT state FROM editor_documents WHERE page_id=$1 FOR UPDATE",
+        "SELECT e.state,p.document FROM editor_documents e JOIN pages p ON p.id=e.page_id WHERE e.page_id=$1 FOR UPDATE OF e",
         [documentName],
       );
       if (row.rowCount) Y.applyUpdate(document, row.rows[0].state);
@@ -274,7 +274,7 @@ const server = new Server<Identity>({
         documentName,
       ]);
       const row = await c.query(
-        "SELECT state FROM editor_documents WHERE page_id=$1 FOR UPDATE",
+        "SELECT e.state,p.document FROM editor_documents e JOIN pages p ON p.id=e.page_id WHERE e.page_id=$1 FOR UPDATE OF e",
         [documentName],
       );
       if (!row.rowCount) deny();
@@ -286,6 +286,17 @@ const server = new Server<Identity>({
         if (next.length > 2 * 1024 * 1024) deny();
         const json = yDocToDocument(candidate);
         if (next.equals(row.rows[0].state)) return;
+        const additions = newDocumentAssets(json, row.rows[0].document);
+        if (
+          additions.length &&
+          !(
+            await c.query(
+              "SELECT orvyn_editor_assets_allowed($1,$2::jsonb) AS allowed",
+              [connection.context.userId, JSON.stringify(additions)],
+            )
+          ).rows[0].allowed
+        )
+          deny();
         await c.query(
           "UPDATE editor_documents SET state=$2,updated_at=now() WHERE page_id=$1",
           [documentName, next],

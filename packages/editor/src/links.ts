@@ -9,6 +9,27 @@ export function headingFromHash(hash: string) {
 }
 export const pageLink = (pageId: string, headingId = "") =>
   `/?page=${encodeURIComponent(pageId)}${validHeadingId(headingId) ? "#h-" + headingId : ""}`;
+export function documentAssets(document: any) {
+  const refs = new Map<string, { fileId: string; image: boolean }>();
+  function walk(node: any) {
+    if (["orvynImage", "orvynFile"].includes(node.type)) {
+      const image = node.type === "orvynImage";
+      refs.set(node.attrs.fileId + ":" + image, {
+        fileId: node.attrs.fileId,
+        image,
+      });
+    }
+    for (const child of node.content || []) walk(child);
+  }
+  walk(document);
+  return [...refs.values()];
+}
+export function newDocumentAssets(next: any, previous: any) {
+  const old = new Set(
+    documentAssets(previous).map((r) => r.fileId + ":" + r.image),
+  );
+  return documentAssets(next).filter((r) => !old.has(r.fileId + ":" + r.image));
+}
 export function documentReferences(document: any, origin: string) {
   const references = new Map<string, { pageId: string; headingId: string }>(),
     base = new URL(origin);

@@ -17,8 +17,9 @@ import {
 } from "./content-blocks.js";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import { common, createLowlight } from "lowlight";
+import { ImageBlock, FileBlock } from "./asset-blocks.js";
 const lowlight = createLowlight(common);
-export const documentSchemaVersion = 4;
+export const documentSchemaVersion = 5;
 export function editorExtensions(collaborative = false): AnyExtension[] {
   return [
     StarterKit.configure({
@@ -38,6 +39,8 @@ export function editorExtensions(collaborative = false): AnyExtension[] {
     ToggleSummary,
     ToggleContent,
     TableOfContentsBlock,
+    ImageBlock,
+    FileBlock,
     CodeBlockLowlight.configure({ lowlight, defaultLanguage: "plaintext" }),
   ];
 }
@@ -68,6 +71,16 @@ export function validateDocument(input: unknown) {
       )
         throw Error("Invalid database block reference");
     }
+    if (
+      ["orvynImage", "orvynFile"].includes(n.type.name) &&
+      (typeof n.attrs.fileId !== "string" ||
+        !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(
+          n.attrs.fileId,
+        ) ||
+        typeof n.attrs.label !== "string" ||
+        n.attrs.label.length > 500)
+    )
+      throw Error("Invalid attachment block");
     if (n.type.name === "heading" && ![1, 2, 3].includes(n.attrs.level))
       throw Error("Invalid heading level");
     if (n.type.name === "orvynCallout" && !calloutTones.includes(n.attrs.tone))

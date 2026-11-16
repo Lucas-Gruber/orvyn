@@ -37,6 +37,9 @@ async function remove(file: any) {
   error.value = "";
   try {
     await $fetch("/api/v1/files/" + file.id, { method: "DELETE", body: {} });
+    window.dispatchEvent(
+      new CustomEvent("orvyn-file-changed", { detail: { fileId: file.id } }),
+    );
     await load();
   } catch (e: any) {
     error.value = e.data?.message || "Removal failed";

@@ -344,6 +344,16 @@ CREATE TRIGGER record_file_notify AFTER INSERT OR UPDATE OR DELETE ON files FOR 
     version: 16,
     sql: `ALTER TABLE pages ALTER COLUMN document_schema_version SET DEFAULT 4;`,
   },
+  {
+    version: 17,
+    sql: `ALTER TABLE pages ALTER COLUMN document_schema_version SET DEFAULT 5;
+  CREATE FUNCTION orvyn_editor_assets_allowed(actor uuid,refs jsonb) RETURNS boolean LANGUAGE sql STABLE AS $$
+    SELECT NOT EXISTS(SELECT 1 FROM jsonb_to_recordset(refs) AS r("fileId" uuid,image boolean)
+      WHERE NOT EXISTS(SELECT 1 FROM files f WHERE f.id=r."fileId" AND f.state='ready'
+        AND orvyn_page_role(f.page_id,actor)>=10
+        AND (NOT r.image OR f.media_type IN ('image/png','image/jpeg','image/gif','image/webp'))));
+  $$;`,
+  },
 ] as const;
 
 export async function migrate(pool: Pool, target = migrations.at(-1)!.version) {

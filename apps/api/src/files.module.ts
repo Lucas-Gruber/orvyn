@@ -74,6 +74,22 @@ class FilesController {
     await user(req);
     return { maxUploadBytes: maxBytes };
   }
+  @Get("files/:id/info") async info(
+    @Req() req: any,
+    @Param("id") id: string,
+    @Res({ passthrough: true }) res: any,
+  ) {
+    res.setHeader("Cache-Control", "private, no-store");
+    const uid = await user(req);
+    const file = (
+      await db.query(
+        "SELECT id,filename,media_type,size,page_id FROM files WHERE id::text=$1 AND state='ready' AND orvyn_page_role(page_id,$2)>=10",
+        [id, uid],
+      )
+    ).rows[0];
+    if (!file) return fail(404, "File not found");
+    return file;
+  }
   @Get("pages/:id/files") async list(@Req() req: any, @Param("id") id: string) {
     const uid = await user(req),
       p = await pageAccess(db, uid, id);

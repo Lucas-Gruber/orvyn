@@ -3,7 +3,7 @@ import {
   documentSchemaVersion,
   documentHeadings,
 } from "@orvyn/editor";
-import { documentReferences } from "@orvyn/editor/links";
+import { documentReferences, newDocumentAssets } from "@orvyn/editor/links";
 import {
   Module,
   Controller,
@@ -167,6 +167,21 @@ class PagesController {
       const p = await pageWrite(c, uid, id);
       if (p.document_schema_version > documentSchemaVersion)
         fail(409, "Document format requires a newer server");
+      if (
+        !(
+          await c.query(
+            "SELECT orvyn_editor_assets_allowed($1,$2::jsonb) AS allowed",
+            [
+              uid,
+              JSON.stringify(newDocumentAssets(input.document, p.document)),
+            ],
+          )
+        ).rows[0].allowed
+      )
+        fail(
+          400,
+          "An attachment is unavailable, inaccessible or not a supported image",
+        );
       const editor = await c.query(
         "SELECT 1 FROM editor_documents WHERE page_id=$1",
         [p.id],

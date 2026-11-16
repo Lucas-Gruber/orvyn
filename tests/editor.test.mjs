@@ -241,3 +241,46 @@ test("structured editor blocks round-trip nested content and reject invalid call
   ])
     assert.throws(() => validateDocument({ type: "doc", content }));
 });
+test("attachment blocks preserve IDs and labels without accepting external image sources", () => {
+  const id = "7782bfa8-5549-4f32-8d2f-8abc5edc4b33",
+    doc = normalizeDocument({
+      type: "doc",
+      content: [
+        {
+          type: "orvynImage",
+          attrs: {
+            fileId: id,
+            label: "<script> is a label",
+            src: "https://tracking.example/image.png",
+          },
+        },
+        { type: "orvynFile", attrs: { fileId: id, label: "Read me" } },
+      ],
+    });
+  assert.deepEqual(
+    { ...doc.content[0].attrs },
+    {
+      fileId: id,
+      label: "<script> is a label",
+    },
+  );
+  const ydoc = documentToYDoc(doc);
+  try {
+    assert.deepEqual(yDocToDocument(ydoc), doc);
+  } finally {
+    ydoc.destroy();
+  }
+  for (const attrs of [
+    { fileId: "javascript:alert(1)" },
+    { fileId: id, label: "a".repeat(501) },
+    { fileId: id, label: 123 },
+  ])
+    assert.throws(
+      () =>
+        validateDocument({
+          type: "doc",
+          content: [{ type: "orvynImage", attrs }],
+        }),
+      /attachment block/,
+    );
+});
