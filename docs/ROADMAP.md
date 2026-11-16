@@ -21,7 +21,7 @@ Work through these areas in order, preserving working features and committing/pu
 3. Databases
    - [x] Same-space relations with permission-safe queries, exports and live target updates.
    - [x] Typed formulas with stable references, server-side queries/exports and a visual expression editor.
-   - [ ] Rollups with permission-safe queries/exports.
+   - [x] Direct-relation rollups with scalar counts/numeric aggregates and permission-safe queries/exports.
    - [ ] Database/record templates.
    - [ ] Retain failed field drafts and await pending database saves during navigation.
 4. Search

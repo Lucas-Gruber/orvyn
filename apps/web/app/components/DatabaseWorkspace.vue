@@ -8,6 +8,7 @@ import {
   type ViewConfig,
   formatFormula,
   formulaPropertyType,
+  type RollupConfig,
 } from "@orvyn/shared";
 const props = defineProps<{
     databaseId: string;
@@ -71,6 +72,34 @@ const formulaSource = ref(""),
   formulaDraft = ref(""),
   formulaName = ref(""),
   formulaVersion = ref(0);
+const rollupSource = ref<RollupConfig>({
+    relationId: "",
+    aggregation: "count",
+  }),
+  editingRollup = ref<Property | null>(null),
+  rollupDraft = ref<RollupConfig>({ relationId: "", aggregation: "count" }),
+  rollupName = ref(""),
+  rollupVersion = ref(0);
+function editRollup(property: Property) {
+  editingRollup.value = property;
+  rollupName.value = property.name;
+  rollupDraft.value = { ...property.config.rollup! };
+  rollupVersion.value = metadata.value.schemaVersion;
+}
+async function saveRollup() {
+  if (!editingRollup.value) return;
+  const id = editingRollup.value.id;
+  await mutate(async () => {
+    await api("/properties/" + id, "PATCH", {
+      name: rollupName.value,
+      rollup: rollupDraft.value,
+      schemaVersion: rollupVersion.value,
+    });
+    editingRollup.value = null;
+    await load();
+    notice.value = "Rollup saved";
+  });
+}
 function editFormula(property: Property) {
   editingFormula.value = property;
   formulaDraft.value = property.config.expression
@@ -318,12 +347,14 @@ function format(record: DatabaseRecord, property: Property) {
     return record.lastEditedBy?.email || "—";
   if (
     property.type === "Checkbox" ||
-    (property.type === "Formula" && formulaPropertyType(property) === "boolean")
+    (["Formula", "Rollup"].includes(property.type) &&
+      formulaPropertyType(property) === "boolean")
   )
     return value ? "Yes" : "No";
   if (
     property.type === "Number" ||
-    (property.type === "Formula" && formulaPropertyType(property) === "number")
+    (["Formula", "Rollup"].includes(property.type) &&
+      formulaPropertyType(property) === "number")
   )
     return Intl.NumberFormat().format(Number(value));
   if (["Select", "Status"].includes(property.type))
@@ -390,7 +421,7 @@ function propertyById(id: string): Property | undefined {
 function filterOperators(filter: any) {
   const original = propertyById(filter.propertyId),
     type =
-      original?.type === "Formula"
+      original && ["Formula", "Rollup"].includes(original.type)
         ? formulaPropertyType(original) === "number"
           ? "Number"
           : formulaPropertyType(original) === "boolean"
@@ -420,7 +451,7 @@ function filterOperators(filter: any) {
 function filterProperty(filter: any): Property | undefined {
   const property = propertyById(filter.propertyId);
   if (!property) return;
-  if (property.type === "Formula")
+  if (["Formula", "Rollup"].includes(property.type))
     return {
       ...property,
       type:
@@ -497,6 +528,9 @@ async function addProperty() {
       ...(propertyType.value === "Formula"
         ? { formula: formulaSource.value }
         : {}),
+      ...(propertyType.value === "Rollup"
+        ? { rollup: rollupSource.value }
+        : {}),
       options: ["Select", "MultiSelect", "Status"].includes(propertyType.value)
         ? optionNames.value
             .split(",")
@@ -507,6 +541,7 @@ async function addProperty() {
     propertyName.value = "";
     optionNames.value = "";
     formulaSource.value = "";
+    rollupSource.value = { relationId: "", aggregation: "count" };
     await load();
     notice.value = "Property created";
   });
@@ -826,6 +861,14 @@ onBeforeUnmount(() => {
                   @click="editFormula(property)"
                 >
                   <span aria-hidden="true">ƒ</span>{{ property.name }}
+                </button>
+                <button
+                  v-else-if="property.type === 'Rollup' && canEdit"
+                  class="formula-header"
+                  :aria-label="'Edit ' + property.name + ' rollup'"
+                  @click="editRollup(property)"
+                >
+                  <span aria-hidden="true">∑</span>{{ property.name }}
                 </button>
                 <template v-else>{{ property.name }}</template>
               </th>
@@ -1147,6 +1190,12 @@ onBeforeUnmount(() => {
             v-model="formulaSource"
             :properties="metadata.properties"
             :disabled="busy"
+          /><DatabaseRollupEditor
+            v-if="propertyType === 'Rollup'"
+            v-model="rollupSource"
+            :properties="metadata.properties"
+            :database-id="databaseId"
+            :disabled="busy"
           /><button :disabled="busy">Add property</button>
         </form>
       </details>
@@ -1192,6 +1241,44 @@ onBeforeUnmount(() => {
             ><button type="button" @click="editingFormula = null">
               Cancel
             </button>
+          </div>
+        </form>
+      </UiDialog>
+      <UiDialog
+        :open="!!editingRollup && canEdit"
+        title="Edit rollup"
+        wide
+        @close="editingRollup = null"
+      >
+        <form
+          v-if="editingRollup && canEdit"
+          class="database-form"
+          @submit.prevent="saveRollup"
+        >
+          <p v-if="error" class="error" role="alert">{{ error }}</p>
+          <label :for="'rollup-name-' + domId">Property name</label
+          ><input
+            :id="'rollup-name-' + domId"
+            v-model="rollupName"
+            required
+            maxlength="80"
+            :disabled="busy"
+          /><DatabaseRollupEditor
+            v-model="rollupDraft"
+            :properties="metadata.properties"
+            :database-id="databaseId"
+            :disabled="busy"
+          />
+          <p v-if="rollupVersion !== metadata.schemaVersion" role="status">
+            The schema changed while editing. Reopen this dialog before saving.
+          </p>
+          <div class="actions">
+            <button
+              class="primary"
+              :disabled="busy || rollupVersion !== metadata.schemaVersion"
+            >
+              Save rollup</button
+            ><button type="button" @click="editingRollup = null">Cancel</button>
           </div>
         </form>
       </UiDialog>

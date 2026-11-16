@@ -3,8 +3,37 @@ import { z } from "@orvyn/shared";
 import { fail, user } from "./runtime.js";
 import { transaction } from "./auth/security.js";
 import { database } from "./databases/model.js";
+import { targetProperties } from "./databases/rollup.js";
 @Controller("api/v1/databases")
 class DatabaseRelationsController {
+  @Get(":id/properties/:property/target-properties") async properties(
+    @Req() req: any,
+    @Param("id") id: string,
+    @Param("property") property: string,
+  ) {
+    const uid = await user(req);
+    return transaction(async (c) => {
+      await c.query(
+        "SELECT s.id FROM spaces s JOIN pages p ON p.space_id=s.id WHERE p.id::text=$1 FOR SHARE OF s",
+        [id],
+      );
+      const context = await database(c, uid, id),
+        field =
+          context.properties.find(
+            (p) => p.id === property && p.type === "Relation",
+          ) || fail(404, "Relation property not found");
+      if (!field.config.databaseId)
+        fail(404, "Related database is unavailable");
+      const properties = await targetProperties(
+        c,
+        uid,
+        context.page.space_id,
+        field.config.databaseId!,
+      );
+      if (!properties) fail(404, "Related database is unavailable");
+      return { properties };
+    });
+  }
   @Get(":id/properties/:property/records") async records(
     @Req() req: any,
     @Param("id") id: string,

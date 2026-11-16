@@ -3,8 +3,10 @@ import {
   relationWatchProperties,
   formulaType,
   FormulaError,
+  rollupInput,
 } from "@orvyn/shared";
 import { formulaConfig } from "./databases/formula.js";
+import { rollupConfig } from "./databases/rollup.js";
 import { checkRelationTarget, checkRelations } from "./databases/relations.js";
 import {
   Module,
@@ -184,6 +186,14 @@ class DatabasesController {
     return transaction(async (c) => {
       const context = await database(c, uid, id, 30, true);
       const config = propertyConfig(input, context.properties);
+      if (input.type === "Rollup")
+        await rollupConfig(
+          c,
+          uid,
+          context.page.space_id,
+          context.properties,
+          input.rollup!,
+        );
       if (input.type === "Relation")
         await checkRelationTarget(
           c,
@@ -218,6 +228,7 @@ class DatabasesController {
           name: z.string().trim().min(1).max(80),
           schemaVersion: z.number().int().positive(),
           formula: z.string().trim().min(1).max(2000).optional(),
+          rollup: rollupInput.optional(),
         })
         .strict(),
       input = parse<z.infer<typeof schema>>(schema, body);
@@ -230,10 +241,20 @@ class DatabasesController {
         fail(404, "Property not found");
       if (input.formula !== undefined && existing.type !== "Formula")
         fail(400, "Only Formula properties accept an expression.");
-      const config =
-          input.formula === undefined
-            ? existing.config
-            : formulaConfig(input.formula, context.properties),
+      if (input.rollup !== undefined && existing.type !== "Rollup")
+        fail(400, "Only Rollup properties accept a calculation.");
+      const config: Property["config"] =
+          input.rollup !== undefined
+            ? await rollupConfig(
+                c,
+                uid,
+                context.page.space_id,
+                context.properties,
+                input.rollup,
+              )
+            : input.formula === undefined
+              ? existing.config
+              : formulaConfig(input.formula, context.properties),
         next = context.properties.map((p) =>
           p.id === property ? { ...p, name: input.name, config } : p,
         );
@@ -258,7 +279,7 @@ class DatabasesController {
       await audit(
         c,
         uid,
-        input.formula === undefined
+        input.formula === undefined && input.rollup === undefined
           ? "database.property_renamed"
           : "database.property_updated",
         {

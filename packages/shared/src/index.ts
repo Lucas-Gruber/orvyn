@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { FormulaNode, FormulaType } from "./formula.js";
+import { rollupInput, type RollupConfig } from "./rollup.js";
 export const propertyTypes = [
   "Title",
   "Text",
@@ -38,6 +39,7 @@ export const writablePropertyTypes = [
   "Relation",
 ] as const;
 export const computedPropertyTypes = [
+  "Rollup",
   "Formula",
   "CreatedTime",
   "CreatedBy",
@@ -63,6 +65,7 @@ export const propertyInput = z
       .transform((id) => id.toLowerCase())
       .optional(),
     formula: z.string().trim().min(1).max(2000).optional(),
+    rollup: rollupInput.optional(),
   })
   .strict();
 export const filterInput = z
@@ -138,6 +141,7 @@ export interface Property {
     formula?: string;
     expression?: FormulaNode;
     resultType?: FormulaType;
+    rollup?: RollupConfig;
   };
   position: number;
 }
@@ -183,3 +187,9 @@ export {
   FormulaError,
 } from "./formula.js";
 export type { FormulaNode, FormulaType } from "./formula.js";
+export {
+  rollupInput,
+  rollupAggregations,
+  rollupTargetSupported,
+} from "./rollup.js";
+export type { RollupConfig } from "./rollup.js";

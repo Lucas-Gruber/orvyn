@@ -12,6 +12,7 @@ import {
   formulaPropertyType,
 } from "@orvyn/shared";
 import { formulaConfig, formulaSql } from "./formula.js";
+import { loadRollupCatalog, rollupSql } from "./rollup.js";
 import { fail } from "../runtime.js";
 import { pageAccess, pageWrite } from "../permissions/access.js";
 export function parse<T>(
@@ -44,6 +45,7 @@ export async function database(
       [page.id],
     )
   ).rows as Property[];
+  await loadRollupCatalog(c, uid, page.space_id, properties);
   const views = (
     await c.query(
       "SELECT id,name,type,config,version FROM database_views WHERE database_id=$1 ORDER BY position,id",
@@ -75,6 +77,17 @@ export function propertyConfig(
   input: ReturnType<typeof propertyInput.parse>,
   properties: Property[] = [],
 ) {
+  if (input.type === "Rollup") {
+    if (
+      !input.rollup ||
+      input.options.length ||
+      input.relationDatabaseId ||
+      input.formula
+    )
+      fail(400, "Choose a relation and calculation for the rollup.");
+    return { rollup: input.rollup!, resultType: "number" as const };
+  }
+  if (input.rollup) fail(400, "Only Rollup properties accept a calculation.");
   if (input.type === "Formula") {
     if (!input.formula || input.options.length || input.relationDatabaseId)
       fail(400, "Enter a formula without options or a related database.");
@@ -101,7 +114,7 @@ export function valueFor(
 ): any {
   if (value === null) return null;
   const invalid = (): never => fail(400, "Invalid value for " + property.name);
-  if (property.type === "Formula") {
+  if (property.type === "Formula" || property.type === "Rollup") {
     if (!filter) return invalid();
     const type = formulaPropertyType(property);
     if (
@@ -259,7 +272,8 @@ export function checkedView(
   return config;
 }
 export function formulaFilterProperty(property: Property): Property {
-  if (property.type !== "Formula") return property;
+  if (property.type !== "Formula" && property.type !== "Rollup")
+    return property;
   const type = formulaPropertyType(property);
   return {
     ...property,
@@ -271,27 +285,53 @@ function formulaBaseField(
   property: Property,
   bind: (value: unknown) => string,
   actor: string,
-  parameter = false,
+  page = "p",
+  record = "r",
 ): string {
-  if (property.type === "Title") return "p.title";
+  if (property.type === "Title") return `${page}.title`;
   if (property.type === "Relation")
-    return `orvyn_record_relation_values(p.id,${bind(property.id)}::uuid,${parameter ? actor : bind(actor)}::uuid)`;
+    return `orvyn_record_relation_values(${page}.id,${bind(property.id)}::uuid,${actor}::uuid)`;
   if (property.type === "Files")
-    return `orvyn_record_file_values(p.id,${bind(property.id)}::uuid)`;
-  if (property.type === "CreatedTime") return "p.created_at::text";
-  if (property.type === "LastEditedTime") return "p.updated_at::text";
-  if (property.type === "CreatedBy") return "p.created_by::text";
-  if (property.type === "LastEditedBy") return "p.last_edited_by::text";
+    return `orvyn_record_file_values(${page}.id,${bind(property.id)}::uuid)`;
+  if (property.type === "CreatedTime") return `${page}.created_at::text`;
+  if (property.type === "LastEditedTime") return `${page}.updated_at::text`;
+  if (property.type === "CreatedBy") return `${page}.created_by::text`;
+  if (property.type === "LastEditedBy") return `${page}.last_edited_by::text`;
   const id = bind(property.id),
-    raw = `(r.values->>${id})`;
+    raw = `(${record}.values->>${id})`;
   if (property.type === "Number") return `(${raw})::double precision`;
   if (property.type === "Checkbox") return `(${raw})::boolean`;
   if (property.type === "Select" || property.type === "Status")
     return `(SELECT option->>'label' FROM jsonb_array_elements(${bind(JSON.stringify(property.config.options || []))}::jsonb) option WHERE option->>'id'=${raw} LIMIT 1)`;
   if (property.type === "MultiSelect")
-    return `(SELECT coalesce(jsonb_agg(option->>'label' ORDER BY option->>'id'),'[]'::jsonb) FROM jsonb_array_elements(${bind(JSON.stringify(property.config.options || []))}::jsonb) option WHERE (r.values->${id}) ? (option->>'id'))`;
-  if (property.type === "Person") return `(r.values->${id})`;
+    return `(SELECT coalesce(jsonb_agg(option->>'label' ORDER BY option->>'id'),'[]'::jsonb) FROM jsonb_array_elements(${bind(JSON.stringify(property.config.options || []))}::jsonb) option WHERE (${record}.values->${id}) ? (option->>'id'))`;
+  if (property.type === "Person") return `(${record}.values->${id})`;
   return raw;
+}
+function calculatedField(
+  property: Property,
+  properties: Property[],
+  bind: (value: unknown) => string,
+  actor: string,
+  page = "p",
+  record = "r",
+): string {
+  if (property.type === "Formula")
+    return formulaSql(property.config.expression!, properties, bind, (p) =>
+      calculatedField(p, properties, bind, actor, page, record),
+    ).sql;
+  if (property.type === "Rollup")
+    return rollupSql(property, properties, bind, actor, (target, targets) =>
+      calculatedField(
+        target,
+        targets,
+        bind,
+        actor,
+        "rollup_page",
+        "rollup_record",
+      ),
+    );
+  return formulaBaseField(property, bind, actor, page, record);
 }
 export function querySql(
   properties: Property[],
@@ -307,6 +347,7 @@ export function querySql(
   };
   const find = (id: string) =>
     properties.find((p) => p.id === id) || fail(400, "Unknown query property");
+  const actor = bind(uid);
   function baseField(property: Property) {
     if (property.type === "Title") return "p.title";
     if (property.type === "Relation")
@@ -325,14 +366,14 @@ export function querySql(
     return raw;
   }
   const formulaField = (property: Property) =>
-    formulaSql(property.config.expression!, properties, bind, (p) =>
-      formulaBaseField(p, bind, uid),
-    ).sql;
+    calculatedField(property, properties, bind, actor);
   const field = (property: Property) =>
-    property.type === "Formula" ? formulaField(property) : baseField(property);
+    property.type === "Formula" || property.type === "Rollup"
+      ? formulaField(property)
+      : baseField(property);
   const conditions = [
     `r.database_id=${bind(id)}`,
-    `orvyn_page_role(p.id,${bind(uid)})>=10`,
+    `orvyn_page_role(p.id,${actor})>=10`,
     `strpos(lower(p.title),lower(${bind(input.search)}))>0`,
   ];
   for (const filter of input.filters || config.filters) {
@@ -464,10 +505,10 @@ export function recordColumns(
   bind: (value: unknown) => string,
 ) {
   const computed = properties
-    .filter((p) => p.type === "Formula")
+    .filter((p) => p.type === "Formula" || p.type === "Rollup")
     .flatMap((property) => [
       `${bind(property.id)}::text`,
-      `to_jsonb(${formulaSql(property.config.expression!, properties, bind, (p) => formulaBaseField(p, bind, actor, true)).sql})`,
+      `to_jsonb(${calculatedField(property, properties, bind, actor)})`,
     ]);
   const formulas = `${computed.length ? `jsonb_build_object(${computed.join(",")})` : "'{}'::jsonb"} AS formula_values`;
   const files = `(SELECT coalesce(jsonb_object_agg(dp.id,orvyn_record_file_values(p.id,dp.id)),'{}'::jsonb) FROM database_properties dp WHERE dp.database_id=r.database_id AND dp.type='Files' AND dp.deleted_at IS NULL) AS file_values,(SELECT coalesce(jsonb_agg(jsonb_build_object('id',f.id,'filename',f.filename,'mediaType',f.media_type,'size',f.size) ORDER BY f.created_at),'[]'::jsonb) FROM files f WHERE f.page_id=p.id AND f.state='ready' AND EXISTS(SELECT 1 FROM database_properties dp WHERE dp.database_id=r.database_id AND dp.type='Files' AND dp.deleted_at IS NULL)) AS file_choices`;
@@ -482,6 +523,7 @@ export function recordDTO(row: any, properties: Property[]) {
   for (const property of properties) {
     switch (property.type) {
       case "Formula":
+      case "Rollup":
         values[property.id] = row.formula_values?.[property.id] ?? null;
         break;
       case "Relation":

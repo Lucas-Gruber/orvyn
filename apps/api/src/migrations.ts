@@ -590,6 +590,17 @@ BEGIN
 EXCEPTION WHEN division_by_zero OR numeric_value_out_of_range OR invalid_parameter_value THEN RETURN NULL;
 END $$;`,
   },
+  {
+    version: 30,
+    sql: `CREATE FUNCTION orvyn_formula_finite(value numeric) RETURNS double precision LANGUAGE plpgsql IMMUTABLE AS $$
+DECLARE result double precision;
+BEGIN
+ result:=value::double precision;
+ IF result IN ('Infinity'::double precision,'-Infinity'::double precision,'NaN'::double precision) THEN RETURN NULL; END IF;
+ RETURN result;
+EXCEPTION WHEN numeric_value_out_of_range THEN RETURN NULL;
+END $$;`,
+  },
 ] as const;
 
 export async function migrate(pool: Pool, target = migrations.at(-1)!.version) {

@@ -146,6 +146,7 @@ try {
           "tests/database-files.test.mjs",
           "tests/database-relations.test.mjs",
           "tests/database-formulas.test.mjs",
+          "tests/database-rollups.test.mjs",
           "tests/worker.test.mjs",
           "tests/preview.test.mjs",
           "tests/local-preview.test.mjs",

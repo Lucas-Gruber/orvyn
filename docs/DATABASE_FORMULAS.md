@@ -11,7 +11,7 @@ concat(prop("Name"), ": ", format(coalesce(prop("Estimate"), 0)))
 length(prop("Related work"))
 ```
 
-Property names resolve to stable IDs at save time. Existing calculations survive renames. Reopening the editor renders current property names. Ambiguous names must be renamed before inserting/saving an expression. Formulas may refer to other formula properties; cyclic dependencies, incompatible types and excessive complexity are rejected.
+Property names resolve to stable IDs at save time. Existing calculations survive renames. Reopening the editor renders current property names. Ambiguous names must be renamed before inserting/saving an expression. Formulas may refer to other formula properties and numeric rollup results; cyclic dependencies, incompatible types and excessive complexity are rejected.
 
 Supported operators: `+ - * / %`, unary `+ - !`, `== != > >= < <=`, `&& ||`. Text `+` joins strings. Functions: `if`, `coalesce`, `empty`, `length`, `abs`, `ceil`, `floor`, `round`, `min`, `max`, `lower`, `upper`, `trim`, `concat`, `contains`, `format`. Lists are accepted by `length`/`empty` and compatible conditional/coalesce expressions; a formula cannot return a list. Select/status references produce labels, multi-select references produce label lists, Person references contain IDs, Files references contain ready attachment IDs and Relation references contain current readable record IDs. Dates and creation/edit timestamps are text; date arithmetic and volatile functions such as `now()` are not implemented.
 

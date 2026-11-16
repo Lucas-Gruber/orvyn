@@ -12,7 +12,8 @@ function invalid(message: string): never {
   throw new FormulaError(message);
 }
 export function formulaPropertyType(property: Property): FormulaType {
-  if (property.type === "Formula") return property.config.resultType || "null";
+  if (property.type === "Formula" || property.type === "Rollup")
+    return property.config.resultType || "null";
   if (property.type === "Number") return "number";
   if (property.type === "Checkbox") return "boolean";
   if (["MultiSelect", "Person", "Files", "Relation"].includes(property.type))
@@ -287,6 +288,8 @@ export function relationWatchProperties(
     if (seen.has(p.id)) return;
     seen.add(p.id);
     if (p.type === "Relation") ids.add(p.id);
+    if (p.type === "Rollup" && p.config.rollup)
+      ids.add(p.config.rollup.relationId);
     if (p.type === "Formula" && p.config.expression) visit(p.config.expression);
   }
   function visit(n: FormulaNode) {
