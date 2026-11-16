@@ -6,6 +6,7 @@ const props = defineProps<{
   id?: string;
   disabled?: boolean;
   people?: { id: string; email: string }[];
+  databaseId?: string;
 }>();
 const options = computed(() =>
   props.property.type === "Person"
@@ -45,8 +46,17 @@ const inputType = computed(
 );
 </script>
 <template>
+  <DatabaseRelationField
+    v-if="property.type === 'Relation'"
+    :property="property"
+    :database-id="databaseId"
+    :model-value="modelValue"
+    can-edit
+    :disabled="disabled"
+    @update:model-value="emit('update:modelValue', $event)"
+  />
   <input
-    v-if="property.type === 'Checkbox'"
+    v-else-if="property.type === 'Checkbox'"
     :id="id"
     :aria-label="property.name"
     type="checkbox"

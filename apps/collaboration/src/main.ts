@@ -7,6 +7,7 @@ import {
 import { Redis as RedisExtension } from "@hocuspocus/extension-redis";
 import { Redis as RedisClient } from "ioredis";
 import { Pool, type PoolClient } from "pg";
+import { databaseFingerprint } from "@orvyn/shared";
 import { authenticateCookie } from "@orvyn/auth";
 import {
   documentToYDoc,
@@ -25,6 +26,8 @@ type Identity = {
   spaceId: string;
   visibleRecords: Set<string>;
   notifiedRank: number;
+  relationSignatures: string;
+  relationProperties: string[] | null;
 };
 const db = new Pool({ connectionString: process.env.DATABASE_URL });
 const live = new Set<Connection<Identity>>();
@@ -143,6 +146,40 @@ function guardOutbound(connection: Connection<Identity>) {
       });
   };
 }
+async function relationSnapshot(connection: Connection<Identity>) {
+  if (!connection.context.visibleRecords.size)
+    return { signature: "", fingerprint: null };
+  const row = (
+    await db.query(
+      `SELECT d.schema_version,
+    (SELECT coalesce(jsonb_agg(jsonb_build_object('pageId',p.id,'version',r.version) ORDER BY p.id),'[]'::jsonb) FROM database_records r JOIN pages p ON p.id=r.page_id WHERE r.database_id=d.page_id AND r.page_id=ANY($2::uuid[]) AND orvyn_page_role(p.id,$3)>=10) AS records,
+    (SELECT coalesce(jsonb_agg(jsonb_build_object('id',item.id,'revision',item.revision) ORDER BY item.id),'[]'::jsonb) FROM (
+      SELECT DISTINCT target.id,concat_ws(':',target.version,target.title_version,target.appearance_version,tr.version,target_database.schema_version) AS revision
+      FROM record_relations rr JOIN database_properties dp ON dp.id=rr.property_id AND dp.database_id=d.page_id AND dp.type='Relation' AND dp.deleted_at IS NULL
+      JOIN database_records source_record ON source_record.page_id=rr.source_id AND source_record.database_id=dp.database_id
+      JOIN pages source ON source.id=rr.source_id JOIN database_records tr ON tr.page_id=rr.target_id AND tr.database_id::text=dp.config->>'databaseId'
+      JOIN databases target_database ON target_database.page_id=tr.database_id JOIN pages target ON target.id=rr.target_id AND target.space_id=source.space_id
+      WHERE rr.source_id=ANY($2::uuid[]) AND ($4::uuid[] IS NULL OR dp.id=ANY($4)) AND orvyn_page_role(source.id,$3)>=10 AND orvyn_page_role(target.id,$3)>=10
+    ) item) AS targets FROM databases d WHERE d.page_id=$1`,
+      [
+        connection.document.name,
+        [...connection.context.visibleRecords],
+        connection.context.userId,
+        connection.context.relationProperties,
+      ],
+    )
+  ).rows[0];
+  if (!row) return { signature: "", fingerprint: null };
+  return {
+    signature: row.targets.length ? JSON.stringify(row.targets) : "",
+    fingerprint: databaseFingerprint(
+      row.schema_version,
+      row.records,
+      row.targets,
+      connection.context.relationProperties || [],
+    ),
+  };
+}
 async function revalidate() {
   if (revalidating) return;
   revalidating = true;
@@ -156,6 +193,13 @@ async function revalidate() {
             connection.context,
             connection.document.name,
           );
+          const { signature } = await relationSnapshot(connection);
+          if (signature !== connection.context.relationSignatures) {
+            connection.context.relationSignatures = signature;
+            connection.sendStateless(
+              JSON.stringify({ type: "database-changed" }),
+            );
+          }
           const readOnly = rank < 30;
           if (rank !== connection.context.notifiedRank) {
             connection.context.notifiedRank = rank;
@@ -209,6 +253,8 @@ const server = new Server<Identity>({
       spaceId: p.rows[0].space_id,
       visibleRecords: new Set<string>(),
       notifiedRank: p.rows[0].rank,
+      relationSignatures: "",
+      relationProperties: null,
     };
   },
   async connected({ connection }) {
@@ -374,6 +420,29 @@ const server = new Server<Identity>({
       )
     )
       deny();
+    if (
+      data.relationProperties !== undefined &&
+      (!Array.isArray(data.relationProperties) ||
+        data.relationProperties.length > 50 ||
+        data.relationProperties.some(
+          (id: any) =>
+            typeof id !== "string" ||
+            !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(
+              id,
+            ),
+        ))
+    )
+      deny();
+    if (
+      data.fingerprint !== undefined &&
+      (typeof data.fingerprint !== "string" ||
+        !/^[a-f0-9]{16}$/.test(data.fingerprint))
+    )
+      deny();
+    connection.context.relationProperties =
+      data.relationProperties === undefined
+        ? null
+        : [...new Set<string>(data.relationProperties)];
     const ids = [...new Set(data.recordIds)];
     const rows = await db.query(
       "SELECT r.page_id FROM database_records r WHERE r.database_id=$1 AND r.page_id=ANY($2::uuid[]) AND orvyn_page_role(r.page_id,$3)>=10",
@@ -382,6 +451,14 @@ const server = new Server<Identity>({
     connection.context.visibleRecords = new Set(
       rows.rows.map((r) => r.page_id),
     );
+    const snapshot = await relationSnapshot(connection);
+    connection.context.relationSignatures = snapshot.signature;
+    if (
+      data.fingerprint &&
+      snapshot.fingerprint &&
+      data.fingerprint !== snapshot.fingerprint
+    )
+      connection.sendStateless(JSON.stringify({ type: "database-changed" }));
     if (rows.rows.length !== ids.length)
       connection.sendStateless(JSON.stringify({ type: "database-changed" }));
     connection.sendStateless(

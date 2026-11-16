@@ -102,6 +102,9 @@ importers:
       '@orvyn/editor':
         specifier: workspace:*
         version: link:../../packages/editor
+      '@orvyn/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       ioredis:
         specifier: ~5.6.1
         version: 5.6.1(supports-color@10.2.2)

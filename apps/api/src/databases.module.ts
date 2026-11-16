@@ -1,3 +1,5 @@
+import { databaseFingerprint } from "@orvyn/shared";
+import { checkRelationTarget, checkRelations } from "./databases/relations.js";
 import {
   Module,
   Controller,
@@ -176,6 +178,13 @@ class DatabasesController {
       config = propertyConfig(input);
     return transaction(async (c) => {
       const context = await database(c, uid, id, 30, true);
+      if (input.type === "Relation")
+        await checkRelationTarget(
+          c,
+          uid,
+          context.page.space_id,
+          input.relationDatabaseId!,
+        );
       if (context.properties.length >= 50)
         fail(400, "A database supports up to 50 active properties");
       const position =
@@ -293,36 +302,60 @@ class DatabasesController {
   ) {
     mutation(req);
     const uid = await user(req),
-      input = parse<QueryInput>(queryInput, body),
-      context = await database(db, uid, id);
-    const view = input.viewId
-      ? context.views.find((v) => v.id === input.viewId)
-      : context.views[0];
-    if (!view) return fail(404, "View not found");
-    const config = checkedView(context.properties, view.type, view.config),
-      query = querySql(context.properties, config, input, uid, context.page.id),
-      rows = (await db.query(query.sql, query.params)).rows;
-    const more = rows.length > input.limit;
-    if (more) rows.pop();
-    const visible = config.visibleProperties.length
-      ? new Set([
-          ...config.visibleProperties,
-          ...context.properties
-            .filter((p) => p.type === "Title")
-            .map((p) => p.id),
-          ...(config.groupBy ? [config.groupBy] : []),
-          ...(config.dateProperty ? [config.dateProperty] : []),
-        ])
-      : null;
-    const properties = visible
-      ? context.properties.filter((p) => visible.has(p.id))
-      : context.properties;
-    return {
-      records: rows.map((row) => recordDTO(row, properties)),
-      nextOffset: more ? input.offset + input.limit : null,
-      view,
-      properties,
-    };
+      input = parse<QueryInput>(queryInput, body);
+    return transaction(async (c) => {
+      await c.query(
+        "SELECT s.id FROM spaces s JOIN pages p ON p.space_id=s.id WHERE p.id::text=$1 FOR SHARE OF s",
+        [id],
+      );
+      const context = await database(c, uid, id);
+      const view = input.viewId
+        ? context.views.find((v) => v.id === input.viewId)
+        : context.views[0];
+      if (!view) return fail(404, "View not found");
+      const config = checkedView(context.properties, view.type, view.config),
+        query = querySql(
+          context.properties,
+          config,
+          input,
+          uid,
+          context.page.id,
+        ),
+        rows = (await c.query(query.sql, query.params)).rows;
+      const more = rows.length > input.limit;
+      if (more) rows.pop();
+      const visible = config.visibleProperties.length
+        ? new Set([
+            ...config.visibleProperties,
+            ...context.properties
+              .filter((p) => p.type === "Title")
+              .map((p) => p.id),
+            ...(config.groupBy ? [config.groupBy] : []),
+            ...(config.dateProperty ? [config.dateProperty] : []),
+          ])
+        : null;
+      const properties = visible
+        ? context.properties.filter((p) => visible.has(p.id))
+        : context.properties;
+      const records = rows.map((row) => recordDTO(row, properties)),
+        relationProperties = properties
+          .filter((p) => p.type === "Relation")
+          .map((p) => p.id);
+      return {
+        records,
+        relationProperties,
+        fingerprint: databaseFingerprint(
+          context.schemaVersion,
+          records,
+          records.flatMap((record) => record.relations || []),
+          relationProperties,
+        ),
+        schemaVersion: context.schemaVersion,
+        nextOffset: more ? input.offset + input.limit : null,
+        view,
+        properties,
+      };
+    });
   }
   @Post("databases/:id/records") async addRecord(
     @Req() req: any,
@@ -344,6 +377,13 @@ class DatabasesController {
         context.page.id,
         0,
         "record",
+      );
+      await checkRelations(
+        c,
+        uid,
+        context.page.space_id,
+        context.properties,
+        values,
       );
       const p = (
         await c.query(
@@ -374,6 +414,7 @@ class DatabasesController {
         "INSERT INTO database_records(page_id,database_id,values) VALUES($1,$2,$3)",
         [p.id, context.page.id, values],
       );
+      await c.query("SELECT orvyn_replace_record_relations($1)", [p.id]);
       await c.query(
         "INSERT INTO page_revisions(page_id,version,title,document,author_id) VALUES($1,$2,$3,$4,$5)",
         [p.id, p.version, p.title, p.document, uid],
@@ -410,11 +451,20 @@ class DatabasesController {
         previous.values,
       );
       await checkFiles(c, page.id, context.properties, values);
+      await checkRelations(
+        c,
+        uid,
+        context.page.space_id,
+        context.properties,
+        values,
+        previous.values,
+      );
       const r = await c.query(
         "UPDATE database_records SET values=values||$1::jsonb,version=version+1 WHERE page_id=$2 AND database_id=$3 AND version=$4 RETURNING page_id",
         [values, page.id, context.page.id, input.version],
       );
       if (!r.rowCount) fail(409, "Record changed or unavailable; reload first");
+      await c.query("SELECT orvyn_replace_record_relations($1)", [page.id]);
       await c.query("UPDATE pages SET last_edited_by=$1 WHERE id=$2", [
         uid,
         page.id,

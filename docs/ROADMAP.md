@@ -19,8 +19,10 @@ Work through these areas in order, preserving working features and committing/pu
    - [x] Inline people mentions in documents with current identity resolution and inbox navigation.
    - [x] Page/space activity with current permission checks and private-record isolation.
 3. Databases
-   - [ ] Relations, formulas and rollups with permission-safe queries/exports.
+   - [x] Same-space relations with permission-safe queries, exports and live target updates.
+   - [ ] Formulas and rollups with permission-safe queries/exports.
    - [ ] Database/record templates.
+   - [ ] Retain failed field drafts and await pending database saves during navigation.
 4. Search
    - [ ] Indexed document full-text search, tags/metadata and space/type filters.
 5. Whiteboards

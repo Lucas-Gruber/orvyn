@@ -214,7 +214,7 @@ defineExpose({ open: () => (opened.value = true) });
                     >
                       <option
                         v-for="type in writablePropertyTypes.filter(
-                          (t) => t !== 'Files',
+                          (t) => !['Files', 'Relation'].includes(t),
                         )"
                         :key="type"
                       >

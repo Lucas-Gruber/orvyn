@@ -532,6 +532,39 @@ BEGIN
 END $$;
 `,
   },
+  {
+    version: 28,
+    sql: `CREATE TABLE record_relations (
+ property_id uuid NOT NULL REFERENCES database_properties(id) ON DELETE CASCADE,
+ source_id uuid NOT NULL REFERENCES database_records(page_id) ON DELETE CASCADE,
+ target_id uuid NOT NULL REFERENCES database_records(page_id) ON DELETE CASCADE,
+ PRIMARY KEY(property_id,source_id,target_id)
+);
+CREATE INDEX record_relations_source ON record_relations(source_id);
+CREATE INDEX record_relations_target ON record_relations(target_id);
+CREATE FUNCTION orvyn_replace_record_relations(record_id uuid) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+ DELETE FROM record_relations WHERE source_id=record_id;
+ INSERT INTO record_relations(property_id,source_id,target_id)
+ SELECT DISTINCT dp.id,r.page_id,tr.page_id FROM database_records r
+ JOIN pages source ON source.id=r.page_id
+ JOIN database_properties dp ON dp.database_id=r.database_id AND dp.type='Relation' AND dp.deleted_at IS NULL
+ CROSS JOIN LATERAL jsonb_array_elements_text(CASE WHEN jsonb_typeof(r.values->dp.id::text)='array' THEN r.values->dp.id::text ELSE '[]'::jsonb END) ref
+ JOIN database_records tr ON tr.page_id::text=ref.value AND tr.database_id::text=dp.config->>'databaseId'
+ JOIN pages target ON target.id=tr.page_id AND target.space_id=source.space_id
+ WHERE r.page_id=record_id;
+END $$;
+CREATE FUNCTION orvyn_record_relation_values(record_id uuid,field_id uuid,actor uuid) RETURNS jsonb LANGUAGE sql STABLE AS $$
+ SELECT coalesce(jsonb_agg(rr.target_id::text ORDER BY rr.target_id),'[]'::jsonb)
+ FROM record_relations rr JOIN database_properties dp ON dp.id=rr.property_id AND dp.type='Relation' AND dp.deleted_at IS NULL
+ JOIN database_records r ON r.page_id=rr.source_id AND r.database_id=dp.database_id
+ JOIN database_records tr ON tr.page_id=rr.target_id AND tr.database_id::text=dp.config->>'databaseId'
+ JOIN pages source ON source.id=rr.source_id JOIN pages target ON target.id=rr.target_id AND target.space_id=source.space_id
+ WHERE rr.source_id=record_id AND rr.property_id=field_id AND orvyn_page_role(rr.source_id,actor)>=10 AND orvyn_page_role(rr.target_id,actor)>=10
+$$;
+DO $$ DECLARE item record; BEGIN FOR item IN SELECT DISTINCT r.page_id FROM database_records r JOIN database_properties p ON p.database_id=r.database_id WHERE p.type='Relation' AND p.deleted_at IS NULL LOOP PERFORM orvyn_replace_record_relations(item.page_id); END LOOP; END $$;
+`,
+  },
 ] as const;
 
 export async function migrate(pool: Pool, target = migrations.at(-1)!.version) {

@@ -5,11 +5,19 @@ export function useDatabaseEvents(id: string, changed: () => void) {
     denied = ref(false),
     document = new Y.Doc();
   let provider: HocuspocusProvider | undefined;
+  let watchedIds: string[] = [],
+    watchedScope:
+      { relationProperties: string[]; fingerprint: string } | undefined;
   const config = useRuntimeConfig();
-  function watchRecords(ids: string[]) {
+  function watchRecords(
+    ids: string[],
+    scope?: { relationProperties: string[]; fingerprint: string },
+  ) {
+    watchedIds = ids;
+    watchedScope = scope;
     if (provider?.isAuthenticated)
       provider.sendStateless(
-        JSON.stringify({ type: "watch-records", recordIds: ids }),
+        JSON.stringify({ type: "watch-records", recordIds: ids, ...scope }),
       );
   }
   onMounted(() => {
@@ -26,6 +34,7 @@ export function useDatabaseEvents(id: string, changed: () => void) {
       token: "cookie",
       onSynced({ state }) {
         live.value = state && !!provider?.isAuthenticated;
+        if (state) watchRecords(watchedIds, watchedScope);
         changed();
       },
       onStatus({ status }) {

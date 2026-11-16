@@ -14,7 +14,11 @@ export const csvMapping = z
     propertyId: z.uuid().optional(),
     name: z.string().trim().min(1).max(80).optional(),
     type: z
-      .enum(writablePropertyTypes.filter((type) => type !== "Files"))
+      .enum(
+        writablePropertyTypes.filter(
+          (type) => !["Files", "Relation"].includes(type),
+        ),
+      )
       .optional(),
     skip: z.boolean().default(false),
   })
@@ -259,6 +263,7 @@ function fromCell(
     if (["false", "no", "0", "unchecked"].includes(normalized)) return false;
     return fail(400, "Use true/false, yes/no or 1/0");
   }
+  if (property.type === "Relation") return labels(cell, "MultiSelect");
   if (property.type === "Person")
     return labels(cell, "MultiSelect").map(
       (label) =>

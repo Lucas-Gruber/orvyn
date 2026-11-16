@@ -34,6 +34,7 @@ export const writablePropertyTypes = [
   "Phone",
   "Person",
   "Files",
+  "Relation",
 ] as const;
 export const computedPropertyTypes = [
   "CreatedTime",
@@ -55,6 +56,10 @@ export const propertyInput = z
     name: z.string().trim().min(1).max(80),
     type: z.enum([...writablePropertyTypes, ...computedPropertyTypes]),
     options: z.array(z.string().trim().min(1).max(80)).max(50).default([]),
+    relationDatabaseId: z
+      .uuid()
+      .transform((id) => id.toLowerCase())
+      .optional(),
   })
   .strict();
 export const filterInput = z
@@ -124,7 +129,10 @@ export interface Property {
   id: string;
   name: string;
   type: PropertyType;
-  config: { options?: { id: string; label: string; color: string }[] };
+  config: {
+    options?: { id: string; label: string; color: string }[];
+    databaseId?: string;
+  };
   position: number;
 }
 export interface DatabaseRecord {
@@ -142,6 +150,12 @@ export interface DatabaseRecord {
   icon: string | null;
   coverPreset: string | null;
   files?: { id: string; filename: string; mediaType: string; size: number }[];
+  relations?: {
+    id: string;
+    title: string;
+    icon: string | null;
+    revision: string;
+  }[];
 }
 export { z };
 export {
@@ -152,3 +166,5 @@ export {
   emojiChoices,
   validEmoji,
 } from "./appearance.js";
+
+export { databaseFingerprint } from "./database-fingerprint.js";

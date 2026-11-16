@@ -61,7 +61,9 @@ const title = ref(""),
   draft = reactive<Record<string, unknown>>({}),
   propertyName = ref(""),
   propertyType = ref<string>("Text"),
-  optionNames = ref("");
+  optionNames = ref(""),
+  relationDatabaseId = ref(""),
+  relationDatabases = ref<any[]>([]);
 const month = ref(new Date().toISOString().slice(0, 7)),
   viewDraft = ref<any>();
 let generation = 0,
@@ -167,7 +169,15 @@ async function load() {
     records.value = result.records;
     columns.value = result.properties;
     nextOffset.value = result.nextOffset;
-    events.watchRecords(records.value.map((r) => r.pageId));
+    events.watchRecords(
+      records.value.map((r) => r.pageId),
+      result.fingerprint
+        ? {
+            relationProperties: result.relationProperties || [],
+            fingerprint: result.fingerprint,
+          }
+        : undefined,
+    );
   } catch (e: any) {
     if (request === generation) {
       loadError.value =
@@ -292,6 +302,13 @@ function format(record: DatabaseRecord, property: Property) {
         .filter(Boolean)
         .join(", ") || "—"
     );
+  if (property.type === "Relation")
+    return (
+      ((value as string[]) || [])
+        .map((id) => record.relations?.find((r) => r.id === id)?.title)
+        .filter(Boolean)
+        .join(", ") || "—"
+    );
   if (property.type === "Person")
     return (
       (value as string[])
@@ -338,6 +355,7 @@ function filterOperators(filter: any) {
   const type = propertyById(filter.propertyId)?.type,
     operators = ["eq", "neq", "empty", "notEmpty"];
   if (type === "Files") return ["empty", "notEmpty"];
+  if (type === "Relation") return ["contains", "empty", "notEmpty"];
   if (
     [
       "Title",
@@ -402,11 +420,26 @@ async function saveView() {
     notice.value = "View saved";
   });
 }
+watch(propertyType, async (type) => {
+  relationDatabaseId.value = "";
+  relationDatabases.value = [];
+  if (type !== "Relation" || !metadata.value) return;
+  try {
+    relationDatabases.value = await $fetch<any[]>(
+      "/api/v1/spaces/" + metadata.value.spaceId + "/databases",
+    );
+  } catch {
+    error.value = "Databases could not be loaded.";
+  }
+});
 async function addProperty() {
   await mutate(async () => {
     await api("/properties", "POST", {
       name: propertyName.value,
       type: propertyType.value,
+      ...(propertyType.value === "Relation"
+        ? { relationDatabaseId: relationDatabaseId.value }
+        : {}),
       options: ["Select", "MultiSelect", "Status"].includes(propertyType.value)
         ? optionNames.value
             .split(",")
@@ -693,6 +726,7 @@ onBeforeUnmount(() => {
               property.name
             }}</label
             ><DatabaseFieldInput
+              :database-id="databaseId"
               :people="directory"
               :id="'record-value-' + domId + '-' + property.id"
               :property="property"
@@ -758,7 +792,19 @@ onBeforeUnmount(() => {
                     patchRecord(record, { [property.id]: $event })
                   "
                   @manage="emit('open', record.pageId)"
+                /><DatabaseRelationField
+                  v-else-if="property.type === 'Relation'"
+                  :property="property"
+                  :database-id="databaseId"
+                  :model-value="record.values[property.id]"
+                  :records="record.relations || []"
+                  :can-edit="canEdit && record.accessRank >= 30"
+                  :disabled="busy"
+                  @update:model-value="
+                    patchRecord(record, { [property.id]: $event })
+                  "
                 /><DatabaseFieldInput
+                  :database-id="databaseId"
                   :people="directory"
                   v-else-if="
                     (writablePropertyTypes as readonly string[]).includes(
@@ -814,6 +860,7 @@ onBeforeUnmount(() => {
             </button>
             <button @click="emit('open', record.pageId)">
               {{ record.title }}</button><DatabaseFieldInput
+              :database-id="databaseId"
               :people="directory"
               v-if="canEdit && record.accessRank >= 30"
               :property="groupProperty"
@@ -1013,6 +1060,22 @@ onBeforeUnmount(() => {
               :id="'property-options-' + domId"
               v-model="optionNames"
               required /></template
+          ><template v-if="propertyType === 'Relation'"
+            ><label :for="'relation-database-' + domId">Related database</label
+            ><select
+              :id="'relation-database-' + domId"
+              v-model="relationDatabaseId"
+              required
+            >
+              <option value="" disabled>Choose a database in this space</option>
+              <option
+                v-for="database in relationDatabases"
+                :key="database.id"
+                :value="database.id"
+              >
+                {{ database.title }}
+              </option>
+            </select></template
           ><button :disabled="busy">Add property</button>
         </form>
       </details>
@@ -1099,7 +1162,9 @@ onBeforeUnmount(() => {
                 filter.operator =
                   propertyById(filter.propertyId)?.type === 'Files'
                     ? 'notEmpty'
-                    : 'eq';
+                    : propertyById(filter.propertyId)?.type === 'Relation'
+                      ? 'contains'
+                      : 'eq';
               "
             >
               <option
@@ -1133,9 +1198,24 @@ onBeforeUnmount(() => {
               >
                 {{ person.email }}
               </option></select
-            ><DatabaseFieldInput
+            ><DatabaseRelationField
+              v-if="
+                propertyById(filter.propertyId)?.type === 'Relation' &&
+                !['empty', 'notEmpty'].includes(filter.operator)
+              "
+              :property="propertyById(filter.propertyId)!"
+              :database-id="databaseId"
+              :model-value="
+                typeof filter.value === 'string' ? [filter.value] : []
+              "
+              can-edit
+              single
+              @update:model-value="filter.value = $event[0] || null"
+            /><DatabaseFieldInput
+              :database-id="databaseId"
               :people="directory"
               v-if="
+                propertyById(filter.propertyId)?.type !== 'Relation' &&
                 !propertyById(filter.propertyId)?.type.endsWith('By') &&
                 !['empty', 'notEmpty'].includes(filter.operator) &&
                 filterProperty(filter)
@@ -1173,7 +1253,9 @@ onBeforeUnmount(() => {
               <option
                 v-for="property in metadata.properties.filter(
                   (p: Property) =>
-                    !['MultiSelect', 'Person', 'Files'].includes(p.type),
+                    !['MultiSelect', 'Person', 'Files', 'Relation'].includes(
+                      p.type,
+                    ),
                 )"
                 :key="property.id"
                 :value="property.id"

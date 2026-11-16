@@ -1,3 +1,4 @@
+import { checkRelations } from "./relations.js";
 import {
   Module,
   Controller,
@@ -76,7 +77,8 @@ function csvValue(row: any, property: Property) {
   if (value === null || value === undefined) return "";
   if (["Select", "Status"].includes(property.type))
     return property.config.options?.find((o) => o.id === value)?.label || "";
-  if (["Person", "Files"].includes(property.type)) return JSON.stringify(value);
+  if (["Person", "Files", "Relation"].includes(property.type))
+    return JSON.stringify(value);
   if (property.type === "MultiSelect")
     return JSON.stringify(
       (value as string[]).map(
@@ -138,6 +140,27 @@ class TransferController {
         csv.rows,
         await personDirectory(db, context.page.space_id),
       );
+    if (!converted.errors.length)
+      for (const [index, record] of converted.records.entries()) {
+        try {
+          await checkRelations(
+            db,
+            uid,
+            context.page.space_id,
+            properties,
+            record.values,
+          );
+        } catch (e: any) {
+          if (converted.errors.length < 20)
+            converted.errors.push({
+              row: index + 2,
+              column: "Relation",
+              message:
+                e.getResponse?.().message ||
+                "Invalid related record references",
+            });
+        }
+      }
     let token: string | null = null;
     if (!converted.errors.length) {
       token = randomBytes(32).toString("hex");
@@ -212,6 +235,14 @@ class TransferController {
         );
       if (converted.errors.length)
         fail(400, "CSV contains invalid values; preview it again");
+      for (const record of converted.records)
+        await checkRelations(
+          c,
+          uid,
+          context.page.space_id,
+          properties,
+          record.values,
+        );
       await newPageParent(
         c,
         uid,
@@ -253,6 +284,7 @@ class TransferController {
           "INSERT INTO database_records(page_id,database_id,values) VALUES($1,$2,$3)",
           [p.id, context.page.id, row.values],
         );
+        await c.query("SELECT orvyn_replace_record_relations($1)", [p.id]);
         await c.query(
           "INSERT INTO page_revisions(page_id,version,title,document,author_id) VALUES($1,$2,$3,$4,$5)",
           [p.id, p.version, p.title, p.document, uid],
