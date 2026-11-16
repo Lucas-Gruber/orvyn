@@ -235,11 +235,39 @@ test("Chromium: database side/modal/full-page editing, templates, context menus 
     await page.reload();
     await expect(peek).toBeVisible();
     assert.equal(await peek.evaluate((el) => el.matches(":modal")), true);
+    await expect(
+      page
+        .locator(".database-table .record-title")
+        .filter({ hasText: record.title }),
+    ).toHaveCount(1);
+    // Focus a row as the dialog disappears. Returning focus must not later
+    // override that new choice when the URL update finishes.
+    await page.evaluate((title) => {
+      const dialog = document.querySelector("dialog.page-peek[open]"),
+        target = [
+          ...document.querySelectorAll(".database-table .record-title"),
+        ].find((node) => node.textContent.trim() === title);
+      const observer = new MutationObserver(() => {
+        if (!dialog.isConnected) {
+          target.focus();
+          observer.disconnect();
+        }
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+    }, record.title);
     await peek
       .getByRole("button", { name: "Close dialog", exact: true })
       .click();
     await expect(peek).not.toBeVisible();
-    await row().focus();
+    await expect
+      .poll(() => new URL(page.url()).searchParams.has("peek"))
+      .toBe(false);
+    await page.evaluate(
+      () =>
+        new Promise((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(resolve)),
+        ),
+    );
     await expect(row()).toBeFocused();
     await page.keyboard.press("Shift+F10");
     await expect(menu).toBeVisible();

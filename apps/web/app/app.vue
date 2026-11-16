@@ -582,12 +582,23 @@ async function openRecord(id: string, mode: RecordOpenMode = "side") {
   });
 }
 async function closePeek() {
+  const returnFocus = peekReturnFocus;
+  peekReturnFocus = undefined;
   peekId.value = "";
-  await updateLocation();
   await nextTick();
-  if (peekReturnFocus?.isConnected) peekReturnFocus.focus();
-  else
-    document.querySelector<HTMLInputElement>(".database-search input")?.focus();
+  // Restore focus as the preview disappears, before asynchronous routing.
+  // A user may already have focused another row or field in the meantime.
+  if (
+    !peekId.value &&
+    (!document.activeElement || document.activeElement === document.body)
+  ) {
+    if (returnFocus?.isConnected) returnFocus.focus();
+    else
+      document
+        .querySelector<HTMLInputElement>(".database-search input")
+        ?.focus();
+  }
+  await updateLocation();
 }
 function restorePeek(query: Record<string, unknown>) {
   peekId.value = "";
