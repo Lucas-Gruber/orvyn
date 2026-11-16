@@ -790,6 +790,9 @@ const provider = new HocuspocusProvider({
   name: props.pageId,
   document,
   token: "cookie",
+  // A fixed short batch also collapses rapid caret awareness updates. Every
+  // merged update still receives the server's durable acknowledgement.
+  flushDelay: 40,
   onAuthenticated({ scope }) {
     readOnly.value = scope === "readonly";
     denied.value = false;
@@ -834,6 +837,7 @@ const provider = new HocuspocusProvider({
   },
 });
 async function flush() {
+  provider.flushPendingUpdates();
   if (!unsynced.value) return;
   await new Promise<void>((resolve, reject) => {
     const timeout = setTimeout(() => {
