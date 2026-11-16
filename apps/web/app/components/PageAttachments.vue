@@ -5,13 +5,35 @@ const props = defineProps<{ page: any }>(),
   error = ref(""),
   busy = ref(false),
   limit = ref(0),
-  fileInput = ref<HTMLInputElement>();
+  fileInput = ref<HTMLInputElement>(),
+  fileId = useId();
+let job: Promise<void> | undefined;
+async function track(operation: () => Promise<void>) {
+  if (job) return job;
+  const current = operation();
+  job = current;
+  try {
+    await current;
+  } finally {
+    if (job === current) job = undefined;
+  }
+}
+function upload() {
+  return track(doUpload);
+}
+function remove(file: any) {
+  return track(() => doRemove(file));
+}
+usePendingWrites(async () => {
+  await job;
+  if (chosen.value && error.value) throw new Error(error.value);
+});
 async function load() {
   files.value = await $fetch<any[]>(
     "/api/v1/pages/" + props.page.id + "/files",
   );
 }
-async function upload() {
+async function doUpload() {
   if (!chosen.value) return;
   busy.value = true;
   error.value = "";
@@ -31,7 +53,7 @@ async function upload() {
     busy.value = false;
   }
 }
-async function remove(file: any) {
+async function doRemove(file: any) {
   if (!window.confirm("Remove this attachment from the page?")) return;
   busy.value = true;
   error.value = "";
@@ -87,9 +109,9 @@ onMounted(async () => {
     </ul>
     <p v-if="!files.length">No attachments on this page.</p>
     <form v-if="page.access_rank >= 30" @submit.prevent="upload">
-      <label for="attachment-file">Choose attachment</label
+      <label :for="fileId">Choose attachment</label
       ><input
-        id="attachment-file"
+        :id="fileId"
         ref="fileInput"
         type="file"
         required

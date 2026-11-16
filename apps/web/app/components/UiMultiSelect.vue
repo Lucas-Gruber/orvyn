@@ -13,14 +13,19 @@ const props = defineProps<{
   panel = ref<HTMLElement>(),
   input = ref<HTMLInputElement>(),
   open = ref(false),
-  query = ref("");
+  query = ref(""),
+  draft = ref<string[]>([]),
+  limit = ref(false);
+let disposed = false;
 const filtered = computed(() =>
     props.options.filter((o) =>
       o.label.toLowerCase().includes(query.value.toLowerCase()),
     ),
   ),
   selected = computed(() =>
-    props.options.filter((o) => props.modelValue.includes(o.id)),
+    props.options.filter((o) =>
+      (open.value ? draft.value : props.modelValue).includes(o.id),
+    ),
   );
 function position() {
   if (!open.value || !trigger.value || !panel.value) return;
@@ -46,6 +51,8 @@ async function toggle() {
     return;
   }
   query.value = "";
+  draft.value = [...props.modelValue];
+  limit.value = false;
   open.value = true;
   position();
   panel.value?.showPopover();
@@ -54,12 +61,10 @@ async function toggle() {
 }
 function pick(id: string) {
   if (props.disabled) return;
-  emit(
-    "update:modelValue",
-    props.modelValue.includes(id)
-      ? props.modelValue.filter((value) => value !== id)
-      : [...props.modelValue, id],
-  );
+  if (draft.value.includes(id))
+    draft.value = draft.value.filter((value) => value !== id);
+  else if (draft.value.length < 50) draft.value = [...draft.value, id];
+  else limit.value = true;
 }
 function keys(event: KeyboardEvent) {
   if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
@@ -84,14 +89,38 @@ function keys(event: KeyboardEvent) {
               items.length;
   items[index]?.focus();
 }
+function beforeToggle(event: Event) {
+  if ((event as ToggleEvent).newState !== "closed" || !open.value) return;
+  open.value = false;
+  if (
+    !disposed &&
+    !props.disabled &&
+    JSON.stringify([...draft.value].sort()) !==
+      JSON.stringify([...props.modelValue].sort())
+  )
+    emit("update:modelValue", [...draft.value]);
+}
 function toggled(event: Event) {
   open.value = (event as ToggleEvent).newState === "open";
 }
+usePendingWrites(async () => {
+  if (open.value) {
+    panel.value?.hidePopover();
+    await nextTick();
+  }
+});
+watch(
+  () => JSON.stringify(props.modelValue),
+  () => {
+    if (open.value) draft.value = [...props.modelValue];
+  },
+);
 onMounted(() => {
   window.addEventListener("resize", position);
   window.addEventListener("scroll", position, true);
 });
 onBeforeUnmount(() => {
+  disposed = true;
   window.removeEventListener("resize", position);
   window.removeEventListener("scroll", position, true);
 });
@@ -132,6 +161,7 @@ onBeforeUnmount(() => {
     role="dialog"
     :aria-label="label + ' options'"
     class="multi-select-panel"
+    @beforetoggle="beforeToggle"
     @toggle="toggled"
     @keydown="keys"
   >
@@ -155,13 +185,13 @@ onBeforeUnmount(() => {
         :key="option.id"
         type="button"
         role="option"
-        :aria-selected="modelValue.includes(option.id)"
+        :aria-selected="draft.includes(option.id)"
         :disabled="disabled"
         @click="pick(option.id)"
       >
         <span class="option-check"
           ><AppIcon
-            v-if="modelValue.includes(option.id)"
+            v-if="draft.includes(option.id)"
             name="check"
             :size="12" /></span
         ><span>{{ option.label }}</span>
@@ -170,8 +200,9 @@ onBeforeUnmount(() => {
         {{ options.length ? "No matching options" : "No options available" }}
       </p>
     </div>
+    <p v-if="limit" class="field-empty" role="alert">Choose up to 50 values.</p>
     <div class="multi-select-footer">
-      <span>{{ modelValue.length }} selected</span
+      <span>{{ draft.length }} selected</span
       ><button
         type="button"
         class="ghost"

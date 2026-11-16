@@ -67,12 +67,21 @@ export const HeadingIdentity = Extension.create<{
                   id: "h-" + target.id,
                   tabindex: "-1",
                   "aria-label": target.text,
+                  "data-heading-level": String(node.attrs.level),
+                  "data-heading-marker": "#".repeat(node.attrs.level),
+                  "data-heading-empty": String(node.content.size === 0),
+                  "data-heading-active": String(
+                    state.selection.$from.parent === node,
+                  ),
                   ...(activeHeading?.() === target.id
                     ? { "data-link-target": "true" }
                     : {}),
                 }),
               );
-              if (copy)
+              // An inline noneditable widget is the only child of an empty
+              // heading after a Markdown input rule. Chromium can then lose
+              // the visible caret. Leave its empty text position unobstructed.
+              if (copy && node.content.size > 0)
                 decorations.push(
                   Decoration.widget(
                     pos + node.nodeSize - 1,

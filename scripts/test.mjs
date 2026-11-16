@@ -63,7 +63,9 @@ async function ready(address, child) {
     }
     await new Promise((r) => setTimeout(r, 100));
   }
-  throw Error(`Test service did not become ready within 30s: ${address} (${last})`);
+  throw Error(
+    `Test service did not become ready within 30s: ${address} (${last})`,
+  );
 }
 function start(args, env) {
   const c = spawn(process.execPath, args, {
@@ -147,6 +149,8 @@ try {
           "tests/database-relations.test.mjs",
           "tests/database-formulas.test.mjs",
           "tests/database-rollups.test.mjs",
+          "tests/database-templates.test.mjs",
+          "tests/database-ux.test.mjs",
           "tests/worker.test.mjs",
           "tests/preview.test.mjs",
           "tests/local-preview.test.mjs",
@@ -155,6 +159,7 @@ try {
           "tests/document-links.test.mjs",
           "tests/backlinks.test.mjs",
           "tests/editor-blocks.test.mjs",
+          "tests/editor-ux.test.mjs",
           "tests/editor-assets.test.mjs",
           "tests/page-previews.test.mjs",
           "tests/video-embeds.test.mjs",

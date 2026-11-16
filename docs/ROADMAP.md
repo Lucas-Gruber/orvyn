@@ -12,6 +12,7 @@ Work through these areas in order, preserving working features and committing/pu
    - [x] Whole document-block selection, movement, drag handles, duplication and deletion.
    - [x] Page/space emoji icons and preset covers; private image covers for pages.
    - [x] Folders, hierarchy dragging and keyboard reorder/nest/outdent.
+   - [x] Empty-heading caret/level hints, icon/description slash menu, consistent modal spacing and discoverable keyboard shortcuts.
 2. Collaboration
    - [x] Page discussion threads, replies, author editing, moderation and resolve/reopen.
    - [x] Text-anchored comments with relative positions and changed/deleted text handling.
@@ -22,8 +23,9 @@ Work through these areas in order, preserving working features and committing/pu
    - [x] Same-space relations with permission-safe queries, exports and live target updates.
    - [x] Typed formulas with stable references, server-side queries/exports and a visual expression editor.
    - [x] Direct-relation rollups with scalar counts/numeric aggregates and permission-safe queries/exports.
-   - [ ] Database/record templates.
-   - [ ] Retain failed field drafts and await pending database saves during navigation.
+   - [x] Database/record snapshot templates with authorized independent attachment copies.
+   - [x] Side/center/full-page record opening, saved view preference and keyboard/context-menu actions.
+   - [ ] Extend failed-draft recovery to every table cell (record-page properties retain drafts; navigation awaits pending writes).
 4. Search
    - [ ] Indexed document full-text search, tags/metadata and space/type filters.
 5. Whiteboards

@@ -74,7 +74,10 @@ test("Chromium: callout, toggle, table of contents and code highlighting persist
       await expect(
         page.getByRole("listbox", { name: "Insert block", exact: true }),
       ).toBeVisible();
-      await page.getByRole("option", { name: command, exact: true }).click();
+      await page
+        .getByRole("listbox", { name: "Insert block", exact: true })
+        .getByRole("option", { name: command, exact: true })
+        .click();
       await page.evaluate(
         () =>
           new Promise((r) =>

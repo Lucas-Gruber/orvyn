@@ -1042,13 +1042,19 @@ hr {
 dialog.link-database-dialog {
   background: var(--elevated);
   color: var(--text);
-  padding: 0;
   border: 1px solid var(--line);
   border-radius: 12px;
   box-shadow: var(--shadow);
   width: min(470px, calc(100vw - 32px));
   max-height: 85dvh;
   overflow: auto;
+}
+.ui-dialog {
+  padding: 0;
+}
+dialog.link-database-dialog {
+  padding: 24px;
+  width: min(680px, calc(100vw - 32px));
 }
 .ui-dialog.wide {
   width: min(800px, calc(100vw - 32px));
@@ -1750,4 +1756,20 @@ dialog.link-database-dialog::backdrop {
 .title-conflict p {
   margin: 0 0 10px;
   color: var(--text);
+}
+.sidebar-shortcut {
+  margin-left: auto;
+  font-size: 0.65rem;
+  color: var(--faint);
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+@media (min-width: 1400px) {
+  .workspace-main.side-peek-open {
+    margin-right: min(740px, 52vw);
+  }
+  .workspace-main.side-peek-open .database-workspace {
+    padding-inline: 36px;
+  }
 }

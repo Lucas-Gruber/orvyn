@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
-import { chromium, expect } from "@playwright/test";
+import { chromium, expect } from "./browser-tools.mjs";
 import { base } from "./helpers.mjs";
 import { chooseSpace, openPageFromSidebar } from "./ui-helpers.mjs";
 test("Chromium: five database views, live Kanban drag, record documents and saved filters", async () => {
@@ -128,7 +128,9 @@ test("Chromium: five database views, live Kanban drag, record documents and save
     await page
       .getByRole("button", { name: "Back to database", exact: true })
       .click();
-    await page.locator("summary").filter({ hasText: "Add a property" }).click();
+    await page
+      .getByRole("button", { name: "Add a property", exact: true })
+      .click();
     await page.getByLabel("Property name", { exact: true }).fill("Estimate");
     await page
       .getByLabel("Property type", { exact: true })

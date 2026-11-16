@@ -40,6 +40,23 @@ function closed() {
   emit("close");
 }
 function keys(event: KeyboardEvent) {
+  if (event.defaultPrevented) return;
+  if (
+    (event.metaKey || event.ctrlKey) &&
+    event.key === "Enter" &&
+    !(event.target as HTMLElement).closest('[contenteditable="true"]')
+  ) {
+    const form = (event.target as HTMLElement).closest("form"),
+      submit = form?.querySelector<HTMLButtonElement>(
+        'button[type="submit"]:not(:disabled),button:not([type]):not(:disabled)',
+      );
+    if (form && submit) {
+      event.preventDefault();
+      event.stopPropagation();
+      form.requestSubmit(submit);
+      return;
+    }
+  }
   if (!props.modal && event.key === "Escape") {
     event.preventDefault();
     event.stopPropagation();
@@ -70,14 +87,16 @@ function outside(event: MouseEvent) {
   >
     <header class="dialog-header">
       <h2 :id="id + '-title'">{{ title }}</h2>
-      <button
-        class="icon-button"
-        type="button"
-        aria-label="Close dialog"
-        @click="emit('close')"
-      >
-        <AppIcon name="x" />
-      </button>
+      <div class="dialog-header-actions">
+        <slot name="actions" /><button
+          class="icon-button"
+          type="button"
+          aria-label="Close dialog"
+          @click="emit('close')"
+        >
+          <AppIcon name="x" />
+        </button>
+      </div>
     </header>
     <div v-if="open" class="dialog-content">
       <p v-if="error" class="error" role="alert">{{ error }}</p>
@@ -85,3 +104,32 @@ function outside(event: MouseEvent) {
     </div>
   </dialog>
 </template>
+<style scoped>
+.dialog-content {
+  padding: 22px 24px;
+  min-width: 0;
+}
+.dialog-header {
+  padding-inline: 24px;
+}
+.dialog-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.dialog-content :deep(form) {
+  min-width: 0;
+}
+.dialog-content :deep(.actions) {
+  flex-wrap: wrap;
+}
+@media (max-width: 600px) {
+  .dialog-content {
+    padding: 18px 20px;
+  }
+  .dialog-header {
+    padding-inline: 20px;
+  }
+}
+</style>

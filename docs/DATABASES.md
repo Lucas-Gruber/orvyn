@@ -8,11 +8,11 @@ Database properties and views have their own tables. Record values use validated
 
 Working property types: Title (managed by the page), Text, Number, Select, MultiSelect, Status, Date, Checkbox, URL, Email, Phone, Person, Files, CreatedTime, CreatedBy, LastEditedTime and LastEditedBy. Metadata is read-only. Date values are canonical ISO dates; metadata timestamps are UTC ISO instants. Legacy page timestamps/actors are backfilled from the first/last known content revisions, falling back to the space owner and migration time where older evidence is absent.
 
-Relation, Formula and Rollup are reserved in the model but not implemented or offered as working properties. Option editing/deletion, property deletion/restore, templates and portable JSON restore are not implemented yet. Reserved property types return a validation error; no placeholder computation is returned.
+Relation, Formula and Rollup are implemented; see DATABASE_RELATIONS.md, DATABASE_FORMULAS.md and DATABASE_ROLLUPS.md for their supported scope. Database/record snapshot templates are described in DATABASE_TEMPLATES.md. Option editing/deletion, property deletion/restore and portable JSON restore are not implemented yet.
 
 ## Views and editing
 
-Table, Board, List, Calendar and Gallery use the same records. Saved views retain filters, sorts, selected properties, grouping and calendar date property. Title remains available to open the full record page. A view's group/date property is also projected when needed to render it. Timeline is not implemented.
+Table, Board, List, Calendar and Gallery use the same records. Saved views retain filters, sorts, selected properties, grouping and calendar date property. Title opens a side peek, center modal or full record page according to the saved view preference and explicit row action. A view's group/date property is also projected when needed to render it. Timeline is not implemented.
 
 Queries filter each record through orvyn_page_role before ordering or pagination. Search, property filters and sorts execute on PostgreSQL. Values are type-checked before persistence; property types are immutable in the current API. Filters are parameterized and operators/directions are allowlisted. A view query returns only its selected properties plus the fields needed to render that view; view column visibility is a presentation rule, not an independent property-level ACL.
 

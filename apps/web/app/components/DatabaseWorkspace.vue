@@ -9,14 +9,151 @@ import {
   formatFormula,
   formulaPropertyType,
   type RollupConfig,
+  type RecordOpenMode,
 } from "@orvyn/shared";
+import { pageLink } from "@orvyn/editor/links";
+import { copyText } from "../utils/clipboard";
+import { propertyIcon } from "../utils/databaseFields";
+import { shortcutLabel } from "../utils/shortcuts";
 const props = defineProps<{
     databaseId: string;
     initialViewId?: string;
     initialTitle?: string;
     appearance?: any;
   }>(),
-  emit = defineEmits<{ open: [pageId: string]; changed: [] }>();
+  emit = defineEmits<{
+    open: [pageId: string, mode?: RecordOpenMode];
+    changed: [];
+  }>();
+const recordMenu = ref<any>(),
+  contextRecord = ref<DatabaseRecord>(),
+  schemaTemplate = ref<{ open: () => void }>(),
+  recordTemplate = ref<{ open: () => void }>();
+const templateLibrary = ref<{ open: () => void }>(),
+  recordTemplates = ref<any[]>([]),
+  chosenTemplate = ref<any>(),
+  selectedTemplateId = ref(""),
+  templateLoading = ref(false);
+let templateDefaults: Record<string, unknown> = {},
+  templateTitle = "",
+  createRequest = "",
+  createRequestBody = "";
+async function loadTemplates() {
+  try {
+    recordTemplates.value = (await api("/templates")).templates;
+  } catch (e: any) {
+    error.value = e.data?.message || "Templates could not be loaded.";
+  }
+}
+async function selectTemplate(value: any) {
+  const next = value?.preview?.values || {};
+  for (const [id, original] of Object.entries(templateDefaults))
+    if (
+      JSON.stringify(draft[id]) === JSON.stringify(original) &&
+      !Object.hasOwn(next, id)
+    )
+      delete draft[id];
+  for (const [id, preset] of Object.entries(next))
+    if (
+      !Object.hasOwn(draft, id) ||
+      JSON.stringify(draft[id]) === JSON.stringify(templateDefaults[id])
+    )
+      draft[id] = preset;
+  if (!title.value || title.value === templateTitle)
+    title.value = value?.preview?.title || "";
+  templateDefaults = { ...next };
+  templateTitle = value?.preview?.title || "";
+  chosenTemplate.value = value;
+  selectedTemplateId.value = value?.id || "";
+}
+async function chooseTemplate(event: Event) {
+  const id = (event.target as HTMLSelectElement).value;
+  if (!id) {
+    await selectTemplate(undefined);
+    return;
+  }
+  templateLoading.value = true;
+  error.value = "";
+  try {
+    await selectTemplate(await $fetch<any>("/api/v1/templates/" + id));
+  } catch (e: any) {
+    selectedTemplateId.value = chosenTemplate.value?.id || "";
+    error.value = e.data?.message || "This template is unavailable.";
+  } finally {
+    templateLoading.value = false;
+  }
+}
+function openRecord(id: string, mode?: RecordOpenMode) {
+  emit("open", id, mode || currentView.value?.config.openMode || "side");
+}
+function recordContext(
+  event: MouseEvent | KeyboardEvent,
+  record: DatabaseRecord,
+) {
+  if (
+    event.type === "contextmenu" &&
+    (event.shiftKey ||
+      (event.target as HTMLElement).closest(
+        "input,textarea,[contenteditable=true]",
+      ))
+  )
+    return;
+  contextRecord.value = record;
+  void recordMenu.value?.open(event);
+}
+function recordKeys(event: KeyboardEvent, record: DatabaseRecord) {
+  if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10"))
+    recordContext(event, record);
+  else if (
+    event.key === "Enter" &&
+    (event.shiftKey || event.metaKey || event.ctrlKey)
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+    openRecord(
+      record.pageId,
+      event.metaKey || event.ctrlKey ? "page" : "modal",
+    );
+  }
+}
+const recordActions = computed(() => [
+  { id: "side", label: "Open to side", icon: "sidePeek", shortcut: "Enter" },
+  {
+    id: "modal",
+    label: "Open as modal",
+    icon: "gallery",
+    shortcut: "Shift Enter",
+  },
+  {
+    id: "page",
+    label: "Open as full page",
+    icon: "expand",
+    shortcut: shortcutLabel("Mod+Enter"),
+  },
+  { id: "copy", label: "Copy link", icon: "link", separator: true },
+  ...(canEdit.value && (contextRecord.value?.accessRank || 0) >= 30
+    ? [{ id: "template", label: "Save as template", icon: "copy" }]
+    : []),
+]);
+async function recordAction(action: string) {
+  if (!contextRecord.value) return;
+  if (["side", "modal", "page"].includes(action))
+    openRecord(contextRecord.value.pageId, action as RecordOpenMode);
+  else if (action === "template") recordTemplate.value?.open();
+  else if (action === "copy") {
+    try {
+      await copyText(
+        new URL(
+          pageLink(contextRecord.value.pageId),
+          location.origin,
+        ).toString(),
+      );
+      notice.value = "Link copied";
+    } catch (e: any) {
+      error.value = e.message || "Link could not be copied.";
+    }
+  }
+}
 const transfer = ref<{ open: () => void }>();
 const viewIcons: Record<string, string> = {
   Table: "table",
@@ -42,6 +179,38 @@ function tabKeys(event: KeyboardEvent, index: number) {
     [next]?.focus();
 }
 const domId = useId();
+const searchInput = ref<HTMLInputElement>();
+function workspaceKeys(event: KeyboardEvent) {
+  if (
+    event.defaultPrevented ||
+    (event.target as HTMLElement).closest(
+      "input,textarea,[contenteditable=true]",
+    )
+  )
+    return;
+  if (event.key === "/" && !event.ctrlKey && !event.metaKey && !event.altKey) {
+    event.preventDefault();
+    searchInput.value?.focus();
+  }
+  if (
+    (event.ctrlKey || event.metaKey) &&
+    event.altKey &&
+    event.key.toLowerCase() === "r" &&
+    canEdit.value
+  ) {
+    event.preventDefault();
+    beginRecord();
+  }
+  if (
+    (event.ctrlKey || event.metaKey) &&
+    event.altKey &&
+    event.key.toLowerCase() === "f" &&
+    canEdit.value
+  ) {
+    event.preventDefault();
+    openSettings();
+  }
+}
 const directory = ref<any[]>([]),
   restrictedRecord = ref(false),
   showPermissions = ref(false);
@@ -58,6 +227,7 @@ const metadata = ref<any>(),
   busy = ref(false),
   loading = ref(false),
   showCreate = ref(false),
+  showPropertyCreate = ref(false),
   showSettings = ref(false),
   newView = ref(false);
 const title = ref(""),
@@ -261,8 +431,19 @@ function schedule() {
   }, 100);
 }
 const events = useDatabaseEvents(props.databaseId, schedule);
+let mutationJob: Promise<void> | undefined;
 async function mutate(fn: () => Promise<void>) {
-  if (busy.value) return;
+  while (mutationJob) await mutationJob;
+  if (disposed) return;
+  const job = runMutation(fn);
+  mutationJob = job;
+  try {
+    await job;
+  } finally {
+    if (mutationJob === job) mutationJob = undefined;
+  }
+}
+async function runMutation(fn: () => Promise<void>) {
   busy.value = true;
   error.value = "";
   notice.value = "";
@@ -276,20 +457,60 @@ async function mutate(fn: () => Promise<void>) {
     busy.value = false;
   }
 }
+async function flush() {
+  while (mutationJob) await mutationJob;
+}
+usePendingWrites(flush);
+defineExpose({
+  flush,
+  reload: load,
+  search: () => searchInput.value?.focus(),
+  newRecord: () => {
+    if (canEdit.value) beginRecord();
+  },
+  filters: () => {
+    if (canEdit.value) openSettings();
+  },
+});
 async function createRecord() {
+  if (busy.value || templateLoading.value) return;
+  const templated = !!chosenTemplate.value;
+  let createdId = "";
   await mutate(async () => {
-    await api("/records", "POST", {
+    const body = {
       title: title.value,
       values: { ...draft },
       visibility: restrictedRecord.value ? "restricted" : "space",
-    });
+    };
+    if (chosenTemplate.value) {
+      const payload = {
+          ...body,
+          version: chosenTemplate.value.version,
+          schemaVersion: metadata.value.schemaVersion,
+        },
+        key = JSON.stringify([chosenTemplate.value.id, payload]);
+      if (key !== createRequestBody) {
+        createRequestBody = key;
+        createRequest = crypto.randomUUID();
+      }
+      const result = await $fetch<any>(
+        `/api/v1/templates/${chosenTemplate.value.id}/apply`,
+        { method: "POST", body: { ...payload, requestId: createRequest } },
+      );
+      createdId = result.pageId;
+    } else createdId = (await api("/records", "POST", body)).pageId;
     title.value = "";
     for (const key of Object.keys(draft)) delete draft[key];
     showCreate.value = false;
     restrictedRecord.value = false;
+    chosenTemplate.value = undefined;
+    selectedTemplateId.value = "";
+    templateDefaults = {};
+    templateTitle = "";
     await load();
     notice.value = "Record created";
   });
+  if (createdId && templated) openRecord(createdId);
 }
 async function patchRecord(
   record: DatabaseRecord,
@@ -334,7 +555,9 @@ async function chooseView(id: string) {
   await load();
 }
 function beginRecord(date?: string) {
+  if (!canEdit.value || busy.value) return;
   showCreate.value = true;
+  void loadTemplates();
   if (date && currentView.value.config.dateProperty)
     draft[currentView.value.config.dateProperty] = date;
 }
@@ -413,6 +636,7 @@ function openSettings(create = false) {
         },
       }
     : JSON.parse(JSON.stringify(currentView.value));
+  viewDraft.value.config.openMode ||= "side";
   showSettings.value = true;
 }
 function propertyById(id: string): Property | undefined {
@@ -542,6 +766,7 @@ async function addProperty() {
     optionNames.value = "";
     formulaSource.value = "";
     rollupSource.value = { relationId: "", aggregation: "count" };
+    showPropertyCreate.value = false;
     await load();
     notice.value = "Property created";
   });
@@ -613,7 +838,7 @@ onBeforeUnmount(() => {
 });
 </script>
 <template>
-  <div class="database-workspace">
+  <div class="database-workspace" @keydown="workspaceKeys">
     <p
       v-if="error && !showCreate && !showSettings && !showRename"
       role="alert"
@@ -683,7 +908,7 @@ onBeforeUnmount(() => {
             v-if="canEdit"
             class="ghost"
             aria-label="View settings"
-            title="Filters and sorting"
+            :title="'Filters and sorting · ' + shortcutLabel('Mod+Alt+F')"
             @click="openSettings()"
           >
             <AppIcon name="filter" :size="15" /><span>Filter</span
@@ -719,10 +944,23 @@ onBeforeUnmount(() => {
               @click="showPermissions = true"
             >
               <AppIcon name="users" :size="16" />Database access</button
+            ><button
+              v-if="canEdit"
+              role="menuitem"
+              @click="schemaTemplate?.open()"
+            >
+              <AppIcon name="copy" :size="16" />Save as template</button
+            ><button role="menuitem" @click="templateLibrary?.open()">
+              <AppIcon name="file" :size="16" />Record templates</button
             ><button role="menuitem" @click="transfer?.open()">
               <AppIcon name="download" :size="16" />Import / export
             </button></UiMenu
-          ><button v-if="canEdit" class="primary" @click="beginRecord()">
+          ><button
+            v-if="canEdit"
+            class="primary"
+            :title="shortcutLabel('Mod+Alt+R')"
+            @click="beginRecord()"
+          >
             <AppIcon name="plus" :size="15" />New record
           </button>
         </div>
@@ -739,6 +977,7 @@ onBeforeUnmount(() => {
           :for="'db-search-' + domId"
           >Search records</label
         ><input
+          ref="searchInput"
           :id="'db-search-' + domId"
           v-model="search"
           type="search"
@@ -808,6 +1047,46 @@ onBeforeUnmount(() => {
           @submit.prevent="createRecord"
         >
           <p v-if="error" role="alert" class="error">{{ error }}</p>
+          <div class="record-template-picker">
+            <label :for="'record-template-' + domId"
+              ><AppIcon name="copy" :size="14" />Start with a template</label
+            ><select
+              :id="'record-template-' + domId"
+              :value="selectedTemplateId"
+              :disabled="templateLoading || busy"
+              @change="chooseTemplate"
+            >
+              <option value="">Empty record</option>
+              <option
+                v-for="item in recordTemplates"
+                :key="item.id"
+                :value="item.id"
+              >
+                {{ item.name }}
+              </option>
+              <option
+                v-if="
+                  chosenTemplate &&
+                  !recordTemplates.some((item) => item.id === chosenTemplate.id)
+                "
+                :value="chosenTemplate.id"
+              >
+                {{ chosenTemplate.name }}
+              </option></select
+            ><button
+              type="button"
+              class="ghost"
+              @click="templateLibrary?.open()"
+            >
+              Browse templates
+            </button>
+            <p v-if="chosenTemplate" class="hint">
+              {{
+                chosenTemplate.preview.excerpt ||
+                "Saved content and property defaults"
+              }}
+            </p>
+          </div>
           <label :for="'record-title-' + domId">Record name</label
           ><input
             :id="'record-title-' + domId"
@@ -840,7 +1119,8 @@ onBeforeUnmount(() => {
             />Restrict this record to you and the space owner</label
           >
           <div class="actions">
-            <button class="primary" :disabled="busy">Create record</button
+            <button class="primary" :disabled="busy || templateLoading">
+              Create record</button
             ><button type="button" @click="showCreate = false">Cancel</button>
           </div>
         </form>
@@ -870,7 +1150,11 @@ onBeforeUnmount(() => {
                 >
                   <span aria-hidden="true">∑</span>{{ property.name }}
                 </button>
-                <template v-else>{{ property.name }}</template>
+                <span v-else class="database-column-label"
+                  ><AppIcon :name="propertyIcon(property)" :size="14" />{{
+                    property.name
+                  }}</span
+                >
               </th>
             </tr>
           </thead>
@@ -878,7 +1162,11 @@ onBeforeUnmount(() => {
             <tr v-if="group.label">
               <th :colspan="columns.length">{{ group.label }}</th>
             </tr>
-            <tr v-for="record in group.records" :key="record.pageId">
+            <tr
+              v-for="record in group.records"
+              :key="record.pageId"
+              @contextmenu="recordContext($event, record)"
+            >
               <td
                 v-for="property in columns"
                 :key="property.id"
@@ -887,9 +1175,19 @@ onBeforeUnmount(() => {
                 <button
                   class="record-title"
                   v-if="property.type === 'Title'"
-                  @click="emit('open', record.pageId)"
+                  @click="openRecord(record.pageId)"
+                  @keydown="recordKeys($event, record)"
+                  @contextmenu="recordContext($event, record)"
                 >
                   <AppIcon name="file" :size="14" />{{ record.title }}</button
+                ><button
+                  v-if="property.type === 'Title'"
+                  class="record-row-actions icon-button"
+                  :aria-label="'Actions for ' + record.title"
+                  title="Record actions"
+                  @click="recordContext($event, record)"
+                >
+                  <AppIcon name="more" :size="15" /></button
                 ><DatabaseFilesField
                   v-else-if="property.type === 'Files'"
                   :name="property.name"
@@ -900,7 +1198,7 @@ onBeforeUnmount(() => {
                   @update:model-value="
                     patchRecord(record, { [property.id]: $event })
                   "
-                  @manage="emit('open', record.pageId)"
+                  @manage="openRecord(record.pageId, 'side')"
                 /><DatabaseRelationField
                   v-else-if="property.type === 'Relation'"
                   :property="property"
@@ -967,7 +1265,11 @@ onBeforeUnmount(() => {
             >
               ↕
             </button>
-            <button @click="emit('open', record.pageId)">
+            <button
+              @click="openRecord(record.pageId)"
+              @keydown="recordKeys($event, record)"
+              @contextmenu="recordContext($event, record)"
+            >
               {{ record.title }}</button><DatabaseFieldInput
               :database-id="databaseId"
               :people="directory"
@@ -1031,7 +1333,9 @@ onBeforeUnmount(() => {
               )"
               :key="record.pageId"
               class="calendar-record"
-              @click="emit('open', record.pageId)"
+              @click="openRecord(record.pageId)"
+              @keydown="recordKeys($event, record)"
+              @contextmenu="recordContext($event, record)"
             >
               {{ record.title }}
             </button>
@@ -1054,7 +1358,11 @@ onBeforeUnmount(() => {
               :src="'/api/v1/files/' + record.coverFileId + '/preview'"
               :alt="record.title"
               loading="lazy"
-            /><button @click="emit('open', record.pageId)">
+            /><button
+              @click="openRecord(record.pageId)"
+              @keydown="recordKeys($event, record)"
+              @contextmenu="recordContext($event, record)"
+            >
               <PageSymbol :icon="record.icon" :size="17" />
               {{ record.title }}
             </button>
@@ -1073,7 +1381,11 @@ onBeforeUnmount(() => {
             <h2>{{ group.label }}</h2>
           </li>
           <li v-for="record in group.records" :key="record.pageId">
-            <button @click="emit('open', record.pageId)">
+            <button
+              @click="openRecord(record.pageId)"
+              @keydown="recordKeys($event, record)"
+              @contextmenu="recordContext($event, record)"
+            >
               {{ record.title }}</button><span
               v-for="property in columns.filter((p) => p.type !== 'Title')"
               :key="property.id"
@@ -1140,9 +1452,23 @@ onBeforeUnmount(() => {
           Next records</button
         ><span v-if="loading" role="status">Loading records…</span>
       </div>
-      <details v-if="canEdit" class="database-form property-builder">
-        <summary>Add a property</summary>
-        <form @submit.prevent="addProperty">
+      <button
+        v-if="canEdit"
+        class="ghost add-property"
+        @click="showPropertyCreate = true"
+      >
+        <AppIcon name="plus" :size="15" />Add a property
+      </button>
+      <UiDialog
+        :open="showPropertyCreate && canEdit"
+        title="New property"
+        @close="showPropertyCreate = false"
+      >
+        <form
+          class="database-form property-builder"
+          @submit.prevent="addProperty"
+        >
+          <p v-if="error" class="error" role="alert">{{ error }}</p>
           <label :for="'property-name-' + domId">Property name</label
           ><input
             :id="'property-name-' + domId"
@@ -1196,9 +1522,15 @@ onBeforeUnmount(() => {
             :properties="metadata.properties"
             :database-id="databaseId"
             :disabled="busy"
-          /><button :disabled="busy">Add property</button>
+          />
+          <div class="actions">
+            <button class="primary" :disabled="busy">Add property</button
+            ><button type="button" @click="showPropertyCreate = false">
+              Cancel
+            </button>
+          </div>
         </form>
-      </details>
+      </UiDialog>
       <UiDialog
         :open="!!editingFormula && canEdit"
         title="Edit formula"
@@ -1305,6 +1637,14 @@ onBeforeUnmount(() => {
             <option v-for="type in viewTypes" :key="type">
               {{ type }}
             </option></select
+          ><label :for="'view-open-' + domId">Open records in</label
+          ><select
+            :id="'view-open-' + domId"
+            v-model="viewDraft.config.openMode"
+          >
+            <option value="side">Side peek</option>
+            <option value="modal">Center peek</option>
+            <option value="page">Full page</option></select
           ><label :for="'view-group-' + domId">Group by</label
           ><select
             :id="'view-group-' + domId"
@@ -1511,6 +1851,37 @@ onBeforeUnmount(() => {
       />
     </div>
   </div>
+  <UiContextMenu
+    ref="recordMenu"
+    label="Record actions"
+    :items="recordActions"
+    @select="recordAction"
+  />
+  <SaveDatabaseTemplate
+    v-if="metadata"
+    ref="schemaTemplate"
+    :database-id="databaseId"
+    :title="metadata.title"
+    :before-save="flush"
+    @saved="notice = 'Template saved'"
+  />
+  <SaveDatabaseTemplate
+    v-if="contextRecord"
+    :key="contextRecord.pageId"
+    ref="recordTemplate"
+    :database-id="databaseId"
+    :record-id="contextRecord.pageId"
+    :title="contextRecord.title"
+    :before-save="flush"
+    @saved="notice = 'Template saved'"
+  />
+  <DatabaseTemplateLibrary
+    ref="templateLibrary"
+    kind="record"
+    :database-id="databaseId"
+    :can-create="canEdit"
+    @select="selectTemplate"
+  />
 </template>
 <style scoped>
 .database-heading {
@@ -1934,20 +2305,7 @@ small {
   max-width: none;
 }
 .property-builder {
-  margin-top: 15px;
-  padding-top: 10px;
-  border-top: 1px solid var(--line-soft);
   font-size: 0.8rem;
-  max-width: 440px;
-}
-.property-builder > summary {
-  cursor: pointer;
-  color: var(--muted);
-  padding: 5px 0;
-  font-size: 0.8rem;
-}
-.property-builder > form {
-  padding: 18px 0;
 }
 .database-empty {
   padding: 40px 20px;
@@ -2193,6 +2551,68 @@ small {
 </style>
 
 <style scoped>
+.database-column-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+.database-column-label .app-icon {
+  color: var(--faint);
+}
+.database-table .property-title {
+  position: relative;
+  padding-right: 35px;
+}
+.database-table .record-row-actions {
+  position: absolute;
+  right: 5px;
+  top: 6px;
+  width: 27px;
+  height: 27px;
+  min-height: 27px;
+  opacity: 0;
+  padding: 4px;
+  background: var(--elevated);
+  box-shadow: 0 1px 4px #0001;
+  border: 1px solid var(--line);
+}
+.database-table tr:hover .record-row-actions,
+.database-table tr:focus-within .record-row-actions {
+  opacity: 1;
+}
+.add-property {
+  margin-top: 5px;
+  font-size: 0.78rem;
+  color: var(--muted);
+  min-height: 32px;
+}
+.record-template-picker {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  margin-bottom: 18px;
+}
+.record-template-picker > label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 0;
+}
+.record-template-picker > button {
+  margin-top: 6px;
+  font-size: 0.75rem;
+  padding: 4px 0;
+}
+.record-template-picker > p {
+  margin-bottom: 0;
+}
+@media (hover: none) {
+  .database-table .record-row-actions {
+    opacity: 1;
+  }
+}
 .formula-header {
   min-height: 0;
   padding: 0;

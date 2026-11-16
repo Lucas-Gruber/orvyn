@@ -1,6 +1,15 @@
 <script setup lang="ts">
 import { pageNavigationKey } from "./composables/pageNavigation";
-import { headingFromHash, validHeadingId } from "@orvyn/editor/links";
+import { recordNavigationKey } from "./composables/recordNavigation";
+import {
+  pendingWritesKey,
+  type WriteFlusher,
+} from "./composables/pendingWrites";
+import { z, type RecordOpenMode } from "@orvyn/shared";
+import type { DatabaseRecord } from "@orvyn/shared";
+import { shortcutLabel } from "./utils/shortcuts";
+import { headingFromHash, validHeadingId, pageLink } from "@orvyn/editor/links";
+import { copyText } from "./utils/clipboard";
 import type { CommentAnchor } from "@orvyn/editor/comments";
 import { pageOrder } from "./utils/pageTree";
 import {
@@ -9,6 +18,8 @@ import {
 } from "./composables/commentDrafts";
 const commentDrafts = new Map<string, CommentDraftState>();
 provide(commentDraftsKey, commentDrafts);
+const pendingWrites = new Set<WriteFlusher>();
+provide(pendingWritesKey, pendingWrites);
 const route = useRoute(),
   router = useRouter();
 const booting = ref(true),
@@ -33,6 +44,54 @@ const email = ref(""),
   password = ref(""),
   name = ref(""),
   authForm = ref<HTMLFormElement>();
+const peekId = ref(""),
+  peekMode = ref<"side" | "modal">("side"),
+  peekHandle = ref<any>(),
+  databaseHandle = ref<any>(),
+  recordPropertiesHandle = ref<any>(),
+  canSaveRecordTemplate = ref(false),
+  recordTemplateDialog = ref<{ open: () => void }>();
+let peekReturnFocus: HTMLElement | undefined;
+const shortcutHelp = ref<{ open: () => void }>();
+const databaseTemplates = ref<{ open: () => void }>();
+const sidebarMenu = ref<any>(),
+  sidebarTarget = ref<any>();
+const sidebarActions = computed(() => [
+  { id: "open", label: "Open page", icon: "file" },
+  ...(["page", "record"].includes(sidebarTarget.value?.kind)
+    ? [
+        { id: "side", label: "Open to side", icon: "sidePeek" },
+        { id: "modal", label: "Open as modal", icon: "gallery" },
+      ]
+    : []),
+  { id: "copy", label: "Copy link", icon: "link", separator: true },
+  ...(canCreate.value &&
+  sidebarTarget.value?.access_rank >= 30 &&
+  sidebarTarget.value?.kind === "page"
+    ? [{ id: "create", label: "New subpage", icon: "plus" }]
+    : []),
+]);
+function sidebarContext(event: MouseEvent | KeyboardEvent, target: any) {
+  if (event.type === "contextmenu" && event.shiftKey) return;
+  sidebarTarget.value = target;
+  void sidebarMenu.value?.open(event);
+}
+async function sidebarAction(action: string) {
+  const target = sidebarTarget.value;
+  if (!target) return;
+  if (action === "open") await navigate(() => openPage(target.id));
+  else if (action === "side" || action === "modal")
+    await openRecord(target.id, action);
+  else if (action === "create") await navigate(() => createPage(target.id));
+  else if (action === "copy") {
+    try {
+      await copyText(new URL(pageLink(target.id), location.origin).toString());
+      notice.value = "Link copied";
+    } catch (e: any) {
+      error.value = e.message || "Link could not be copied.";
+    }
+  }
+}
 const linkAction = ref(""),
   linkToken = ref(""),
   newPassword = ref("");
@@ -353,11 +412,15 @@ async function updateLocation() {
       ? {
           space: space.value.id,
           ...(page.value ? { page: page.value.id } : {}),
+          ...(peekId.value
+            ? { peek: peekId.value, peekMode: peekMode.value }
+            : {}),
         }
       : {},
   });
 }
 function signedOut() {
+  peekId.value = "";
   commentDrafts.clear();
   clearTimeout(titleTimer);
   signedIn.value = false;
@@ -382,7 +445,8 @@ async function refreshMe() {
 async function login(action: string) {
   if (busy.value || !authForm.value?.reportValidity()) return;
   const requestedPage = String(route.query.page || ""),
-    requestedHeading = headingFromHash(route.hash);
+    requestedHeading = headingFromHash(route.hash),
+    requestedPeek = { ...route.query };
   await run(async () => {
     await api("auth/" + action, "POST", {
       email: email.value,
@@ -394,8 +458,11 @@ async function login(action: string) {
     spaces.value = list;
     signedIn.value = true;
     const pref = preferences();
-    if (requestedPage) await openPage(requestedPage, true, requestedHeading);
-    else if (list.length) {
+    if (requestedPage) {
+      await openPage(requestedPage, true, requestedHeading);
+      restorePeek(requestedPeek);
+      await updateLocation();
+    } else if (list.length) {
       const selected = list.find((s: any) => s.id === pref.spaceId) || list[0];
       await select(selected);
     }
@@ -419,6 +486,7 @@ async function loadPages(after = "") {
 }
 async function select(s: any, location = true) {
   await beforeNavigate();
+  peekId.value = "";
   view.value = "workspace";
   space.value = s;
   page.value = undefined;
@@ -437,6 +505,8 @@ async function select(s: any, location = true) {
   if (mobile.value) sidebarOpen.value = false;
 }
 function edit(p: any) {
+  canSaveRecordTemplate.value = false;
+  peekId.value = "";
   closeComments();
   showActivity.value = false;
   showPageAppearance.value = false;
@@ -493,6 +563,49 @@ provide(
   pageNavigationKey,
   (id, headingId = "") => void navigate(() => openPage(id, true, headingId)),
 );
+provide(recordNavigationKey, (id, mode) => void openRecord(id, mode));
+async function openRecord(id: string, mode: RecordOpenMode = "side") {
+  if (mode === "page") {
+    await navigate(() => openPage(id));
+    return;
+  }
+  await navigate(async () => {
+    await beforeNavigate();
+    peekReturnFocus =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : undefined;
+    closeComments();
+    peekMode.value = mode;
+    peekId.value = id;
+    await updateLocation();
+  });
+}
+async function closePeek() {
+  peekId.value = "";
+  await updateLocation();
+  await nextTick();
+  if (peekReturnFocus?.isConnected) peekReturnFocus.focus();
+  else
+    document.querySelector<HTMLInputElement>(".database-search input")?.focus();
+}
+function restorePeek(query: Record<string, unknown>) {
+  peekId.value = "";
+  const id = String(query.peek || "").toLowerCase();
+  if (z.uuid().safeParse(id).success) {
+    peekId.value = id;
+    peekMode.value = query.peekMode === "modal" ? "modal" : "side";
+  }
+}
+function updateRecordSnapshot(record: DatabaseRecord) {
+  if (page.value?.id !== record.pageId) return;
+  if (page.value.title === serverTitle.value && !titleJob) {
+    page.value.title = record.title;
+    page.value.title_version = record.titleVersion;
+    serverTitle.value = record.title;
+  }
+  page.value.access_rank = record.accessRank;
+}
 async function save() {
   clearTimeout(titleTimer);
   if (titleConflict.value) return;
@@ -552,11 +665,22 @@ function pageAppearanceChanged(value: any) {
   if (entry) Object.assign(entry, value);
   if (page.value?.id === value.id) Object.assign(page.value, value);
 }
-async function beforeNavigate() {
+async function flushCurrentDocument() {
   await save();
   if (titleConflict.value)
     throw new Error("Resolve the title conflict before leaving this page.");
   await editorHandle.value?.flush();
+  await recordPropertiesHandle.value?.flush();
+}
+async function flushSource(id: string) {
+  if (id === peekId.value) await peekHandle.value?.flush();
+  if (id === page.value?.id) await flushCurrentDocument();
+}
+async function beforeNavigate() {
+  await flushCurrentDocument();
+  await Promise.all([...pendingWrites].map((flush) => flush()));
+  await databaseHandle.value?.flush();
+  await peekHandle.value?.flush();
 }
 async function resolveTitle(keepMine: boolean) {
   if (!page.value || !titleConflict.value) return;
@@ -794,16 +918,73 @@ function searchKeys(event: KeyboardEvent) {
 }
 function globalKeys(event: KeyboardEvent) {
   if (
-    (event.metaKey || event.ctrlKey) &&
-    event.key.toLowerCase() === "k" &&
-    signedIn.value
-  ) {
+    event.defaultPrevented ||
+    !signedIn.value ||
+    event.getModifierState("AltGraph")
+  )
+    return;
+  const mod = event.metaKey || event.ctrlKey,
+    key = event.key.toLowerCase(),
+    modal = !!document.querySelector("dialog:modal");
+  if (mod && !event.altKey && !event.shiftKey && ["k", "p"].includes(key)) {
     event.preventDefault();
     void openSearch();
+    return;
   }
-  if ((event.metaKey || event.ctrlKey) && event.key === "\\") {
+  if (mod && key === "/") {
+    event.preventDefault();
+    shortcutHelp.value?.open();
+    return;
+  }
+  if (mod && event.shiftKey && key === "l") {
+    event.preventDefault();
+    chooseTheme(theme.value === "light" ? "cybercade" : "light");
+    return;
+  }
+  if (modal) return;
+  if (mod && key === "\\") {
     event.preventDefault();
     sidebarOpen.value = !sidebarOpen.value;
+    return;
+  }
+  if (mod && event.altKey && key === "n" && canCreate.value) {
+    event.preventDefault();
+    void navigate(() => createPage());
+    return;
+  }
+  if (mod && event.altKey && key === "d" && canCreate.value) {
+    event.preventDefault();
+    showDatabaseCreate.value = true;
+    return;
+  }
+  if (mod && event.altKey && key === "r" && databaseHandle.value) {
+    event.preventDefault();
+    databaseHandle.value.newRecord();
+    return;
+  }
+  if (mod && event.altKey && key === "f" && databaseHandle.value) {
+    event.preventDefault();
+    databaseHandle.value.filters();
+    return;
+  }
+  const editing = (event.target as HTMLElement).closest(
+    'input,textarea,[contenteditable="true"]',
+  );
+  if (
+    key === "/" &&
+    !mod &&
+    !event.altKey &&
+    !editing &&
+    databaseHandle.value
+  ) {
+    event.preventDefault();
+    databaseHandle.value.search();
+    return;
+  }
+  if (event.key === "Escape" && peekId.value && !editing) {
+    event.preventDefault();
+    void peekHandle.value?.requestClose();
+    return;
   }
   if (event.key === "Escape" && mobile.value) sidebarOpen.value = false;
 }
@@ -829,6 +1010,7 @@ async function fromHistory() {
     pages.value = [];
     view.value = "workspace";
   }
+  restorePeek(Object.fromEntries(query));
 }
 async function readAccountLink(hash = route.hash) {
   const params = new URLSearchParams(hash.slice(1)),
@@ -924,6 +1106,7 @@ onMounted(async () => {
             false,
             headingFromHash(window.location.hash),
           );
+        restorePeek(route.query);
       });
   }
   booting.value = false;
@@ -1143,7 +1326,7 @@ onBeforeUnmount(() => {
           >orvyn<span>.</span></a
         ><button
           class="icon-button"
-          title="Collapse sidebar"
+          :title="'Collapse sidebar · ' + shortcutLabel('Mod+\\')"
           aria-label="Collapse sidebar"
           @click="sidebarOpen = false"
         >
@@ -1187,8 +1370,13 @@ onBeforeUnmount(() => {
         <button :disabled="!space" @click="openActivity()">
           <AppIcon name="history" :size="17" />Activity
         </button>
-        <button @click="openSearch">
-          <AppIcon name="search" :size="17" />Search<kbd>Ctrl K</kbd></button
+        <button
+          :title="'Search pages · ' + shortcutLabel('Mod+P')"
+          @click="openSearch"
+        >
+          <AppIcon name="search" :size="17" />Search<kbd>{{
+            shortcutLabel("Mod+P")
+          }}</kbd></button
         ><button
           :class="{ active: view === 'workspace' && !page }"
           @click="navigate(home)"
@@ -1254,6 +1442,7 @@ onBeforeUnmount(() => {
             @open="navigate(() => openPage($event))"
             @create="navigate(() => createPage($event))"
             @move="moveHierarchy"
+            @context="sidebarContext"
           /><button
             v-if="nextCursor"
             class="sidebar-link"
@@ -1276,6 +1465,24 @@ onBeforeUnmount(() => {
         </section>
       </div>
       <div class="sidebar-footer">
+        <button
+          v-if="space"
+          class="sidebar-link subtle-link"
+          @click="databaseTemplates?.open()"
+        >
+          <AppIcon name="copy" :size="15" />Templates
+        </button>
+        <button
+          class="sidebar-link subtle-link"
+          aria-label="Keyboard shortcuts"
+          :title="shortcutLabel('Mod+/')"
+          @click="shortcutHelp?.open()"
+        >
+          <AppIcon name="keyboard" :size="15" />Keyboard shortcuts<kbd
+            class="sidebar-shortcut"
+            >{{ shortcutLabel("Mod+/") }}</kbd
+          >
+        </button>
         <button
           v-if="space && ['Owner', 'Admin'].includes(space.role)"
           class="sidebar-link subtle-link"
@@ -1327,7 +1534,10 @@ onBeforeUnmount(() => {
     </aside>
     <main
       class="workspace-main"
-      :class="{ 'comments-inline': showComments && commentsInline }"
+      :class="{
+        'comments-inline': showComments && commentsInline,
+        'side-peek-open': !!peekId && peekMode === 'side',
+      }"
       :inert="mobile && sidebarOpen"
     >
       <header class="workspace-topbar">
@@ -1421,6 +1631,12 @@ onBeforeUnmount(() => {
               @click="navigate(() => openPage(page.parent_id))"
             >
               <AppIcon name="back" :size="16" />Back to database</button
+            ><button
+              v-if="page.kind === 'record' && canSaveRecordTemplate"
+              role="menuitem"
+              @click="recordTemplateDialog?.open()"
+            >
+              <AppIcon name="copy" :size="16" />Save as template</button
             ><button
               v-if="page.kind !== 'database'"
               role="menuitem"
@@ -1555,11 +1771,12 @@ onBeforeUnmount(() => {
         </div>
         <LazyDatabaseWorkspace
           v-else-if="page?.kind === 'database'"
+          ref="databaseHandle"
           :key="page.id"
           :database-id="page.id"
           :initial-title="page.title"
           :appearance="page"
-          @open="navigate(() => openPage($event))"
+          @open="openRecord"
           @changed="run(refreshSpace)"
         />
         <article
@@ -1636,6 +1853,18 @@ onBeforeUnmount(() => {
               ><button @click="resolveTitle(true)">Keep my title</button>
             </div>
           </div>
+          <RecordProperties
+            v-if="page.kind === 'record' && page.parent_id"
+            :key="'properties-' + page.id"
+            ref="recordPropertiesHandle"
+            :database-id="page.parent_id"
+            :record-id="page.id"
+            :editable="page.access_rank >= 30 && !navigating"
+            @snapshot="updateRecordSnapshot"
+            @denied="editorAccess({ pageId: $event, rank: 0 })"
+            @template-access="canSaveRecordTemplate = $event"
+            @manage="showAttachments = true"
+          />
           <LazyBlockEditor
             v-if="me"
             ref="editorHandle"
@@ -1836,8 +2065,8 @@ onBeforeUnmount(() => {
           </div>
           <div class="home-tip">
             <AppIcon name="command" :size="15" /><span
-              >Find any page with <kbd>Ctrl K</kbd>. Your changes save as you
-              work.</span
+              >Find any page with <kbd>{{ shortcutLabel("Mod+P") }}</kbd>. Your
+              changes save as you work.</span
             >
           </div>
         </section>
@@ -1899,6 +2128,16 @@ onBeforeUnmount(() => {
       Organize information in tables, boards and other views. Every record has
       its own page.
     </p>
+    <button
+      type="button"
+      class="ghost"
+      @click="
+        showDatabaseCreate = false;
+        databaseTemplates?.open();
+      "
+    >
+      <AppIcon name="copy" :size="16" />Start with a saved template
+    </button>
     <form @submit.prevent="createDatabase">
       <label for="database-name">Database name</label
       ><input
@@ -2115,4 +2354,56 @@ onBeforeUnmount(() => {
       </button>
     </div></UiDialog
   >
+  <LazyPagePeek
+    v-if="peekId && me"
+    :key="peekId"
+    ref="peekHandle"
+    :page-id="peekId"
+    :mode="peekMode"
+    :user="me"
+    :paused="navigating"
+    @close="closePeek"
+    @fullpage="(id, heading) => navigate(() => openPage(id, true, heading))"
+    @mode="
+      peekMode = $event;
+      updateLocation();
+    "
+    @changed="
+      databaseHandle?.reload?.();
+      loadPages();
+    "
+  />
+  <SaveDatabaseTemplate
+    v-if="page?.kind === 'record' && page.parent_id"
+    :key="'record-template-' + page.id"
+    ref="recordTemplateDialog"
+    :database-id="page.parent_id"
+    :record-id="page.id"
+    :title="page.title"
+    :before-save="flushCurrentDocument"
+    @saved="notice = 'Template saved'"
+  />
+  <KeyboardShortcuts ref="shortcutHelp" />
+  <UiContextMenu
+    ref="sidebarMenu"
+    label="Page actions"
+    :items="sidebarActions"
+    @select="sidebarAction"
+  />
+  <DatabaseTemplateLibrary
+    v-if="space"
+    :key="space.id"
+    ref="databaseTemplates"
+    kind="database"
+    :space-id="space.id"
+    :can-create="canCreate"
+    :flush-source="flushSource"
+    @created="
+      (id) =>
+        navigate(async () => {
+          await loadPages();
+          await openPage(id);
+        })
+    "
+  />
 </template>

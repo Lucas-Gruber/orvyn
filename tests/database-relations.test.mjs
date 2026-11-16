@@ -624,7 +624,7 @@ test("subscription fingerprints invalidate a stale relation snapshot when rights
 });
 
 test("Chromium: create a relation property, select/open related records, refresh titles and hide private/revoked targets for live readers", async () => {
-  const { chromium, expect } = await import("@playwright/test"),
+  const { chromium, expect } = await import("./browser-tools.mjs"),
     { mkdir } = await import("node:fs/promises"),
     { pageLink } = await import("../packages/editor/dist/links.js"),
     db = new Pool({ connectionString: process.env.DATABASE_URL }),
@@ -664,8 +664,13 @@ test("Chromium: create a relation property, select/open related records, refresh
     await expect(
       owner.getByRole("button", { name: task.title, exact: true }),
     ).toBeVisible();
-    const builder = owner.locator("details.property-builder");
-    await builder.locator("summary").click();
+    await owner
+      .getByRole("button", { name: "Add a property", exact: true })
+      .click();
+    const builder = owner.getByRole("dialog", {
+      name: "New property",
+      exact: true,
+    });
     await builder
       .getByLabel("Property name", { exact: true })
       .fill("Related work");
@@ -681,7 +686,7 @@ test("Chromium: create a relation property, select/open related records, refresh
     await expect(
       owner.getByText("Property created", { exact: true }),
     ).toBeVisible();
-    await builder.locator("summary").click();
+    await expect(builder).not.toBeVisible();
     const field = owner.locator("td.property-relation").first();
     await field.getByRole("button", { name: "Project", exact: true }).click();
     const picker = owner.getByRole("dialog", {

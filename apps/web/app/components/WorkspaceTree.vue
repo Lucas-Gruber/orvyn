@@ -9,6 +9,7 @@ const props = defineProps<{
   }>(),
   emit = defineEmits<{
     open: [id: string];
+    context: [event: MouseEvent | KeyboardEvent, page: any];
     create: [parentId: string];
     toggle: [id: string];
     move: [
@@ -129,6 +130,10 @@ function rootDrop(event: DragEvent) {
 }
 onBeforeUnmount(endDrag);
 function keys(event: KeyboardEvent, page: any) {
+  if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
+    emit("context", event, page);
+    return;
+  }
   if (
     event.altKey &&
     event.shiftKey &&
@@ -221,6 +226,7 @@ function keys(event: KeyboardEvent, page: any) {
       @dragstart="start($event, page)"
       @dragover="over($event, page)"
       @drop="drop($event, page)"
+      @contextmenu="emit('context', $event, page)"
     >
       <button
         v-if="page.children"

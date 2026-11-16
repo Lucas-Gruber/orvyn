@@ -18,6 +18,7 @@ import {
   type EditorPerson,
 } from "../composables/editorPeople";
 import { editorPageKey } from "../composables/editorContext";
+import { shortcutLabel } from "../utils/shortcuts";
 import {
   editorExtensions,
   documentHeadings,
@@ -336,6 +337,7 @@ const saveStatus = computed(() =>
 );
 interface SlashCommand {
   label: string;
+  icon: string;
   run: (editor: Editor) => unknown;
   keepSelection?: boolean;
   aliases?: string[];
@@ -343,39 +345,46 @@ interface SlashCommand {
 const commands: SlashCommand[] = [
   {
     label: "Mention person",
+    icon: "users",
     aliases: ["erwähnen", "person", "mention"],
     run: (e) => e.chain().focus().insertContent("@").run(),
   },
   {
     label: "2 columns",
+    icon: "columns2",
     aliases: ["spalten"],
     run: (e) => e.chain().focus().insertColumns(2).run(),
   },
   {
     label: "3 columns",
+    icon: "board",
     aliases: ["spalten"],
     run: (e) => e.chain().focus().insertColumns(3).run(),
   },
   {
     label: "Embed",
+    icon: "video",
     aliases: ["video", "einbetten"],
     keepSelection: true,
     run: () => void openVideo(),
   },
   {
     label: "Image",
+    icon: "image",
     aliases: ["bild", "photo"],
     keepSelection: true,
     run: () => void openAsset(true),
   },
   {
     label: "File",
+    icon: "paperclip",
     aliases: ["datei", "attachment"],
     keepSelection: true,
     run: () => void openAsset(false),
   },
   {
     label: "Callout",
+    icon: "lightbulb",
     aliases: ["note", "hinweis"],
     run: (e) =>
       e
@@ -390,11 +399,13 @@ const commands: SlashCommand[] = [
   },
   {
     label: "Toggle",
+    icon: "chevronRight",
     aliases: ["collapse", "aufklappen"],
     run: (e: Editor) => e.chain().focus().insertToggle().run(),
   },
   {
     label: "Table of contents",
+    icon: "list",
     aliases: ["toc", "outline", "inhaltsverzeichnis"],
     run: (e) =>
       e
@@ -405,46 +416,57 @@ const commands: SlashCommand[] = [
   },
   {
     label: "Paragraph",
+    icon: "text",
     run: (e: Editor) => e.chain().focus().setParagraph().run(),
   },
   {
     label: "Heading 1",
+    icon: "heading1",
     run: (e: Editor) => e.chain().focus().toggleHeading({ level: 1 }).run(),
   },
   {
     label: "Heading 2",
+    icon: "heading",
     run: (e: Editor) => e.chain().focus().toggleHeading({ level: 2 }).run(),
   },
   {
     label: "Heading 3",
+    icon: "heading3",
     run: (e: Editor) => e.chain().focus().toggleHeading({ level: 3 }).run(),
   },
   {
     label: "Bullet list",
+    icon: "list",
     run: (e: Editor) => e.chain().focus().toggleBulletList().run(),
   },
   {
     label: "Numbered list",
+    icon: "listOrdered",
     run: (e: Editor) => e.chain().focus().toggleOrderedList().run(),
   },
   {
     label: "Checklist",
+    icon: "checklist",
     run: (e: Editor) => e.chain().focus().toggleTaskList().run(),
   },
   {
     label: "Quote",
+    icon: "quote",
     run: (e: Editor) => e.chain().focus().toggleBlockquote().run(),
   },
   {
     label: "Code block",
+    icon: "code",
     run: (e: Editor) => e.chain().focus().toggleCodeBlock().run(),
   },
   {
     label: "Divider",
+    icon: "divider",
     run: (e: Editor) => e.chain().focus().setHorizontalRule().run(),
   },
   {
     label: "Link to document",
+    icon: "link",
     aliases: ["link", "page", "document", "seite", "dokument", "verlinken"],
     keepSelection: true,
     run: () => {
@@ -453,6 +475,7 @@ const commands: SlashCommand[] = [
   },
   {
     label: "Page preview",
+    icon: "file",
     aliases: ["vorschau", "page card"],
     keepSelection: true,
     run: () => {
@@ -461,6 +484,7 @@ const commands: SlashCommand[] = [
   },
   {
     label: "Linked database",
+    icon: "database",
     keepSelection: true,
     run: () => {
       void openLinkPicker();
@@ -468,6 +492,7 @@ const commands: SlashCommand[] = [
   },
   {
     label: "Table",
+    icon: "table",
     run: (e: Editor) =>
       e
         .chain()
@@ -476,6 +501,59 @@ const commands: SlashCommand[] = [
         .run(),
   },
 ];
+const basicCommands = [
+  "Paragraph",
+  "Heading 1",
+  "Heading 2",
+  "Heading 3",
+  "Bullet list",
+  "Numbered list",
+  "Checklist",
+  "Quote",
+  "Callout",
+  "Toggle",
+  "Divider",
+  "Link to document",
+  "Page preview",
+  "Mention person",
+  "Table",
+  "Linked database",
+  "Code block",
+  "Image",
+  "File",
+  "Embed",
+  "2 columns",
+  "3 columns",
+  "Table of contents",
+];
+commands.sort(
+  (a, b) => basicCommands.indexOf(a.label) - basicCommands.indexOf(b.label),
+);
+const commandDescriptions: Record<string, string> = {
+  Paragraph: "Start writing with plain text",
+  "Heading 1": "A large section heading",
+  "Heading 2": "A medium section heading",
+  "Heading 3": "A small section heading",
+  "Bullet list": "Create a simple bulleted list",
+  "Numbered list": "Keep steps in order",
+  Checklist: "Track work with checkboxes",
+  Quote: "Highlight a quotation",
+  Callout: "Make a note stand out",
+  Toggle: "Keep details in a collapsible section",
+  Divider: "Separate sections with a line",
+  "Link to document": "Reference a page or a specific heading",
+  "Page preview": "Show a linked page as a card",
+  "Mention person": "Bring someone into the conversation",
+  Table: "Arrange content in rows and columns",
+  "Linked database": "Insert a live view of your database",
+  "Code block": "Write code with syntax highlighting",
+  Image: "Upload an image",
+  File: "Attach a file to this page",
+  Embed: "Add a video from a supported service",
+  "2 columns": "Arrange blocks side by side",
+  "3 columns": "Create a three-column layout",
+  "Table of contents": "Navigate the headings on this page",
+};
 const filtered = computed(() =>
   commands.filter((c) =>
     [c.label, ...(c.aliases || [])].some((label) =>
@@ -483,6 +561,23 @@ const filtered = computed(() =>
     ),
   ),
 );
+const textStyle = computed(() => {
+  const node = editor.value?.state.selection.$from.parent;
+  return node?.type.name === "heading"
+    ? "heading-" + node.attrs.level
+    : "paragraph";
+});
+function changeTextStyle(event: Event) {
+  const value = (event.target as HTMLSelectElement).value,
+    e = editor.value;
+  if (!e?.isEditable) return;
+  if (value === "paragraph") e.chain().focus().setParagraph().run();
+  else
+    e.chain()
+      .focus()
+      .setHeading({ level: Number(value.slice(-1)) as 1 | 2 | 3 })
+      .run();
+}
 function applyCommand(index: number) {
   const command = filtered.value[index];
   if (!editor.value || !command) return;
@@ -1371,8 +1466,20 @@ onBeforeUnmount(() => {
         @comment="prepareComment"
       />
       <div class="editor-toolbar" aria-label="Text formatting">
+        <select
+          class="editor-text-style"
+          aria-label="Text style"
+          :value="textStyle"
+          :disabled="!editor.isEditable"
+          @change="changeTextStyle"
+        >
+          <option value="paragraph">Text</option>
+          <option value="heading-1">Heading 1</option>
+          <option value="heading-2">Heading 2</option>
+          <option value="heading-3">Heading 3</option>
+        </select>
         <button
-          title="Link to document · Ctrl+K"
+          :title="'Link to document · ' + shortcutLabel('Mod+K')"
           aria-label="Link to document"
           :disabled="!editor.isEditable"
           @click="openDocumentLink()"
@@ -1387,7 +1494,7 @@ onBeforeUnmount(() => {
           <AppIcon name="database" :size="16" /><span>Link database</span>
         </button>
         <button
-          title="Bold · Ctrl+B"
+          :title="'Bold · ' + shortcutLabel('Mod+B')"
           :disabled="!editor.isEditable"
           :aria-pressed="editor.isActive('bold')"
           @click="editor.chain().focus().toggleBold().run()"
@@ -1396,21 +1503,13 @@ onBeforeUnmount(() => {
             >Bold</span
           ></button
         ><button
-          title="Italic · Ctrl+I"
+          :title="'Italic · ' + shortcutLabel('Mod+I')"
           :disabled="!editor.isEditable"
           :aria-pressed="editor.isActive('italic')"
           @click="editor.chain().focus().toggleItalic().run()"
         >
           <AppIcon name="italic" :size="16" /><span class="sr-only"
             >Italic</span
-          ></button
-        ><button
-          title="Heading"
-          :disabled="!editor.isEditable"
-          @click="editor.chain().focus().toggleHeading({ level: 2 }).run()"
-        >
-          <AppIcon name="heading" :size="16" /><span class="sr-only"
-            >Heading</span
           ></button
         ><button
           title="Bullet list"
@@ -1437,7 +1536,7 @@ onBeforeUnmount(() => {
             >Code</span
           ></button
         ><button
-          title="Undo · Ctrl+Z"
+          :title="'Undo · ' + shortcutLabel('Mod+Z')"
           :disabled="!editor.isEditable"
           @click="editor.chain().focus().undo().run()"
         >
@@ -1445,7 +1544,7 @@ onBeforeUnmount(() => {
             >Undo</span
           ></button
         ><button
-          title="Redo · Ctrl+Shift+Z"
+          :title="'Redo · ' + shortcutLabel('Mod+Shift+Z')"
           :disabled="!editor.isEditable"
           @click="editor.chain().focus().redo().run()"
         >
@@ -1463,11 +1562,17 @@ onBeforeUnmount(() => {
           v-for="(command, index) in filtered"
           :key="command.label"
           role="option"
+          :aria-label="command.label"
           :aria-selected="index === slashIndex"
           @mousedown.prevent
           @click="applyCommand(index)"
         >
-          {{ command.label }}
+          <span class="slash-command-icon" aria-hidden="true"
+            ><AppIcon :name="command.icon" :size="18" /></span
+          ><span class="slash-command-copy"
+            ><strong>{{ command.label }}</strong
+            ><small>{{ commandDescriptions[command.label] }}</small></span
+          >
         </button>
         <p v-if="!filtered.length">No matching block</p>
       </div>
@@ -1829,6 +1934,93 @@ button:disabled {
 .block-editor .tiptap h3 {
   position: relative;
   scroll-margin-top: 80px;
+  min-height: 1.4em;
+  caret-color: var(--text);
+}
+.block-editor .tiptap [data-heading-marker]::before {
+  content: attr(data-heading-marker);
+  position: absolute;
+  left: -25px;
+  top: 0.35em;
+  width: 21px;
+  text-align: right;
+  color: var(--faint);
+  opacity: 0.6;
+  font:
+    500 9.5px/1.6 "JetBrains Mono Variable",
+    monospace;
+  pointer-events: none;
+  user-select: none;
+}
+.block-editor .ProseMirror-focused [data-heading-active="true"]::before {
+  color: var(--accent);
+  opacity: 0.8;
+}
+.block-editor .tiptap [data-heading-empty="true"]::after {
+  content: "Heading " attr(data-heading-level);
+  position: absolute;
+  inset: 0 auto auto 0;
+  color: var(--faint);
+  opacity: 0.55;
+  pointer-events: none;
+  user-select: none;
+}
+.slash-command-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 31px;
+  width: 31px;
+  height: 31px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  background: var(--surface);
+}
+.slash-command-copy {
+  display: grid;
+  gap: 3px;
+  text-align: left;
+  min-width: 0;
+}
+.slash-command-copy strong {
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+.slash-command-copy small {
+  font-size: 0.66rem;
+  color: var(--faint);
+  white-space: normal;
+  line-height: 1.3;
+}
+.editor-text-style {
+  width: 112px;
+  min-height: 29px;
+  padding: 4px 7px;
+  border: 0;
+  border-right: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  font-size: 0.75rem;
+  box-shadow: none;
+}
+.slash-menu button {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-height: 44px;
+  border-radius: 6px;
+  padding: 5px 7px;
+}
+.slash-menu button[aria-selected="true"] .slash-command-icon {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+}
+@media (max-width: 760px) {
+  .block-editor .tiptap [data-heading-marker]::before {
+    left: -20px;
+    width: 17px;
+    font-size: 8.5px;
+  }
 }
 .block-editor .tiptap [data-link-target] {
   background: var(--accent-soft);
