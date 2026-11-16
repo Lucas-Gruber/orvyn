@@ -1,4 +1,10 @@
-import { databaseFingerprint } from "@orvyn/shared";
+import {
+  databaseFingerprint,
+  relationWatchProperties,
+  formulaType,
+  FormulaError,
+} from "@orvyn/shared";
+import { formulaConfig } from "./databases/formula.js";
 import { checkRelationTarget, checkRelations } from "./databases/relations.js";
 import {
   Module,
@@ -174,10 +180,10 @@ class DatabasesController {
   ) {
     mutation(req);
     const uid = await user(req),
-      input = parse<z.infer<typeof propertyInput>>(propertyInput, body),
-      config = propertyConfig(input);
+      input = parse<z.infer<typeof propertyInput>>(propertyInput, body);
     return transaction(async (c) => {
       const context = await database(c, uid, id, 30, true);
+      const config = propertyConfig(input, context.properties);
       if (input.type === "Relation")
         await checkRelationTarget(
           c,
@@ -207,21 +213,58 @@ class DatabasesController {
   ) {
     mutation(req);
     const uid = await user(req),
-      name = text(body?.name, 80);
-    if (!Number.isSafeInteger(body?.schemaVersion))
-      fail(400, "Schema version required");
+      schema = z
+        .object({
+          name: z.string().trim().min(1).max(80),
+          schemaVersion: z.number().int().positive(),
+          formula: z.string().trim().min(1).max(2000).optional(),
+        })
+        .strict(),
+      input = parse<z.infer<typeof schema>>(schema, body);
     return transaction(async (c) => {
       const context = await database(c, uid, id, 30, true);
-      if (context.schemaVersion !== body.schemaVersion)
+      if (context.schemaVersion !== input.schemaVersion)
         fail(409, "Database schema changed; reload first");
+      const existing =
+        context.properties.find((p) => p.id === property) ||
+        fail(404, "Property not found");
+      if (input.formula !== undefined && existing.type !== "Formula")
+        fail(400, "Only Formula properties accept an expression.");
+      const config =
+          input.formula === undefined
+            ? existing.config
+            : formulaConfig(input.formula, context.properties),
+        next = context.properties.map((p) =>
+          p.id === property ? { ...p, name: input.name, config } : p,
+        );
+      try {
+        for (const p of next.filter((p) => p.type === "Formula")) {
+          const result = formulaType(p.config.expression!, next);
+          if (p.id !== property && result !== p.config.resultType)
+            fail(
+              400,
+              "Other formulas depend on this result type. Keep the same result type.",
+            );
+        }
+      } catch (e) {
+        if (e instanceof FormulaError) fail(400, e.message);
+        throw e;
+      }
       const r = await c.query(
-        "UPDATE database_properties SET name=$1 WHERE database_id=$2 AND id::text=$3 AND deleted_at IS NULL RETURNING id,name,type,config,position",
-        [name, context.page.id, property],
+        "UPDATE database_properties SET name=$1,config=$4 WHERE database_id=$2 AND id::text=$3 AND deleted_at IS NULL RETURNING id,name,type,config,position",
+        [input.name, context.page.id, property, config],
       );
       if (!r.rowCount) fail(404, "Property not found");
-      await audit(c, uid, "database.property_renamed", {
-        pageId: context.page.id,
-      });
+      await audit(
+        c,
+        uid,
+        input.formula === undefined
+          ? "database.property_renamed"
+          : "database.property_updated",
+        {
+          pageId: context.page.id,
+        },
+      );
       return r.rows[0];
     });
   }
@@ -338,16 +381,31 @@ class DatabasesController {
         ? context.properties.filter((p) => visible.has(p.id))
         : context.properties;
       const records = rows.map((row) => recordDTO(row, properties)),
-        relationProperties = properties
-          .filter((p) => p.type === "Relation")
-          .map((p) => p.id);
+        relationProperties = relationWatchProperties(
+          [
+            ...properties,
+            ...context.properties.filter((p) =>
+              [
+                ...(input.filters || config.filters),
+                ...(input.sorts || config.sorts),
+              ].some((item) => item.propertyId === p.id),
+            ),
+          ],
+          context.properties,
+        ),
+        targets = rows.flatMap((row) => {
+          const ids = new Set(
+            relationProperties.flatMap((id) => row.relation_values?.[id] || []),
+          );
+          return (row.relation_choices || []).filter((r: any) => ids.has(r.id));
+        });
       return {
         records,
         relationProperties,
         fingerprint: databaseFingerprint(
           context.schemaVersion,
           records,
-          records.flatMap((record) => record.relations || []),
+          targets,
           relationProperties,
         ),
         schemaVersion: context.schemaVersion,

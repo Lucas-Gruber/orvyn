@@ -565,6 +565,31 @@ $$;
 DO $$ DECLARE item record; BEGIN FOR item IN SELECT DISTINCT r.page_id FROM database_records r JOIN database_properties p ON p.database_id=r.database_id WHERE p.type='Relation' AND p.deleted_at IS NULL LOOP PERFORM orvyn_replace_record_relations(item.page_id); END LOOP; END $$;
 `,
   },
+  {
+    version: 29,
+    sql: `CREATE FUNCTION orvyn_formula_number(op text,a double precision,b double precision) RETURNS double precision LANGUAGE plpgsql IMMUTABLE AS $$
+DECLARE result double precision;
+BEGIN
+ IF a IS NULL THEN RETURN NULL; END IF;
+ IF op IN ('add','sub','mul','div','mod') AND b IS NULL THEN RETURN NULL; END IF;
+ CASE op
+ WHEN 'add' THEN result:=a+b;
+ WHEN 'sub' THEN result:=a-b;
+ WHEN 'mul' THEN result:=a*b;
+ WHEN 'div' THEN IF b=0 THEN RETURN NULL; END IF; result:=a/b;
+ WHEN 'mod' THEN IF b=0 THEN RETURN NULL; END IF; result:=a-trunc(a/b)*b;
+ WHEN 'neg' THEN result:=-a;
+ WHEN 'abs' THEN result:=abs(a);
+ WHEN 'ceil' THEN result:=ceil(a);
+ WHEN 'floor' THEN result:=floor(a);
+ WHEN 'round' THEN result:=round(a);
+ ELSE RETURN NULL;
+ END CASE;
+ IF result IN ('Infinity'::double precision,'-Infinity'::double precision,'NaN'::double precision) THEN RETURN NULL; END IF;
+ RETURN result;
+EXCEPTION WHEN division_by_zero OR numeric_value_out_of_range OR invalid_parameter_value THEN RETURN NULL;
+END $$;`,
+  },
 ] as const;
 
 export async function migrate(pool: Pool, target = migrations.at(-1)!.version) {

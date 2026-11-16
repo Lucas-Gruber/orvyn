@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { FormulaNode, FormulaType } from "./formula.js";
 export const propertyTypes = [
   "Title",
   "Text",
@@ -37,6 +38,7 @@ export const writablePropertyTypes = [
   "Relation",
 ] as const;
 export const computedPropertyTypes = [
+  "Formula",
   "CreatedTime",
   "CreatedBy",
   "LastEditedTime",
@@ -60,6 +62,7 @@ export const propertyInput = z
       .uuid()
       .transform((id) => id.toLowerCase())
       .optional(),
+    formula: z.string().trim().min(1).max(2000).optional(),
   })
   .strict();
 export const filterInput = z
@@ -132,6 +135,9 @@ export interface Property {
   config: {
     options?: { id: string; label: string; color: string }[];
     databaseId?: string;
+    formula?: string;
+    expression?: FormulaNode;
+    resultType?: FormulaType;
   };
   position: number;
 }
@@ -168,3 +174,12 @@ export {
 } from "./appearance.js";
 
 export { databaseFingerprint } from "./database-fingerprint.js";
+export {
+  parseFormula,
+  formulaType,
+  formulaPropertyType,
+  formatFormula,
+  relationWatchProperties,
+  FormulaError,
+} from "./formula.js";
+export type { FormulaNode, FormulaType } from "./formula.js";

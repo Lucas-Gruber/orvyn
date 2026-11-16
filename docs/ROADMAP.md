@@ -20,7 +20,8 @@ Work through these areas in order, preserving working features and committing/pu
    - [x] Page/space activity with current permission checks and private-record isolation.
 3. Databases
    - [x] Same-space relations with permission-safe queries, exports and live target updates.
-   - [ ] Formulas and rollups with permission-safe queries/exports.
+   - [x] Typed formulas with stable references, server-side queries/exports and a visual expression editor.
+   - [ ] Rollups with permission-safe queries/exports.
    - [ ] Database/record templates.
    - [ ] Retain failed field drafts and await pending database saves during navigation.
 4. Search

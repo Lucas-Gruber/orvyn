@@ -6,6 +6,8 @@ import {
   type Property,
   type DatabaseRecord,
   type ViewConfig,
+  formatFormula,
+  formulaPropertyType,
 } from "@orvyn/shared";
 const props = defineProps<{
     databaseId: string;
@@ -64,6 +66,33 @@ const title = ref(""),
   optionNames = ref(""),
   relationDatabaseId = ref(""),
   relationDatabases = ref<any[]>([]);
+const formulaSource = ref(""),
+  editingFormula = ref<Property | null>(null),
+  formulaDraft = ref(""),
+  formulaName = ref(""),
+  formulaVersion = ref(0);
+function editFormula(property: Property) {
+  editingFormula.value = property;
+  formulaDraft.value = property.config.expression
+    ? formatFormula(property.config.expression, metadata.value.properties)
+    : property.config.formula || "";
+  formulaName.value = property.name;
+  formulaVersion.value = metadata.value.schemaVersion;
+}
+async function saveFormula() {
+  if (!editingFormula.value) return;
+  const id = editingFormula.value.id;
+  await mutate(async () => {
+    await api("/properties/" + id, "PATCH", {
+      name: formulaName.value,
+      formula: formulaDraft.value,
+      schemaVersion: formulaVersion.value,
+    });
+    editingFormula.value = null;
+    await load();
+    notice.value = "Formula saved";
+  });
+}
 const month = ref(new Date().toISOString().slice(0, 7)),
   viewDraft = ref<any>();
 let generation = 0,
@@ -287,8 +316,15 @@ function format(record: DatabaseRecord, property: Property) {
   if (property.type === "CreatedBy") return record.createdBy?.email || "—";
   if (property.type === "LastEditedBy")
     return record.lastEditedBy?.email || "—";
-  if (property.type === "Checkbox") return value ? "Yes" : "No";
-  if (property.type === "Number")
+  if (
+    property.type === "Checkbox" ||
+    (property.type === "Formula" && formulaPropertyType(property) === "boolean")
+  )
+    return value ? "Yes" : "No";
+  if (
+    property.type === "Number" ||
+    (property.type === "Formula" && formulaPropertyType(property) === "number")
+  )
     return Intl.NumberFormat().format(Number(value));
   if (["Select", "Status"].includes(property.type))
     return (
@@ -352,7 +388,15 @@ function propertyById(id: string): Property | undefined {
   return metadata.value?.properties.find((p: Property) => p.id === id);
 }
 function filterOperators(filter: any) {
-  const type = propertyById(filter.propertyId)?.type,
+  const original = propertyById(filter.propertyId),
+    type =
+      original?.type === "Formula"
+        ? formulaPropertyType(original) === "number"
+          ? "Number"
+          : formulaPropertyType(original) === "boolean"
+            ? "Checkbox"
+            : "Text"
+        : original?.type,
     operators = ["eq", "neq", "empty", "notEmpty"];
   if (type === "Files") return ["empty", "notEmpty"];
   if (type === "Relation") return ["contains", "empty", "notEmpty"];
@@ -376,6 +420,16 @@ function filterOperators(filter: any) {
 function filterProperty(filter: any): Property | undefined {
   const property = propertyById(filter.propertyId);
   if (!property) return;
+  if (property.type === "Formula")
+    return {
+      ...property,
+      type:
+        formulaPropertyType(property) === "number"
+          ? "Number"
+          : formulaPropertyType(property) === "boolean"
+            ? "Checkbox"
+            : "Text",
+    };
   if (property.type === "Person" && filter.operator === "contains")
     return {
       ...property,
@@ -440,6 +494,9 @@ async function addProperty() {
       ...(propertyType.value === "Relation"
         ? { relationDatabaseId: relationDatabaseId.value }
         : {}),
+      ...(propertyType.value === "Formula"
+        ? { formula: formulaSource.value }
+        : {}),
       options: ["Select", "MultiSelect", "Status"].includes(propertyType.value)
         ? optionNames.value
             .split(",")
@@ -449,6 +506,7 @@ async function addProperty() {
     });
     propertyName.value = "";
     optionNames.value = "";
+    formulaSource.value = "";
     await load();
     notice.value = "Property created";
   });
@@ -761,7 +819,15 @@ onBeforeUnmount(() => {
           <thead>
             <tr>
               <th v-for="property in columns" :key="property.id">
-                {{ property.name }}
+                <button
+                  v-if="property.type === 'Formula' && canEdit"
+                  class="formula-header"
+                  :aria-label="'Edit ' + property.name + ' formula'"
+                  @click="editFormula(property)"
+                >
+                  <span aria-hidden="true">ƒ</span>{{ property.name }}
+                </button>
+                <template v-else>{{ property.name }}</template>
               </th>
             </tr>
           </thead>
@@ -1076,9 +1142,59 @@ onBeforeUnmount(() => {
                 {{ database.title }}
               </option>
             </select></template
-          ><button :disabled="busy">Add property</button>
+          ><DatabaseFormulaEditor
+            v-if="propertyType === 'Formula'"
+            v-model="formulaSource"
+            :properties="metadata.properties"
+            :disabled="busy"
+          /><button :disabled="busy">Add property</button>
         </form>
       </details>
+      <UiDialog
+        :open="!!editingFormula && canEdit"
+        title="Edit formula"
+        wide
+        @close="editingFormula = null"
+      >
+        <form
+          v-if="editingFormula && canEdit"
+          class="database-form"
+          @submit.prevent="saveFormula"
+        >
+          <p v-if="error" class="error" role="alert">{{ error }}</p>
+          <label :for="'formula-name-' + domId">Property name</label>
+          <input
+            :id="'formula-name-' + domId"
+            v-model="formulaName"
+            required
+            maxlength="80"
+            :disabled="busy"
+          />
+          <DatabaseFormulaEditor
+            v-model="formulaDraft"
+            :properties="
+              metadata.properties.filter(
+                (p: Property) => p.id !== editingFormula?.id,
+              )
+            "
+            :disabled="busy"
+          />
+          <p v-if="formulaVersion !== metadata.schemaVersion" role="status">
+            The schema changed while editing. Copy your expression and reopen
+            this dialog before saving.
+          </p>
+          <div class="actions">
+            <button
+              class="primary"
+              :disabled="busy || formulaVersion !== metadata.schemaVersion"
+            >
+              Save formula</button
+            ><button type="button" @click="editingFormula = null">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </UiDialog>
       <UiDialog
         :open="showSettings && !!viewDraft && canEdit"
         :title="newView ? 'Create view' : 'View settings'"
@@ -1990,6 +2106,19 @@ small {
 </style>
 
 <style scoped>
+.formula-header {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  display: inline-flex;
+  gap: 6px;
+}
+.formula-header span {
+  color: var(--accent);
+}
 .database-notice {
   position: fixed;
   z-index: 60;
