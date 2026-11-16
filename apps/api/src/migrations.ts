@@ -299,6 +299,10 @@ END $$;
 CREATE TRIGGER record_file_notify AFTER INSERT OR UPDATE OR DELETE ON files FOR EACH ROW EXECUTE FUNCTION orvyn_record_file_notify();
 `,
   },
+  {
+    version: 14,
+    sql: `ALTER TABLE pages ALTER COLUMN document_schema_version SET DEFAULT 3;`,
+  },
 ] as const;
 
 export async function migrate(pool: Pool, target = migrations.at(-1)!.version) {

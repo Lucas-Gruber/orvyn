@@ -1,4 +1,5 @@
 import { DatabaseBlock } from "./database-node.js";
+import { HeadingIdentity, validHeadingId } from "./heading-links.js";
 import { getSchema, type AnyExtension } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import TaskList from "@tiptap/extension-task-list";
@@ -6,11 +7,12 @@ import TaskItem from "@tiptap/extension-task-item";
 import { TableKit } from "@tiptap/extension-table";
 import { prosemirrorJSONToYDoc, yDocToProsemirrorJSON } from "y-prosemirror";
 import * as Y from "yjs";
-export const documentSchemaVersion = 2;
+export const documentSchemaVersion = 3;
 export function editorExtensions(collaborative = false): AnyExtension[] {
   return [
     StarterKit.configure({
       undoRedo: collaborative ? false : undefined,
+      trailingNode: false,
       heading: { levels: [1, 2, 3] },
       link: { openOnClick: false, defaultProtocol: "https" },
     }),
@@ -18,6 +20,7 @@ export function editorExtensions(collaborative = false): AnyExtension[] {
     TaskItem.configure({ nested: true }),
     TableKit.configure({ table: { resizable: false } }),
     DatabaseBlock,
+    HeadingIdentity,
   ];
 }
 export const schema: ReturnType<typeof getSchema> =
@@ -49,6 +52,12 @@ export function validateDocument(input: unknown) {
     }
     if (n.type.name === "heading" && ![1, 2, 3].includes(n.attrs.level))
       throw Error("Invalid heading level");
+    if (
+      n.type.name === "heading" &&
+      n.attrs.id !== null &&
+      !validHeadingId(n.attrs.id)
+    )
+      throw Error("Invalid heading anchor");
     if (
       n.type.name === "codeBlock" &&
       n.attrs.language !== null &&
@@ -140,3 +149,10 @@ export { default as TaskItem } from "@tiptap/extension-task-item";
 export { TableKit } from "@tiptap/extension-table";
 
 export { DatabaseBlock } from "./database-node.js";
+export {
+  HeadingIdentity,
+  documentHeadings,
+  validHeadingId,
+  headingFromHash,
+  pageLink,
+} from "./heading-links.js";

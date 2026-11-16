@@ -4,14 +4,31 @@ import Collaboration from "@tiptap/extension-collaboration";
 import CollaborationCaret from "@tiptap/extension-collaboration-caret";
 import { HocuspocusProvider } from "@hocuspocus/provider";
 import EmbeddedDatabaseNode from "./EmbeddedDatabaseNode.vue";
-import { editorExtensions } from "@orvyn/editor";
+import {
+  editorExtensions,
+  documentHeadings,
+  yDocToDocument,
+  pageLink,
+  headingFromHash,
+  validHeadingId,
+} from "@orvyn/editor";
+import { pageNavigationKey } from "../composables/pageNavigation";
 import * as Y from "yjs";
 const props = defineProps<{
   pageId: string;
   spaceId: string;
   user: any;
   paused?: boolean;
+  targetHeading?: string;
+  headingVisit?: number;
 }>();
+const openPage = inject(pageNavigationKey),
+  root = ref<HTMLElement>(),
+  showDocumentLink = ref(false),
+  selectedLinkText = ref(""),
+  linkMessage = ref(""),
+  headingMessage = ref("");
+let documentLinkRange = { from: 0, to: 0 };
 const document = new Y.Doc(),
   editor = shallowRef<Editor>(),
   status = ref("connecting"),
@@ -23,7 +40,9 @@ const document = new Y.Doc(),
   tick = ref(0);
 const slash = ref(""),
   slashOpen = ref(false),
-  slashIndex = ref(0);
+  slashIndex = ref(0),
+  slashStyle = ref<Record<string, string>>({});
+let linkSelectionActive = false;
 let slashRange = { from: 0, to: 0 };
 const config = useRuntimeConfig(),
   url = String(
@@ -49,6 +68,7 @@ interface SlashCommand {
   label: string;
   run: (editor: Editor) => unknown;
   keepSelection?: boolean;
+  aliases?: string[];
 }
 const commands: SlashCommand[] = [
   {
@@ -92,6 +112,14 @@ const commands: SlashCommand[] = [
     run: (e: Editor) => e.chain().focus().setHorizontalRule().run(),
   },
   {
+    label: "Link to document",
+    aliases: ["link", "page", "document", "seite", "dokument", "verlinken"],
+    keepSelection: true,
+    run: () => {
+      void openDocumentLink(true);
+    },
+  },
+  {
     label: "Linked database",
     keepSelection: true,
     run: () => {
@@ -110,7 +138,9 @@ const commands: SlashCommand[] = [
 ];
 const filtered = computed(() =>
   commands.filter((c) =>
-    c.label.toLowerCase().includes(slash.value.toLowerCase()),
+    [c.label, ...(c.aliases || [])].some((label) =>
+      label.toLowerCase().includes(slash.value.toLowerCase()),
+    ),
   ),
 );
 function applyCommand(index: number) {
@@ -123,16 +153,22 @@ function applyCommand(index: number) {
 }
 function initialize() {
   if (editor.value) return;
+  persistInitialHeadingIds();
   editor.value = new Editor({
     extensions: [
       ...editorExtensions(true).map((extension) =>
-        extension.name === "orvynDatabase"
-          ? extension.extend({
-              addNodeView() {
-                return VueNodeViewRenderer(EmbeddedDatabaseNode);
-              },
+        extension.name === "headingIdentity"
+          ? extension.configure({
+              onCopy: copyHeadingLink,
+              activeHeading: () => props.targetHeading || "",
             })
-          : extension,
+          : extension.name === "orvynDatabase"
+            ? extension.extend({
+                addNodeView() {
+                  return VueNodeViewRenderer(EmbeddedDatabaseNode);
+                },
+              })
+            : extension,
       ),
       Collaboration.configure({ document }),
       CollaborationCaret.configure({
@@ -155,6 +191,16 @@ function initialize() {
         "aria-multiline": "true",
       },
       handleKeyDown: (_view, event) => {
+        if (
+          (event.metaKey || event.ctrlKey) &&
+          event.key.toLowerCase() === "k" &&
+          editor.value?.isEditable
+        ) {
+          event.preventDefault();
+          event.stopPropagation();
+          void openDocumentLink();
+          return true;
+        }
         if (!slashOpen.value) return false;
         if (event.key === "Escape") {
           slashOpen.value = false;
@@ -174,27 +220,240 @@ function initialize() {
         }
         return false;
       },
+      handleDOMEvents: {
+        click: (_view, event) => {
+          if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+            return false;
+          const anchor = (event.target as HTMLElement).closest("a[href]");
+          if (!anchor) return false;
+          const href = new URL(
+              anchor.getAttribute("href")!,
+              window.location.href,
+            ),
+            id = href.searchParams.get("page");
+          if (
+            href.origin !== window.location.origin ||
+            href.pathname !== "/" ||
+            !id ||
+            !/^[a-f0-9-]{36}$/.test(id)
+          )
+            return false;
+          event.preventDefault();
+          openPage?.(id, headingFromHash(href.hash));
+          return true;
+        },
+      },
     },
-    onTransaction() {
+    onTransaction({ transaction }) {
       tick.value++;
+      if (linkSelectionActive && transaction.docChanged) {
+        documentLinkRange = {
+          from: transaction.mapping.map(documentLinkRange.from, 1),
+          to: transaction.mapping.map(documentLinkRange.to, -1),
+        };
+        if (documentLinkRange.to < documentLinkRange.from)
+          documentLinkRange.to = documentLinkRange.from;
+      }
     },
-    onUpdate({ editor: e }) {
-      const { selection } = e.state,
-        paragraph = selection.$from.parent,
-        text = paragraph.textContent;
-      if (
-        paragraph.type.name === "paragraph" &&
-        /^\/[a-z0-9 ]*$/i.test(text) &&
-        selection.$from.parentOffset === text.length
-      ) {
-        slash.value = text.slice(1);
-        slashRange = { from: selection.$from.start(), to: selection.from };
-        slashIndex.value = 0;
-        slashOpen.value = true;
-      } else slashOpen.value = false;
-    },
+    onUpdate: ({ editor: e }) => updateSlash(e),
+    onSelectionUpdate: ({ editor: e }) => updateSlash(e),
   });
 }
+function updateSlash(e: Pick<Editor, "state" | "isEditable">) {
+  const { selection } = e.state,
+    paragraph = selection.$from.parent,
+    text = paragraph.textContent;
+  if (
+    !e.isEditable ||
+    linkSelectionActive ||
+    paragraph.type.name !== "paragraph" ||
+    !/^\/[\p{L}\p{N} -]*$/u.test(text) ||
+    selection.$from.parentOffset !== text.length
+  ) {
+    slashOpen.value = false;
+    return;
+  }
+  if (slash.value !== text.slice(1)) slashIndex.value = 0;
+  slash.value = text.slice(1);
+  slashRange = { from: selection.$from.start(), to: selection.from };
+  slashOpen.value = true;
+  void nextTick(positionSlash);
+}
+function positionSlash() {
+  if (!slashOpen.value || !editor.value) return;
+  const rect = editor.value.view.coordsAtPos(editor.value.state.selection.from),
+    below = window.innerHeight - rect.bottom - 12,
+    above = below < 220 && rect.top > 220,
+    width = Math.min(280, window.innerWidth - 24);
+  slashStyle.value = {
+    position: "fixed",
+    width: width + "px",
+    left:
+      Math.max(12, Math.min(rect.left, window.innerWidth - width - 12)) + "px",
+    top: above ? "auto" : rect.bottom + 6 + "px",
+    bottom: above ? window.innerHeight - rect.top + 6 + "px" : "auto",
+    maxHeight:
+      Math.min(350, Math.max(120, above ? rect.top - 18 : below)) + "px",
+  };
+}
+function persistInitialHeadingIds() {
+  if (readOnly.value || !synced.value) return;
+  const targets = documentHeadings(yDocToDocument(document));
+  let index = 0;
+  function walk(nodes: (Y.XmlElement | Y.XmlText)[]) {
+    for (const node of nodes) {
+      if (!(node instanceof Y.XmlElement)) continue;
+      if (node.nodeName === "heading") {
+        const target = targets[index++];
+        if (target && !validHeadingId(node.getAttribute("id")))
+          node.setAttribute("id", target.id);
+      }
+      walk(node.toArray() as (Y.XmlElement | Y.XmlText)[]);
+    }
+  }
+  document.transact(
+    () =>
+      walk(
+        document.getXmlFragment("default").toArray() as (
+          Y.XmlElement | Y.XmlText
+        )[],
+      ),
+    "heading-identity",
+  );
+}
+async function openDocumentLink(fromSlash = false) {
+  if (!editor.value?.isEditable) return;
+  // Native selectionchange can arrive after a fast shortcut; use the actual
+  // selection in this editor instead of replacing a stale/collapsed range.
+  const selected = window.getSelection(),
+    view = editor.value.view;
+  if (
+    !fromSlash &&
+    selected?.anchorNode &&
+    selected.focusNode &&
+    view.dom.contains(selected.anchorNode) &&
+    view.dom.contains(selected.focusNode)
+  ) {
+    const anchor = view.posAtDOM(selected.anchorNode, selected.anchorOffset),
+      focus = view.posAtDOM(selected.focusNode, selected.focusOffset);
+    editor.value.commands.setTextSelection({
+      from: Math.min(anchor, focus),
+      to: Math.max(anchor, focus),
+    });
+  }
+  documentLinkRange = fromSlash
+    ? { ...slashRange }
+    : {
+        from: editor.value.state.selection.from,
+        to: editor.value.state.selection.to,
+      };
+  selectedLinkText.value = fromSlash
+    ? ""
+    : editor.value.state.doc.textBetween(
+        documentLinkRange.from,
+        documentLinkRange.to,
+        " ",
+      );
+  slashOpen.value = false;
+  linkSelectionActive = true;
+  try {
+    await flush();
+    showDocumentLink.value = true;
+  } catch {
+    linkSelectionActive = false;
+    linkMessage.value = "Save pending changes before adding a link.";
+  }
+}
+function insertDocumentLink(target: {
+  pageId: string;
+  headingId: string;
+  label: string;
+}) {
+  if (!editor.value?.isEditable) return;
+  linkSelectionActive = false;
+  if (
+    documentLinkRange.from < documentLinkRange.to &&
+    selectedLinkText.value &&
+    target.label.trim() === selectedLinkText.value.trim()
+  ) {
+    editor.value
+      .chain()
+      .focus()
+      .setTextSelection(documentLinkRange)
+      .setLink({
+        href: pageLink(target.pageId, target.headingId),
+        target: "_self",
+        rel: null,
+      })
+      .run();
+    showDocumentLink.value = false;
+    return;
+  }
+  editor.value
+    .chain()
+    .focus()
+    .insertContentAt(documentLinkRange, {
+      type: "text",
+      text: target.label,
+      marks: [
+        {
+          type: "link",
+          attrs: {
+            href: pageLink(target.pageId, target.headingId),
+            target: "_self",
+            rel: null,
+          },
+        },
+      ],
+    })
+    .run();
+  showDocumentLink.value = false;
+}
+function closeDocumentLink() {
+  showDocumentLink.value = false;
+  linkSelectionActive = false;
+  editor.value?.commands.focus();
+}
+async function copyHeadingLink(id: string) {
+  try {
+    if (!readOnly.value) await flush();
+    await navigator.clipboard.writeText(
+      new URL(pageLink(props.pageId, id), window.location.href).toString(),
+    );
+    linkMessage.value = "Heading link copied.";
+  } catch {
+    linkMessage.value =
+      "Link could not be copied. Try again after changes are saved.";
+  }
+}
+async function revealHeading() {
+  headingMessage.value = "";
+  if (editor.value) editor.value.view.updateState(editor.value.state);
+  if (!props.targetHeading || !editor.value || !synced.value) return;
+  await nextTick();
+  const heading = root.value?.querySelector<HTMLElement>(
+    '[id="h-' + props.targetHeading + '"]',
+  );
+  if (!heading) {
+    headingMessage.value =
+      "This heading is no longer in this document. You can still read the document.";
+    return;
+  }
+  heading.scrollIntoView({
+    block: "start",
+    behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      ? "auto"
+      : "smooth",
+  });
+  heading.focus({ preventScroll: true });
+}
+watch(
+  [() => props.targetHeading, () => props.headingVisit, editor, synced],
+  () => void revealHeading(),
+  {
+    flush: "post",
+  },
+);
 const linkDialog = ref<HTMLDialogElement>(),
   linkSpaces = ref<any[]>([]),
   linkDatabases = ref<any[]>([]),
@@ -336,8 +595,8 @@ const provider = new HocuspocusProvider({
     status.value = s;
   },
   onSynced({ state }) {
-    if (state) initialize();
     synced.value = state;
+    if (state) initialize();
   },
   onUnsyncedChanges({ number }) {
     unsynced.value = number;
@@ -392,24 +651,49 @@ function beforeUnload(event: BeforeUnloadEvent) {
   event.returnValue = "";
 }
 onMounted(() => window.addEventListener("beforeunload", beforeUnload));
-watch([status, synced, readOnly, editor, denied, () => props.paused], () =>
+onMounted(() => {
+  window.addEventListener("scroll", positionSlash, true);
+  window.addEventListener("resize", positionSlash);
+});
+watch([status, synced, readOnly, editor, denied, () => props.paused], () => {
+  persistInitialHeadingIds();
   editor.value?.setEditable(
     status.value === "connected" &&
       synced.value &&
       !readOnly.value &&
       !denied.value &&
       !props.paused,
-  ),
-);
+  );
+});
 onBeforeUnmount(() => {
   window.removeEventListener("beforeunload", beforeUnload);
+  window.removeEventListener("scroll", positionSlash, true);
+  window.removeEventListener("resize", positionSlash);
   editor.value?.destroy();
   provider.destroy();
   document.destroy();
 });
 </script>
 <template>
-  <div class="block-editor" :data-revision="tick">
+  <div ref="root" class="block-editor" :data-revision="tick">
+    <div v-if="linkMessage" class="editor-link-toast" role="status">
+      <span>{{ linkMessage }}</span><button
+        class="ghost"
+        aria-label="Dismiss link notification"
+        @click="linkMessage = ''"
+      >
+        ×
+      </button>
+    </div>
+    <p v-if="headingMessage" class="heading-link-notice" role="status">
+      {{ headingMessage }}
+    </p>
+    <DocumentLinkPicker
+      :open="showDocumentLink"
+      :selected-text="selectedLinkText"
+      @close="closeDocumentLink"
+      @select="insertDocumentLink"
+    />
     <div class="editor-status">
       <span role="status">{{ saveStatus }}</span><span
         >{{ peers.length }} present</span
@@ -511,6 +795,14 @@ onBeforeUnmount(() => {
     <template v-if="editor"
       ><div class="editor-toolbar" aria-label="Text formatting">
         <button
+          title="Link to document · Ctrl+K"
+          aria-label="Link to document"
+          :disabled="!editor.isEditable"
+          @click="openDocumentLink()"
+        >
+          <AppIcon name="link" :size="16" />
+        </button>
+        <button
           title="Link a database"
           :disabled="!editor.isEditable"
           @click="openLinkPicker"
@@ -586,6 +878,7 @@ onBeforeUnmount(() => {
       <div
         v-if="slashOpen"
         class="slash-menu"
+        :style="slashStyle"
         role="listbox"
         aria-label="Insert block"
       >
@@ -954,5 +1247,77 @@ button:disabled {
   .editor-status {
     font-size: 0.68rem;
   }
+}
+</style>
+<style>
+.block-editor .tiptap h1,
+.block-editor .tiptap h2,
+.block-editor .tiptap h3 {
+  position: relative;
+  scroll-margin-top: 80px;
+}
+.block-editor .tiptap [data-link-target] {
+  background: var(--accent-soft);
+  border-radius: 4px;
+  outline: 1px solid var(--accent);
+  outline-offset: 6px;
+}
+.heading-permalink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  margin-left: 8px;
+  min-height: 24px;
+  width: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 16px;
+  opacity: 0;
+  user-select: none;
+}
+.tiptap h1:hover .heading-permalink,
+.tiptap h2:hover .heading-permalink,
+.tiptap h3:hover .heading-permalink,
+.heading-permalink:focus-visible {
+  opacity: 1;
+}
+.heading-link-notice {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+@media (max-width: 760px) {
+  .heading-permalink {
+    opacity: 1;
+  }
+  .editor-toolbar button:has(> span:not(.sr-only)) span {
+    display: none;
+  }
+}
+</style>
+<style>
+.editor-link-toast {
+  position: fixed;
+  z-index: 70;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100vw - 32px);
+  background: var(--elevated);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 12px;
+  box-shadow: var(--shadow);
+  font-size: 0.85rem;
 }
 </style>

@@ -142,6 +142,7 @@ try {
           "tests/local-preview.test.mjs",
           "tests/ui-workflow.test.mjs",
           "tests/search.test.mjs",
+          "tests/document-links.test.mjs",
         ];
   const tests = spawn(
     process.execPath,

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { pageNavigationKey } from "./composables/pageNavigation";
+import { headingFromHash, validHeadingId } from "@orvyn/editor/links";
 const route = useRoute(),
   router = useRouter();
 const booting = ref(true),
@@ -12,6 +13,8 @@ const booting = ref(true),
   pages = ref<any[]>([]),
   page = ref<any>(),
   pageLoading = ref(false),
+  targetHeading = ref(""),
+  headingVisit = ref(0),
   navigating = ref(false),
   pending = ref(0),
   error = ref(""),
@@ -238,6 +241,7 @@ function toggleExpanded(id: string) {
 async function updateLocation() {
   await router.push({
     path: "/",
+    hash: targetHeading.value && page.value ? "#h-" + targetHeading.value : "",
     query: space.value
       ? {
           space: space.value.id,
@@ -265,6 +269,8 @@ async function refreshMe() {
 }
 async function login(action: string) {
   if (busy.value || !authForm.value?.reportValidity()) return;
+  const requestedPage = String(route.query.page || ""),
+    requestedHeading = headingFromHash(route.hash);
   await run(async () => {
     await api("auth/" + action, "POST", {
       email: email.value,
@@ -276,7 +282,8 @@ async function login(action: string) {
     spaces.value = list;
     signedIn.value = true;
     const pref = preferences();
-    if (list.length) {
+    if (requestedPage) await openPage(requestedPage, true, requestedHeading);
+    else if (list.length) {
       const selected = list.find((s: any) => s.id === pref.spaceId) || list[0];
       await select(selected);
     }
@@ -318,6 +325,7 @@ async function select(s: any, location = true) {
   if (mobile.value) sidebarOpen.value = false;
 }
 function edit(p: any) {
+  targetHeading.value = "";
   page.value = p;
   serverTitle.value = p.title;
   titleStatus.value = "";
@@ -341,7 +349,7 @@ function edit(p: any) {
   );
   persist();
 }
-async function openPage(id: string, location = true) {
+async function openPage(id: string, location = true, headingId = "") {
   await beforeNavigate();
   pageLoading.value = true;
   try {
@@ -356,6 +364,8 @@ async function openPage(id: string, location = true) {
       await select(s, false);
     }
     edit(p);
+    targetHeading.value = validHeadingId(headingId) ? headingId : "";
+    if (targetHeading.value) headingVisit.value++;
     view.value = "workspace";
     if (location) await updateLocation();
     if (mobile.value) sidebarOpen.value = false;
@@ -363,7 +373,10 @@ async function openPage(id: string, location = true) {
     pageLoading.value = false;
   }
 }
-provide(pageNavigationKey, (id) => void navigate(() => openPage(id)));
+provide(
+  pageNavigationKey,
+  (id, headingId = "") => void navigate(() => openPage(id, true, headingId)),
+);
 async function save() {
   clearTimeout(titleTimer);
   if (titleConflict.value) return;
@@ -633,10 +646,17 @@ async function fromHistory() {
   if (!signedIn.value) return;
   const query = new URL(window.location.href).searchParams,
     s = spaces.value.find((s) => s.id === query.get("space"));
-  if (s) {
+  if (query.get("page")) {
+    await navigate(() =>
+      openPage(
+        query.get("page")!,
+        false,
+        headingFromHash(window.location.hash),
+      ),
+    );
+  } else if (s) {
     await run(async () => {
       await select(s, false);
-      if (query.get("page")) await openPage(query.get("page")!, false);
     });
   } else {
     page.value = undefined;
@@ -661,7 +681,11 @@ async function readAccountLink(hash = route.hash) {
 watch(
   () => route.hash,
   (hash) => {
-    if (import.meta.client) void readAccountLink(hash);
+    if (import.meta.client) {
+      void readAccountLink(hash);
+      if (page.value?.id === route.query.page)
+        targetHeading.value = headingFromHash(hash);
+    }
   },
 );
 async function completeLink() {
@@ -723,11 +747,15 @@ onMounted(async () => {
         spaces.value.find((s) => s.id === requestedSpace) ||
         spaces.value.find((s) => s.id === pref.spaceId) ||
         spaces.value[0];
-    if (s)
+    if (s || requestedPage)
       await run(async () => {
-        await select(s, false);
-        if (requestedPage && s.id === requestedSpace)
-          await openPage(requestedPage, false);
+        if (s) await select(s, false);
+        if (requestedPage)
+          await openPage(
+            requestedPage,
+            false,
+            headingFromHash(window.location.hash),
+          );
       });
   }
   booting.value = false;
@@ -1375,6 +1403,8 @@ onBeforeUnmount(() => {
             :page-id="page.id"
             :space-id="page.space_id"
             :paused="navigating || pageLoading"
+            :target-heading="targetHeading"
+            :heading-visit="headingVisit"
             :user="me"
           />
           <section v-if="childPages.length" class="page-subpages">

@@ -2,11 +2,11 @@
 
 The workspace has a persistent sidebar, a collapsible page hierarchy, breadcrumbs and a document area. Creating a page opens and focuses its title immediately. Title changes save on blur or after a short pause; navigation waits for pending title writes and acknowledged document changes. A failed save keeps the current page open. Concurrent title changes offer an explicit choice to use the saved title or keep the local title, and block navigation until resolved. Closing a tab with an unsaved title or unacknowledged document changes prompts the browser's unsaved-changes confirmation.
 
-Search (`Ctrl/Cmd K`) queries titles across the signed-in user's authorized spaces. Results are filtered by the same inherited page permissions as opening a page. Trashed and inaccessible pages are excluded. The URL identifies the current space and page, so reloading or returning through browser history opens the same authorized page.
+Workspace search (`Ctrl/Cmd K` outside the document editor) queries titles across the signed-in user's authorized spaces. Results are filtered by the same inherited page permissions as opening a page. Trashed and inaccessible pages are excluded. The URL identifies the current space and page, so reloading or returning through browser history opens the same authorized page.
 
 The sidebar shows favorites and recent pages. Only their IDs are stored in per-account device preferences; labels come from the current authorized page list. These preferences are not yet synchronized across devices. Pages outside the currently loaded sidebar batch can be found through search or by loading more pages.
 
-Page actions contain width, attachments, history, permissions, move and trash operations. New databases and spaces use dialogs. Database views retain real filters, sorting, property editing, pagination, live updates, record pages and imports/exports. Person, multi-select and attachment fields use searchable multiple-choice popovers. Board cards have both drag controls and a keyboard-accessible status selector.
+The document editor supports slash commands and internal links to documents and stable headings; Ctrl/Cmd K inside the editor opens the link picker (see DOCUMENT_LINKS.md). Page actions contain width, attachments, history, permissions, move and trash operations. New databases and spaces use dialogs. Database views retain real filters, sorting, property editing, pagination, live updates, record pages and imports/exports. Person, multi-select and attachment fields use searchable multiple-choice popovers. Board cards have both drag controls and a keyboard-accessible status selector.
 
 ## Design system
 

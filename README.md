@@ -22,3 +22,5 @@ Private attachments: [docs/FILES.md](docs/FILES.md). Recovery evidence and remai
 Structured databases and tested view behavior: [docs/DATABASES.md](docs/DATABASES.md).
 
 Workspace navigation, themes, keyboard behavior and UI verification: [docs/UI.md](docs/UI.md).
+
+Slash commands and links to documents or specific headings: [docs/DOCUMENT_LINKS.md](docs/DOCUMENT_LINKS.md).

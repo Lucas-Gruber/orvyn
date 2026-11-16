@@ -1,4 +1,8 @@
-import { normalizeDocument, documentSchemaVersion } from "@orvyn/editor";
+import {
+  normalizeDocument,
+  documentSchemaVersion,
+  documentHeadings,
+} from "@orvyn/editor";
 import {
   Module,
   Controller,
@@ -87,6 +91,13 @@ class PagesController {
   }
   @Get("pages/:id") async get(@Req() req: any, @Param("id") id: string) {
     return pageAccess(db, await user(req), id);
+  }
+  @Get("pages/:id/headings") async headings(
+    @Req() req: any,
+    @Param("id") id: string,
+  ) {
+    const page = await pageAccess(db, await user(req), id);
+    return documentHeadings(page.document);
   }
   @Post("spaces/:id/pages") async create(
     @Req() req: any,

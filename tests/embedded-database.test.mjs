@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { chromium, expect } from "@playwright/test";
 import { request, sessionCookie, Pool, base } from "./helpers.mjs";
 import { chooseSpace, openPageFromSidebar } from "./ui-helpers.mjs";
+import { documentSchemaVersion } from "../packages/editor/dist/index.js";
 test("linked database blocks persist independent views and never grant access to their source", async () => {
   const db = new Pool({ connectionString: process.env.DATABASE_URL }),
     browser = await chromium.launch({
@@ -137,7 +138,7 @@ test("linked database blocks persist independent views and never grant access to
     const persisted = (
       await request("pages/" + document.id, { cookie: owner.cookie })
     ).data;
-    assert.equal(persisted.document_schema_version, 2);
+    assert.equal(persisted.document_schema_version, documentSchemaVersion);
     assert.ok(
       persisted.document.content.some(
         (n) => n.type === "orvynDatabase" && n.attrs.databaseId === source.id,
