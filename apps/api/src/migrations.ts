@@ -1,5 +1,6 @@
 import { Pool, type PoolClient } from "pg";
 import { documentReferences } from "@orvyn/editor/links";
+import { templateMigration } from "./databases/templates/migration.js";
 export const migrations = [
   {
     version: 1,
@@ -601,6 +602,7 @@ BEGIN
 EXCEPTION WHEN numeric_value_out_of_range THEN RETURN NULL;
 END $$;`,
   },
+  { version: 31, sql: templateMigration },
 ] as const;
 
 export async function migrate(pool: Pool, target = migrations.at(-1)!.version) {

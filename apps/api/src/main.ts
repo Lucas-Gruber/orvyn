@@ -13,6 +13,7 @@ import { SpacesModule } from "./spaces.module.js";
 import { PagesModule } from "./pages.module.js";
 import { HealthModule } from "./health.module.js";
 import { DatabaseRelationsModule } from "./database-relations.module.js";
+import { DatabaseTemplatesModule } from "./database-templates.module.js";
 import { ActivityModule } from "./activity.module.js";
 import { NotificationsModule } from "./notifications.module.js";
 import { CommentsModule } from "./comments.module.js";
@@ -30,6 +31,7 @@ import { CommentsModule } from "./comments.module.js";
     NotificationsModule,
     ActivityModule,
     DatabaseRelationsModule,
+    DatabaseTemplatesModule,
   ],
 })
 class App {}

@@ -436,6 +436,49 @@ class DatabasesController {
       };
     });
   }
+  @Get("databases/:id/records/:record") async getRecord(
+    @Req() req: any,
+    @Param("id") id: string,
+    @Param("record") recordId: string,
+  ) {
+    const uid = await user(req);
+    return transaction(async (c) => {
+      await c.query(
+        "SELECT s.id FROM spaces s JOIN pages p ON p.space_id=s.id WHERE p.id::text=$1 FOR SHARE OF s",
+        [id],
+      );
+      const context = await database(c, uid, id),
+        record = await recordSnapshot(
+          c,
+          uid,
+          context.page.id,
+          recordId,
+          context.properties,
+        ),
+        relationProperties = relationWatchProperties(
+          context.properties,
+          context.properties,
+        );
+      return {
+        record,
+        properties: context.properties,
+        schemaVersion: context.schemaVersion,
+        relationProperties,
+        fingerprint: databaseFingerprint(
+          context.schemaVersion,
+          [record],
+          record.relations || [],
+          relationProperties,
+        ),
+        database: {
+          id: context.page.id,
+          title: context.page.title,
+          spaceId: context.page.space_id,
+          accessRank: context.page.access_rank,
+        },
+      };
+    });
+  }
   @Post("databases/:id/records") async addRecord(
     @Req() req: any,
     @Param("id") id: string,

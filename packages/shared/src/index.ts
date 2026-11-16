@@ -55,6 +55,7 @@ export const viewTypes = [
   "Gallery",
 ] as const;
 export type ViewType = (typeof viewTypes)[number];
+export type RecordOpenMode = "side" | "modal" | "page";
 export const propertyInput = z
   .object({
     name: z.string().trim().min(1).max(80),
@@ -91,6 +92,7 @@ export const sortInput = z
   .strict();
 export const viewConfigInput = z
   .object({
+    openMode: z.enum(["side", "modal", "page"]).optional(),
     filters: z.array(filterInput).max(20).default([]),
     sorts: z.array(sortInput).max(3).default([]),
     visibleProperties: z.array(z.uuid()).max(50).default([]),
@@ -193,3 +195,5 @@ export {
   rollupTargetSupported,
 } from "./rollup.js";
 export type { RollupConfig } from "./rollup.js";
+export { cloneDatabaseSchema } from "./database-templates.js";
+export type { TemplateView } from "./database-templates.js";
