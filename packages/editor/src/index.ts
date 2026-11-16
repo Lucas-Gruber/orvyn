@@ -21,8 +21,9 @@ import { ImageBlock, FileBlock } from "./asset-blocks.js";
 import { PagePreviewBlock } from "./page-preview.js";
 import { VideoEmbedBlock } from "./video-embed.js";
 import { validVideo } from "./embed-model.js";
+import { ColumnsBlock, ColumnBlock } from "./columns.js";
 const lowlight = createLowlight(common);
-export const documentSchemaVersion = 7;
+export const documentSchemaVersion = 8;
 export function editorExtensions(collaborative = false): AnyExtension[] {
   return [
     StarterKit.configure({
@@ -46,6 +47,8 @@ export function editorExtensions(collaborative = false): AnyExtension[] {
     FileBlock,
     PagePreviewBlock,
     VideoEmbedBlock,
+    ColumnsBlock,
+    ColumnBlock,
     CodeBlockLowlight.configure({ lowlight, defaultLanguage: "plaintext" }),
   ];
 }
@@ -203,6 +206,7 @@ export { default as TaskItem } from "@tiptap/extension-task-item";
 export { TableKit } from "@tiptap/extension-table";
 
 export { DatabaseBlock } from "./database-node.js";
+export { ColumnsBlock, ColumnBlock } from "./columns.js";
 export {
   CalloutBlock,
   ToggleBlock,

@@ -1,9 +1,25 @@
-import { Node, mergeAttributes } from "@tiptap/core";
+import { Node, mergeAttributes, type Editor } from "@tiptap/core";
 import { TextSelection } from "@tiptap/pm/state";
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
     orvynBlocks: { insertToggle: () => ReturnType };
   }
+}
+export function exitStructuredBlock(editor: Editor, name: string) {
+  const { $from } = editor.state.selection;
+  for (let depth = $from.depth; depth > 0; depth--) {
+    const type = $from.node(depth).type.name;
+    if (["orvynCallout", "orvynToggle", "orvynColumns"].includes(type))
+      return (
+        type === name &&
+        editor
+          .chain()
+          .insertContentAt($from.after(depth), { type: "paragraph" })
+          .focus()
+          .run()
+      );
+  }
+  return false;
 }
 export const calloutTones = [
   "info",
@@ -38,17 +54,7 @@ export const CalloutBlock = Node.create({
   },
   addKeyboardShortcuts() {
     return {
-      "Mod-Enter": () => {
-        const { $from } = this.editor.state.selection;
-        for (let d = $from.depth; d > 0; d--)
-          if ($from.node(d).type.name === this.name)
-            return this.editor
-              .chain()
-              .insertContentAt($from.after(d), { type: "paragraph" })
-              .focus()
-              .run();
-        return false;
-      },
+      "Mod-Enter": () => exitStructuredBlock(this.editor, this.name),
     };
   },
 });
@@ -141,17 +147,7 @@ export const ToggleBlock = Node.create({
   },
   addKeyboardShortcuts() {
     return {
-      "Mod-Enter": () => {
-        const { $from } = this.editor.state.selection;
-        for (let depth = $from.depth; depth > 0; depth--)
-          if ($from.node(depth).type.name === this.name)
-            return this.editor
-              .chain()
-              .insertContentAt($from.after(depth), { type: "paragraph" })
-              .focus()
-              .run();
-        return false;
-      },
+      "Mod-Enter": () => exitStructuredBlock(this.editor, this.name),
     };
   },
   parseHTML() {

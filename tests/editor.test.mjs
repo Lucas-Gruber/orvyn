@@ -390,3 +390,36 @@ test("video embeds allow only canonical provider resource IDs and never arbitrar
       /video embed/,
     );
 });
+test("columns preserve nested blocks and reject invalid column counts and standalone cells", () => {
+  const cell = (text) => ({
+    type: "orvynColumn",
+    content: [{ type: "paragraph", content: [{ type: "text", text }] }],
+  });
+  const doc = normalizeDocument({
+      type: "doc",
+      content: [
+        { type: "orvynColumns", content: [cell("Left"), cell("Right")] },
+        {
+          type: "orvynColumns",
+          content: [cell("One"), cell("Two"), cell("Three")],
+        },
+      ],
+    }),
+    ydoc = documentToYDoc(doc);
+  try {
+    assert.deepEqual(yDocToDocument(ydoc), doc);
+  } finally {
+    ydoc.destroy();
+  }
+  for (const content of [
+    [cell("Invalid")],
+    [{ type: "orvynColumns", content: [cell("One")] }],
+    [
+      {
+        type: "orvynColumns",
+        content: Array.from({ length: 4 }, () => cell("Too many")),
+      },
+    ],
+  ])
+    assert.throws(() => validateDocument({ type: "doc", content }));
+});

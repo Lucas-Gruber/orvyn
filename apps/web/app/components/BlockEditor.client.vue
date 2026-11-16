@@ -11,6 +11,7 @@ import CodeBlockNode from "./CodeBlockNode.vue";
 import AssetNode from "./AssetNode.vue";
 import PagePreviewNode from "./PagePreviewNode.vue";
 import VideoEmbedNode from "./VideoEmbedNode.vue";
+import ColumnsNode from "./ColumnsNode.vue";
 import { editorPageKey } from "../composables/editorContext";
 import {
   editorExtensions,
@@ -84,6 +85,16 @@ interface SlashCommand {
   aliases?: string[];
 }
 const commands: SlashCommand[] = [
+  {
+    label: "2 columns",
+    aliases: ["spalten"],
+    run: (e) => e.chain().focus().insertColumns(2).run(),
+  },
+  {
+    label: "3 columns",
+    aliases: ["spalten"],
+    run: (e) => e.chain().focus().insertColumns(3).run(),
+  },
   {
     label: "Embed",
     aliases: ["video", "einbetten"],
@@ -234,6 +245,7 @@ function initialize() {
           "orvynFile",
           "orvynPagePreview",
           "orvynVideo",
+          "orvynColumns",
         ].includes(extension.name)
           ? extension.extend({
               addNodeView() {
@@ -248,6 +260,7 @@ function initialize() {
                       orvynFile: AssetNode,
                       orvynPagePreview: PagePreviewNode,
                       orvynVideo: VideoEmbedNode,
+                      orvynColumns: ColumnsNode,
                     } as Record<string, any>
                   )[extension.name],
                 );
@@ -989,7 +1002,8 @@ onBeforeUnmount(() => {
       <button type="button" @click="linkDialog?.close()">Cancel</button>
     </dialog>
     <template v-if="editor"
-      ><div class="editor-toolbar" aria-label="Text formatting">
+      ><FloatingFormatMenu :editor="editor" @link="openDocumentLink()" />
+      <div class="editor-toolbar" aria-label="Text formatting">
         <button
           title="Link to document · Ctrl+K"
           aria-label="Link to document"

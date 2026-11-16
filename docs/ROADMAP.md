@@ -8,7 +8,8 @@ Work through these areas in order, preserving working features and committing/pu
    - [x] Private images/files embedded in document content.
    - [x] Internal document/heading preview cards.
    - [x] Opt-in YouTube/Vimeo/Loom video embeds.
-   - [ ] Columns, floating formatting toolbar and multi-block selection/movement.
+   - [x] Two/three-column layouts and a floating selection formatting toolbar.
+   - [ ] Multi-block selection/movement and drag handles.
    - [ ] Page/space icons and covers, folders and hierarchy dragging.
 2. Collaboration
    - [ ] Page/thread/text-anchored comments, resolve/reopen and mentions.
