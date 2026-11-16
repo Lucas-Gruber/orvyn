@@ -366,6 +366,19 @@ CREATE TRIGGER record_file_notify AFTER INSERT OR UPDATE OR DELETE ON files FOR 
     version: 20,
     sql: `ALTER TABLE pages ALTER COLUMN document_schema_version SET DEFAULT 8;`,
   },
+  {
+    version: 21,
+    sql: `
+ALTER TABLE pages ADD COLUMN icon text CHECK(icon IS NULL OR char_length(icon)<=64);
+ALTER TABLE pages ADD COLUMN cover_preset text CHECK(cover_preset IN ('aurora','dusk','meadow','ocean','sand','ink'));
+ALTER TABLE pages ADD COLUMN cover_file_id uuid REFERENCES files(id) ON DELETE SET NULL;
+ALTER TABLE pages ADD COLUMN appearance_version integer NOT NULL DEFAULT 1;
+ALTER TABLE pages ADD CONSTRAINT page_one_cover CHECK(cover_preset IS NULL OR cover_file_id IS NULL);
+ALTER TABLE spaces ADD COLUMN icon text CHECK(icon IS NULL OR char_length(icon)<=64);
+ALTER TABLE spaces ADD COLUMN cover_preset text CHECK(cover_preset IN ('aurora','dusk','meadow','ocean','sand','ink'));
+ALTER TABLE spaces ADD COLUMN appearance_version integer NOT NULL DEFAULT 1;
+`,
+  },
 ] as const;
 
 export async function migrate(pool: Pool, target = migrations.at(-1)!.version) {

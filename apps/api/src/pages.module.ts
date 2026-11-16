@@ -24,6 +24,7 @@ import {
   Query,
 } from "@nestjs/common";
 import { db, fail, text, mutation, user } from "./runtime.js";
+import { appearanceInput } from "@orvyn/shared";
 import { transaction, audit } from "./auth/security.js";
 import {
   spaceAccess,
@@ -57,7 +58,7 @@ class PagesController {
     const query = (input as string).trim();
     return (
       await db.query(
-        `SELECT p.id,p.title,p.parent_id,p.kind,p.space_id,s.name AS space_name,p.updated_at
+        `SELECT p.id,p.title,p.icon,p.parent_id,p.kind,p.space_id,s.name AS space_name,p.updated_at
       FROM pages p JOIN spaces s ON s.id=p.space_id
       WHERE (s.owner_id=$1 OR EXISTS(SELECT 1 FROM space_members m WHERE m.space_id=s.id AND m.user_id=$1))
       AND orvyn_page_role(p.id,$1)>=10 AND strpos(lower(p.title),lower($2))>0
@@ -261,6 +262,36 @@ class PagesController {
       );
       await audit(c, uid, "page.title_updated");
       return r.rows[0];
+    });
+  }
+  @Patch("pages/:id/appearance") async appearance(
+    @Req() req: any,
+    @Param("id") id: string,
+    @Body() body: any,
+  ) {
+    mutation(req);
+    const uid = await user(req),
+      parsed = appearanceInput.safeParse(body);
+    if (!parsed.success) fail(400, "Choose one emoji and a supported cover");
+    const input = parsed.data!;
+    return transaction(async (c) => {
+      const p = await pageWrite(c, uid, id);
+      if (input.appearanceVersion !== p.appearance_version)
+        fail(409, "Appearance changed; reload before saving");
+      if (input.coverFileId && input.coverFileId !== p.cover_file_id) {
+        const file = await c.query(
+          "SELECT 1 FROM files WHERE id=$1 AND page_id=$2 AND state='ready' AND media_type IN ('image/png','image/jpeg','image/gif','image/webp')",
+          [input.coverFileId, p.id],
+        );
+        if (!file.rowCount)
+          fail(400, "Choose an available image attached to this page");
+      }
+      const saved = await c.query(
+        "UPDATE pages SET icon=$2,cover_preset=$3,cover_file_id=$4,appearance_version=appearance_version+1,version=version+1,last_edited_by=$5 WHERE id=$1 RETURNING id,icon,cover_preset,cover_file_id,appearance_version",
+        [p.id, input.icon, input.coverPreset, input.coverFileId, uid],
+      );
+      await audit(c, uid, "page.appearance_updated");
+      return saved.rows[0];
     });
   }
   @Get("pages/:id/permissions") async permissions(

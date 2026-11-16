@@ -37,6 +37,7 @@ const sidebarOpen = ref(true),
   showMove = ref(false),
   showDelete = ref(false),
   showAppearance = ref(false),
+  showPageAppearance = ref(false),
   showAttachments = ref(false),
   fullWidth = ref(false),
   moveParent = ref(""),
@@ -325,6 +326,7 @@ async function select(s: any, location = true) {
   if (mobile.value) sidebarOpen.value = false;
 }
 function edit(p: any) {
+  showPageAppearance.value = false;
   targetHeading.value = "";
   page.value = p;
   serverTitle.value = p.title;
@@ -430,6 +432,11 @@ async function save() {
   await titleJob;
   if (page.value?.id === current.id && current.title !== serverTitle.value)
     await save();
+}
+function pageAppearanceChanged(value: any) {
+  const entry = pages.value.find((p) => p.id === value.id);
+  if (entry) Object.assign(entry, value);
+  if (page.value?.id === value.id) Object.assign(page.value, value);
 }
 async function beforeNavigate() {
   await save();
@@ -983,9 +990,14 @@ onBeforeUnmount(() => {
       </div>
       <UiMenu label="Switch space" align="left" wide
         ><template #trigger
-          ><span class="space-letter">{{
-            space?.name?.slice(0, 1).toUpperCase() || "W"
-          }}</span
+          ><span class="space-letter"
+            ><PageSymbol
+              v-if="space?.icon"
+              :icon="space.icon"
+              :size="19"
+            /><template v-else>{{
+              space?.name?.slice(0, 1).toUpperCase() || "W"
+            }}</template></span
           ><strong>{{ space?.name || "Your workspace" }}</strong
           ><AppIcon name="chevronDown" :size="14"
         /></template>
@@ -996,7 +1008,8 @@ onBeforeUnmount(() => {
           role="menuitem"
           @click="navigate(() => select(s))"
         >
-          <AppIcon
+          <PageSymbol v-if="s.icon" :icon="s.icon" :size="15" /><AppIcon
+            v-else
             :name="s.kind === 'team' ? 'users' : 'lock'"
             :size="15"
           /><span>{{ s.name }}</span
@@ -1026,10 +1039,9 @@ onBeforeUnmount(() => {
             class="sidebar-link"
             @click="navigate(() => openPage(p.id))"
           >
-            <AppIcon
-              :name="p.kind === 'database' ? 'database' : 'file'"
-              :size="15"
-            /><span>{{ p.title }}</span>
+            <PageSymbol :icon="p.icon" :kind="p.kind" :size="15" /><span>{{
+              p.title
+            }}</span>
           </button>
         </section>
         <section v-if="recentPages.length" class="sidebar-section">
@@ -1040,10 +1052,9 @@ onBeforeUnmount(() => {
             class="sidebar-link"
             @click="navigate(() => openPage(p.id))"
           >
-            <AppIcon
-              :name="p.kind === 'database' ? 'database' : 'file'"
-              :size="15"
-            /><span>{{ p.title }}</span>
+            <PageSymbol :icon="p.icon" :kind="p.kind" :size="15" /><span>{{
+              p.title
+            }}</span>
           </button>
         </section>
         <section v-if="space" class="sidebar-section">
@@ -1200,6 +1211,12 @@ onBeforeUnmount(() => {
             <AppIcon name="users" :size="15" />Page permissions</button
           ><UiMenu label="Page actions"
             ><button
+              v-if="page.access_rank >= 30"
+              role="menuitem"
+              @click="showPageAppearance = true"
+            >
+              <AppIcon name="palette" :size="16" />Icon and cover</button
+            ><button
               v-if="page.kind === 'record' && page.parent_id"
               role="menuitem"
               @click="navigate(() => openPage(page.parent_id))"
@@ -1342,6 +1359,7 @@ onBeforeUnmount(() => {
           :key="page.id"
           :database-id="page.id"
           :initial-title="page.title"
+          :appearance="page"
           @open="navigate(() => openPage($event))"
           @changed="run(refreshSpace)"
         />
@@ -1357,7 +1375,30 @@ onBeforeUnmount(() => {
           >
             <AppIcon name="back" :size="15" />Back to database
           </button>
-          <div class="page-symbol"><AppIcon name="file" :size="48" /></div>
+          <CoverBanner
+            :preset="page.cover_preset"
+            :file-id="page.cover_file_id"
+          />
+          <div class="page-decoration-controls">
+            <button
+              v-if="page.access_rank >= 30"
+              class="page-symbol page-symbol-button"
+              aria-label="Change page icon and cover"
+              @click="showPageAppearance = true"
+            >
+              <PageSymbol :icon="page.icon" :kind="page.kind" :size="48" />
+            </button>
+            <div v-else class="page-symbol">
+              <PageSymbol :icon="page.icon" :kind="page.kind" :size="48" />
+            </div>
+            <button
+              v-if="page.access_rank >= 30"
+              class="ghost page-cover-action"
+              @click="showPageAppearance = true"
+            >
+              Icon and cover
+            </button>
+          </div>
           <div class="page-heading">
             <label for="page-title" class="sr-only">Page title</label
             ><input
@@ -1414,10 +1455,9 @@ onBeforeUnmount(() => {
               :key="child.id"
               @click="navigate(() => openPage(child.id))"
             >
-              <AppIcon
-                :name="child.kind === 'database' ? 'database' : 'file'"
-                :size="17"
-              />{{ child.title }}
+              <PageSymbol :icon="child.icon" :kind="child.kind" :size="17" />{{
+                child.title
+              }}
             </button>
           </section>
           <PageBacklinks :key="page.id" :page-id="page.id" />
@@ -1442,6 +1482,7 @@ onBeforeUnmount(() => {
           </details>
         </article>
         <section v-else class="space-home">
+          <CoverBanner :preset="space.cover_preset" />
           <div class="home-overline">
             <AppIcon
               :name="space.kind === 'team' ? 'users' : 'lock'"
@@ -1454,7 +1495,11 @@ onBeforeUnmount(() => {
           </div>
           <div class="home-header">
             <div>
-              <h1>{{ space.name }}</h1>
+              <h1>
+                <PageSymbol v-if="space.icon" :icon="space.icon" :size="34" />{{
+                  space.name
+                }}
+              </h1>
               <p>
                 {{
                   pages.length
@@ -1491,9 +1536,7 @@ onBeforeUnmount(() => {
                 @click="navigate(() => openPage(p.id))"
               >
                 <span class="card-symbol"
-                  ><AppIcon
-                    :name="p.kind === 'database' ? 'database' : 'file'"
-                    :size="20" /></span
+                  ><PageSymbol :icon="p.icon" :kind="p.kind" :size="20" /></span
                 ><strong>{{ p.title }}</strong
                 ><small
                   ><AppIcon
@@ -1520,10 +1563,9 @@ onBeforeUnmount(() => {
                 :aria-label="'Open ' + p.title"
                 @click="navigate(() => openPage(p.id))"
               >
-                <AppIcon
-                  :name="p.kind === 'database' ? 'database' : 'file'"
-                  :size="17"
-                /><span>{{ p.title }}</span
+                <PageSymbol :icon="p.icon" :kind="p.kind" :size="17" /><span>{{
+                  p.title
+                }}</span
                 ><small>{{ p.kind === "database" ? "Database" : "Page" }}</small
                 ><AppIcon name="arrowRight" :size="14" />
               </button></div
@@ -1687,6 +1729,17 @@ onBeforeUnmount(() => {
       ><span><kbd>Enter</kbd> Open</span><span><kbd>Esc</kbd> Close</span>
     </div></UiDialog
   >
+  <PageAppearanceDialog
+    v-if="page"
+    :key="page.id"
+    :open="showPageAppearance"
+    title="Page appearance"
+    :resource-path="'pages/' + page.id"
+    :appearance="page"
+    :page-id="page.id"
+    @close="showPageAppearance = false"
+    @changed="pageAppearanceChanged"
+  />
   <UiDialog
     :open="showAppearance"
     title="Appearance"

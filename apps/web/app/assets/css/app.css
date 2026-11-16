@@ -719,6 +719,41 @@ hr {
 .page-heading {
   position: relative;
 }
+.page-decoration-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 17px;
+}
+.page-decoration-controls .page-symbol {
+  margin-bottom: 0;
+}
+.page-symbol-button {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  border-radius: 8px;
+}
+.page-symbol-button:hover {
+  background: var(--surface-hover);
+}
+.page-cover-action {
+  opacity: 0;
+  font-size: 0.75rem;
+}
+.page-decoration-controls:hover .page-cover-action,
+.page-cover-action:focus-visible {
+  opacity: 1;
+}
+.home-header h1 .page-emoji {
+  margin-right: 12px;
+  vertical-align: middle;
+}
+@media (max-width: 760px) {
+  .page-cover-action {
+    opacity: 1;
+  }
+}
 .page-title {
   font-size: 2.7rem;
   letter-spacing: -0.045em;

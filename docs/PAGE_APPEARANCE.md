@@ -1,0 +1,13 @@
+# Page and space appearance
+
+Use the page symbol or **Page actions → Icon and cover** to choose an emoji icon and one of six covers. The same settings apply to database and record pages. Icons appear in the sidebar, recent/favorite lists and page headers. Database galleries use explicit record covers/icons, preserving automatic attachment covers on records that have never been customized.
+
+Page covers can also use existing or newly uploaded images from that page's attachments. The image picker is shared with the editor. Only ready PNG/JPEG/GIF/WebP images attached to the same page can become a new cover; references to other pages, pending uploads and unsafe file formats are rejected. Images continue to use authenticated file preview routes and current inherited permissions. No remote image URL or public bucket access is introduced. A deleted file shows a generic unavailable cover; eventual file-row cleanup clears the foreign key without preventing retention cleanup. Removing a cover does not delete its attachment or select a different image automatically.
+
+Owners and administrators can use **Space settings → Space icon and cover**. Spaces support emoji icons and the same preset covers. Uploaded space-cover images, cropping/focal-point controls and arbitrary cover colors are not implemented. Global device themes remain separate.
+
+Icons accept one emoji grapheme, including family sequences, flags and modifiers, with length/control-character checks. Preset IDs map to static CSS gradients; user-supplied URLs and CSS are not accepted. Emoji glyph appearance depends on the operating system's fonts.
+
+Migration 21 adds independent `appearance_version` counters and appearance fields to pages/spaces. Page appearance changes require edit permission; space appearance requires administrator/owner permission. Writes serialize with the existing space lock and compare the separate appearance counter. They cannot overwrite a concurrent title or rich-document update. Stale appearance edits require an explicit reload of saved settings in the dialog. Other browser sessions see new decorations on reload/reopening; metadata has no new live subscription. Appearance changes are audited but are not included in rich-document history snapshots.
+
+Tests cover emoji/preset validation, anonymous/outsider/viewer/editor boundaries, concurrent version conflicts, independent titles/documents, cover-file ownership/MIME/state, file cleanup, database gallery cover behavior and migrations. Chromium tests cover the real dialogs, persistence, conflict recovery, private image rendering, unavailable covers, read-only controls, sidebar icon sizing and mobile overflow.

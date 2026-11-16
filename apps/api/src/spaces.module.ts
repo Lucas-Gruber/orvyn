@@ -4,6 +4,7 @@ import {
   Get,
   Post,
   Put,
+  Patch,
   Delete,
   Req,
   Body,
@@ -14,13 +15,14 @@ import { db, hash, fail, text, mutation, user } from "./runtime.js";
 import { transaction, audit, origin, rateLimit } from "./auth/security.js";
 import { queueMail } from "./auth/mail.js";
 import { spaceAccess, memberRole, roleRanks } from "./permissions/access.js";
+import { appearanceInput } from "@orvyn/shared";
 @Controller("api/v1")
 class SpacesController {
   @Get("spaces") async spaces(@Req() req: any) {
     const uid = await user(req);
     return (
       await db.query(
-        "SELECT s.id,s.name,s.kind,s.version,CASE WHEN s.owner_id=$1 THEN 'Owner' ELSE m.role END AS role FROM spaces s LEFT JOIN space_members m ON m.space_id=s.id AND m.user_id=$1 WHERE s.owner_id=$1 OR m.user_id=$1 ORDER BY s.name",
+        "SELECT s.id,s.name,s.kind,s.version,s.icon,s.cover_preset,s.appearance_version,CASE WHEN s.owner_id=$1 THEN 'Owner' ELSE m.role END AS role FROM spaces s LEFT JOIN space_members m ON m.space_id=s.id AND m.user_id=$1 WHERE s.owner_id=$1 OR m.user_id=$1 ORDER BY s.name",
         [uid],
       )
     ).rows;
@@ -30,11 +32,47 @@ class SpacesController {
     const uid = await user(req);
     return transaction(async (c) => {
       const r = await c.query(
-        "INSERT INTO spaces(owner_id,name) VALUES($1,$2) RETURNING id,name,kind,version",
+        "INSERT INTO spaces(owner_id,name) VALUES($1,$2) RETURNING id,name,kind,version,icon,cover_preset,appearance_version",
         [uid, text(body?.name, 120)],
       );
       await audit(c, uid, "space.created");
       return { ...r.rows[0], role: "Owner" };
+    });
+  }
+  @Get("spaces/:id/appearance") async appearance(
+    @Req() req: any,
+    @Param("id") id: string,
+  ) {
+    const s = await spaceAccess(db, await user(req), id);
+    return {
+      id: s.id,
+      icon: s.icon,
+      cover_preset: s.cover_preset,
+      cover_file_id: null,
+      appearance_version: s.appearance_version,
+    };
+  }
+  @Patch("spaces/:id/appearance") async updateAppearance(
+    @Req() req: any,
+    @Param("id") id: string,
+    @Body() body: any,
+  ) {
+    mutation(req);
+    const uid = await user(req),
+      parsed = appearanceInput.safeParse(body);
+    if (!parsed.success || parsed.data.coverFileId !== null)
+      fail(400, "Choose one emoji and a supported cover");
+    const input = parsed.data!;
+    return transaction(async (c) => {
+      const s = await spaceAccess(c, uid, id, 40, true);
+      if (s.appearance_version !== input.appearanceVersion)
+        fail(409, "Appearance changed; reload before saving");
+      const saved = await c.query(
+        "UPDATE spaces SET icon=$2,cover_preset=$3,appearance_version=appearance_version+1 WHERE id=$1 RETURNING id,icon,cover_preset,appearance_version",
+        [s.id, input.icon, input.coverPreset],
+      );
+      await audit(c, uid, "space.appearance_updated");
+      return { ...saved.rows[0], cover_file_id: null };
     });
   }
   @Get("spaces/:id/team-preview") async preview(

@@ -376,7 +376,7 @@ export const recordFrom =
   "FROM database_records r JOIN pages p ON p.id=r.page_id LEFT JOIN users creator ON creator.id=p.created_by LEFT JOIN users editor ON editor.id=p.last_edited_by";
 export function recordColumns(actor: string) {
   const files = `(SELECT coalesce(jsonb_object_agg(dp.id,orvyn_record_file_values(p.id,dp.id)),'{}'::jsonb) FROM database_properties dp WHERE dp.database_id=r.database_id AND dp.type='Files' AND dp.deleted_at IS NULL) AS file_values,(SELECT coalesce(jsonb_agg(jsonb_build_object('id',f.id,'filename',f.filename,'mediaType',f.media_type,'size',f.size) ORDER BY f.created_at),'[]'::jsonb) FROM files f WHERE f.page_id=p.id AND f.state='ready' AND EXISTS(SELECT 1 FROM database_properties dp WHERE dp.database_id=r.database_id AND dp.type='Files' AND dp.deleted_at IS NULL)) AS file_choices`;
-  return `${files},p.id,p.title,p.title_version,p.created_at,p.updated_at,p.created_by,p.last_edited_by,creator.email AS creator_email,editor.email AS editor_email,r.values,r.version,orvyn_page_role(p.id,${actor}) AS access_rank,(SELECT id FROM files WHERE page_id=p.id AND state='ready' AND media_type IN ('image/png','image/jpeg','image/gif','image/webp') ORDER BY created_at LIMIT 1) AS cover_file_id`;
+  return `${files},p.id,p.title,p.icon,p.cover_preset,p.title_version,p.created_at,p.updated_at,p.created_by,p.last_edited_by,creator.email AS creator_email,editor.email AS editor_email,r.values,r.version,orvyn_page_role(p.id,${actor}) AS access_rank,CASE WHEN p.appearance_version=1 THEN (SELECT id FROM files WHERE page_id=p.id AND state='ready' AND media_type IN ('image/png','image/jpeg','image/gif','image/webp') ORDER BY created_at LIMIT 1) ELSE (SELECT id FROM files WHERE id=p.cover_file_id AND page_id=p.id AND state='ready' AND media_type IN ('image/png','image/jpeg','image/gif','image/webp')) END AS cover_file_id`;
 }
 export function recordDTO(row: any, properties: Property[]) {
   const values: Record<string, unknown> = {};
@@ -420,6 +420,8 @@ export function recordDTO(row: any, properties: Property[]) {
       ? { id: row.last_edited_by, email: row.editor_email }
       : null,
     coverFileId: row.cover_file_id || null,
+    icon: row.icon || null,
+    coverPreset: row.cover_preset || null,
     ...(properties.some((p) => p.type === "Files")
       ? { files: row.file_choices || [] }
       : {}),

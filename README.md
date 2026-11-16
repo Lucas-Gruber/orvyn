@@ -36,3 +36,5 @@ Opt-in YouTube/Vimeo/Loom players: [docs/VIDEO_EMBEDS.md](docs/VIDEO_EMBEDS.md).
 Responsive columns and selection formatting: [docs/EDITOR_LAYOUT.md](docs/EDITOR_LAYOUT.md).
 
 Block selection, drag handles and keyboard movement: [docs/BLOCK_CONTROLS.md](docs/BLOCK_CONTROLS.md).
+
+Page and space icons/covers: [docs/PAGE_APPEARANCE.md](docs/PAGE_APPEARANCE.md).

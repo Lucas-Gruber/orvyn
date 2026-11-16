@@ -2,6 +2,7 @@
 const props = defineProps<{ space: any }>(),
   emit = defineEmits<{ changed: [] }>();
 const preview = ref<any>(),
+  appearanceOpen = ref(false),
   members = ref<any[]>([]),
   email = ref(""),
   role = ref("Viewer"),
@@ -53,6 +54,22 @@ onMounted(refresh);
 <template>
   <section>
     <h1>{{ space.name }}</h1>
+    <CoverBanner :preset="space.cover_preset" compact />
+    <button
+      v-if="['Owner', 'Admin'].includes(space.role)"
+      class="ghost"
+      @click="appearanceOpen = true"
+    >
+      <AppIcon name="palette" :size="16" />Space icon and cover
+    </button>
+    <PageAppearanceDialog
+      :open="appearanceOpen"
+      title="Space appearance"
+      :resource-path="'spaces/' + space.id"
+      :appearance="space"
+      @close="appearanceOpen = false"
+      @changed="emit('changed')"
+    />
     <p>
       {{
         space.kind === "personal"

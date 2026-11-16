@@ -102,10 +102,9 @@ function keys(event: KeyboardEvent, page: any) {
         @click="emit('open', page.id)"
         @keydown="keys($event, page)"
       >
-        <AppIcon
-          :name="page.kind === 'database' ? 'database' : 'file'"
-          :size="16"
-        /><span>{{ page.title }}</span
+        <PageSymbol :icon="page.icon" :kind="page.kind" :size="16" /><span>{{
+          page.title
+        }}</span
         ><AppIcon
           v-if="page.visibility === 'restricted'"
           name="lock"

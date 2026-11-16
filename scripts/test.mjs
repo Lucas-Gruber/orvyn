@@ -150,6 +150,7 @@ try {
           "tests/video-embeds.test.mjs",
           "tests/editor-layout.test.mjs",
           "tests/block-controls.test.mjs",
+          "tests/appearance.test.mjs",
           "tests/editor-batching.test.mjs",
         ];
   const tests = spawn(

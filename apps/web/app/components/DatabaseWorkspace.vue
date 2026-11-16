@@ -11,6 +11,7 @@ const props = defineProps<{
     databaseId: string;
     initialViewId?: string;
     initialTitle?: string;
+    appearance?: any;
   }>(),
   emit = defineEmits<{ open: [pageId: string]; changed: [] }>();
 const transfer = ref<{ open: () => void }>();
@@ -506,8 +507,16 @@ onBeforeUnmount(() => {
       </button>
     </div>
     <template v-if="metadata"
-      ><div class="database-page-symbol">
-        <AppIcon name="database" :size="40" />
+      ><CoverBanner
+        :preset="(appearance || metadata.appearance)?.cover_preset"
+        :file-id="(appearance || metadata.appearance)?.cover_file_id"
+      />
+      <div class="database-page-symbol">
+        <PageSymbol
+          :icon="(appearance || metadata.appearance)?.icon"
+          kind="database"
+          :size="40"
+        />
       </div>
       <div class="database-heading">
         <h1>{{ metadata.title }}</h1>
@@ -879,12 +888,18 @@ onBeforeUnmount(() => {
             {{ group.label }}
           </h2>
           <article v-for="record in group.records" :key="record.pageId">
+            <CoverBanner
+              v-if="record.coverPreset"
+              :preset="record.coverPreset"
+              compact
+            />
             <img
-              v-if="record.coverFileId"
+              v-else-if="record.coverFileId"
               :src="'/api/v1/files/' + record.coverFileId + '/preview'"
               :alt="record.title"
               loading="lazy"
             /><button @click="emit('open', record.pageId)">
+              <PageSymbol :icon="record.icon" :size="17" />
               {{ record.title }}
             </button>
             <p

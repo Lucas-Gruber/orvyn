@@ -141,6 +141,12 @@ class DatabasesController {
       id: context.page.id,
       title: context.page.title,
       titleVersion: context.page.title_version,
+      appearance: {
+        icon: context.page.icon,
+        cover_preset: context.page.cover_preset,
+        cover_file_id: context.page.cover_file_id,
+        appearance_version: context.page.appearance_version,
+      },
       spaceId: context.page.space_id,
       pageVersion: context.page.version,
       accessRank: context.page.access_rank,
