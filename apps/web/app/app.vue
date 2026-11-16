@@ -23,6 +23,8 @@ const booting = ref(true),
   pageLoading = ref(false),
   targetHeading = ref(""),
   headingVisit = ref(0),
+  targetPerson = ref(""),
+  personVisit = ref(0),
   navigating = ref(false),
   pending = ref(0),
   error = ref(""),
@@ -125,7 +127,11 @@ async function visitNotification(item: any) {
   try {
     await openPage(item.pageId);
     view.value = "workspace";
-    openCommentThread(item.threadId);
+    if (item.threadId) openCommentThread(item.threadId);
+    else {
+      targetPerson.value = me.value.id;
+      personVisit.value++;
+    }
     if (mobile.value) sidebarOpen.value = false;
   } finally {
     navigating.value = false;
@@ -410,6 +416,7 @@ function edit(p: any) {
   closeComments();
   showPageAppearance.value = false;
   targetHeading.value = "";
+  targetPerson.value = "";
   page.value = p;
   serverTitle.value = p.title;
   titleStatus.value = "";
@@ -1614,6 +1621,8 @@ onBeforeUnmount(() => {
             :paused="navigating || pageLoading"
             :target-heading="targetHeading"
             :heading-visit="headingVisit"
+            :target-person="targetPerson"
+            :person-visit="personVisit"
             :user="me"
           />
           <section

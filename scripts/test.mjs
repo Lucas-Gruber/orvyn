@@ -156,6 +156,7 @@ try {
           "tests/comments.test.mjs",
           "tests/comment-anchors.test.mjs",
           "tests/notifications.test.mjs",
+          "tests/document-mentions.test.mjs",
         ];
   const tests = spawn(
     process.execPath,

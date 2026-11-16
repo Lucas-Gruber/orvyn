@@ -1,3 +1,4 @@
+import { documentPeople } from "@orvyn/editor/mentions";
 import {
   normalizeDocument,
   documentSchemaVersion,
@@ -223,6 +224,17 @@ class PagesController {
           400,
           "An attachment is unavailable, inaccessible or not a supported image",
         );
+      const people = documentPeople(input.document),
+        oldPeople = new Set(documentPeople(p.document));
+      if (
+        !(
+          await c.query(
+            "SELECT orvyn_document_people_allowed($1,$2::uuid[]) AS allowed",
+            [p.id, people.filter((id) => !oldPeople.has(id))],
+          )
+        ).rows[0].allowed
+      )
+        fail(400, "New person references must identify current page readers");
       const editor = await c.query(
         "SELECT 1 FROM editor_documents WHERE page_id=$1",
         [p.id],
@@ -246,6 +258,11 @@ class PagesController {
         "INSERT INTO page_revisions(page_id,version,title,document,author_id) VALUES($1,$2,$3,$4,$5)",
         [saved.id, saved.version, saved.title, saved.document, uid],
       );
+      await c.query("SELECT orvyn_sync_document_people($1,$2,$3::uuid[])", [
+        saved.id,
+        uid,
+        people,
+      ]);
       await audit(c, uid, "page.updated");
       return { ...saved, access_rank: p.access_rank };
     });

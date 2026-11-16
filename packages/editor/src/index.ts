@@ -23,9 +23,11 @@ import { VideoEmbedBlock } from "./video-embed.js";
 import { validVideo } from "./embed-model.js";
 import { ColumnsBlock, ColumnBlock } from "./columns.js";
 import { BlockControls } from "./block-controls.js";
+import { PersonMention } from "./person-mention.js";
+import { validPersonId, documentPeople } from "./mention-model.js";
 import { CommentHighlights } from "./comment-highlights.js";
 const lowlight = createLowlight(common);
-export const documentSchemaVersion = 8;
+export const documentSchemaVersion = 9;
 export function editorExtensions(collaborative = false): AnyExtension[] {
   return [
     StarterKit.configure({
@@ -53,6 +55,7 @@ export function editorExtensions(collaborative = false): AnyExtension[] {
     ColumnBlock,
     BlockControls,
     CommentHighlights,
+    PersonMention,
     CodeBlockLowlight.configure({ lowlight, defaultLanguage: "plaintext" }),
   ];
 }
@@ -72,6 +75,8 @@ export function validateDocument(input: unknown) {
   const bounded = (n: any, depth: number) => {
     if (++nodes > 3000 || depth > 64)
       throw Error("Document structure limit exceeded");
+    if (n.type.name === "orvynPerson" && !validPersonId(n.attrs.userId))
+      throw Error("Invalid person reference");
     if (n.type.name === "orvynDatabase") {
       const uuid =
         /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
@@ -156,6 +161,8 @@ export function validateDocument(input: unknown) {
     n.forEach((child: any) => bounded(child, depth + 1));
   };
   bounded(node, 0);
+  if (documentPeople(node.toJSON()).length > 100)
+    throw Error("Mention up to 100 different people in one document");
   node.descendants((n) => {
     for (const mark of n.marks)
       if (mark.type.name === "link") {
@@ -237,3 +244,5 @@ export {
   headingFromHash,
   pageLink,
 } from "./heading-links.js";
+
+export { PersonMention } from "./person-mention.js";

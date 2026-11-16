@@ -12,6 +12,11 @@ import AssetNode from "./AssetNode.vue";
 import PagePreviewNode from "./PagePreviewNode.vue";
 import VideoEmbedNode from "./VideoEmbedNode.vue";
 import ColumnsNode from "./ColumnsNode.vue";
+import PersonMentionNode from "./PersonMentionNode.vue";
+import {
+  editorPeopleKey,
+  type EditorPerson,
+} from "../composables/editorPeople";
 import { editorPageKey } from "../composables/editorContext";
 import {
   editorExtensions,
@@ -37,6 +42,8 @@ const props = defineProps<{
   paused?: boolean;
   targetHeading?: string;
   headingVisit?: number;
+  targetPerson?: string;
+  personVisit?: number;
 }>();
 const emit = defineEmits<{
   comment: [anchor: CommentAnchor];
@@ -56,6 +63,8 @@ watch(
   (rank) => (accessRank.value = rank),
 );
 provide(editorPageKey, () => props.pageId);
+const people = shallowRef(new Map<string, EditorPerson>());
+provide(editorPeopleKey, people);
 const openPage = inject(pageNavigationKey),
   root = ref<HTMLElement>(),
   showDocumentLink = ref(false),
@@ -66,6 +75,123 @@ const openPage = inject(pageNavigationKey),
   selectedLinkText = ref(""),
   linkMessage = ref(""),
   headingMessage = ref("");
+const personOpen = ref(false),
+  personQuery = ref(""),
+  personStyle = ref<Record<string, string>>({}),
+  personPicker = ref<{ key: (event: KeyboardEvent) => boolean }>();
+let personRange = { from: 0, to: 0 },
+  peopleRequest = 0,
+  peopleTimer: ReturnType<typeof setTimeout> | undefined,
+  lastPeople = "",
+  fetchedPeople = "";
+function currentPeople() {
+  const ids = new Set<string>();
+  editor.value?.state.doc.descendants((node) => {
+    if (node.type.name === "orvynPerson") ids.add(node.attrs.userId);
+  });
+  return [...ids].sort();
+}
+async function refreshPeople() {
+  if (disposed || !synced.value || denied.value || unsynced.value) return;
+  const ids = currentPeople(),
+    token = ++peopleRequest;
+  if (!ids.length) {
+    people.value = new Map();
+    fetchedPeople = "";
+    return;
+  }
+  try {
+    const data = await $fetch<EditorPerson[]>(
+      `/api/v1/pages/${props.pageId}/people-references`,
+      { query: { ids: ids.join(",") } },
+    );
+    if (
+      !disposed &&
+      token === peopleRequest &&
+      !unsynced.value &&
+      ids.join(",") === currentPeople().join(",")
+    ) {
+      people.value = new Map(data.map((person) => [person.id, person]));
+      fetchedPeople = ids.join(",");
+    }
+  } catch {
+    if (!disposed && token === peopleRequest) people.value = new Map();
+  }
+}
+function schedulePeople() {
+  const ids = currentPeople().join(",");
+  if (ids === lastPeople) return;
+  lastPeople = ids;
+  clearTimeout(peopleTimer);
+  peopleTimer = setTimeout(() => void refreshPeople(), 150);
+}
+function updatePerson(
+  e: Pick<Editor, "isEditable" | "state" | "isActive" | "view">,
+) {
+  if (
+    !e.isEditable ||
+    pickerSelectionActive ||
+    !e.state.selection.empty ||
+    e.isActive("codeBlock") ||
+    e.view.composing
+  ) {
+    personOpen.value = false;
+    return;
+  }
+  const selection = e.state.selection,
+    text = selection.$from.parent.textBetween(
+      0,
+      selection.$from.parentOffset,
+      "",
+      "\uFFFC",
+    ),
+    match = text.match(/(?:^|[\s(])@([^\s@{}]*)$/);
+  if (!match || match[1]!.length > 100) {
+    personOpen.value = false;
+    return;
+  }
+  personQuery.value = match[1]!;
+  personRange = {
+    from: selection.from - match[1]!.length - 1,
+    to: selection.from,
+  };
+  personOpen.value = true;
+  void nextTick(positionSlash);
+}
+function insertPerson(person: EditorPerson) {
+  const e = editor.value;
+  if (!e?.isEditable) return;
+  if (!currentPeople().includes(person.id) && currentPeople().length >= 100) {
+    linkMessage.value = "Mention up to 100 different people in one document.";
+    return;
+  }
+  people.value = new Map([...people.value, [person.id, person]]);
+  personOpen.value = false;
+  e.chain()
+    .focus()
+    .insertContentAt(personRange, [
+      { type: "orvynPerson", attrs: { userId: person.id } },
+      { type: "text", text: " " },
+    ])
+    .run();
+}
+async function visitPerson() {
+  if (!props.targetPerson || !synced.value || !editor.value) return;
+  await nextTick();
+  // Inbox navigation closes its modal after page selection. Wait for its DOM
+  // update and the inline node view before moving focus out of the dialog.
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  if (disposed || !editor.value) return;
+  const node = editor.value.view.dom.querySelector<HTMLElement>(
+    '[data-person-id="' + CSS.escape(props.targetPerson) + '"]',
+  );
+  editor.value.view.dom
+    .querySelectorAll("[data-mention-target]")
+    .forEach((el) => el.removeAttribute("data-mention-target"));
+  node?.setAttribute("data-mention-target", "");
+  node?.scrollIntoView({ block: "center" });
+  node?.focus({ preventScroll: true });
+}
 const blockMenuPosition = ref<{ left: number; top: number }>();
 let commentAnchors: { id: string; anchor: CommentAnchor }[] = [],
   annotationFrame = 0,
@@ -215,6 +341,11 @@ interface SlashCommand {
   aliases?: string[];
 }
 const commands: SlashCommand[] = [
+  {
+    label: "Mention person",
+    aliases: ["erwähnen", "person", "mention"],
+    run: (e) => e.chain().focus().insertContent("@").run(),
+  },
   {
     label: "2 columns",
     aliases: ["spalten"],
@@ -376,6 +507,7 @@ function initialize() {
           "orvynPagePreview",
           "orvynVideo",
           "orvynColumns",
+          "orvynPerson",
         ].includes(extension.name)
           ? extension.extend({
               addNodeView() {
@@ -391,6 +523,7 @@ function initialize() {
                       orvynPagePreview: PagePreviewNode,
                       orvynVideo: VideoEmbedNode,
                       orvynColumns: ColumnsNode,
+                      orvynPerson: PersonMentionNode,
                     } as Record<string, any>
                   )[extension.name],
                 );
@@ -455,6 +588,7 @@ function initialize() {
           void openDocumentLink();
           return true;
         }
+        if (personOpen.value && personPicker.value?.key(event)) return true;
         if (!slashOpen.value) return false;
         if (event.key === "Escape") {
           slashOpen.value = false;
@@ -519,7 +653,10 @@ function initialize() {
     },
     onTransaction({ transaction }) {
       tick.value++;
-      if (transaction.docChanged) scheduleHighlights();
+      if (transaction.docChanged) {
+        scheduleHighlights();
+        schedulePeople();
+      }
       if (pickerSelectionActive && transaction.docChanged) {
         insertionRange = {
           from: transaction.mapping.map(insertionRange.from, 1),
@@ -529,8 +666,14 @@ function initialize() {
           insertionRange.to = insertionRange.from;
       }
     },
-    onUpdate: ({ editor: e }) => updateSlash(e),
-    onSelectionUpdate: ({ editor: e }) => updateSlash(e),
+    onUpdate: ({ editor: e }) => {
+      updateSlash(e);
+      updatePerson(e);
+    },
+    onSelectionUpdate: ({ editor: e }) => {
+      updateSlash(e);
+      updatePerson(e);
+    },
   });
 }
 function updateSlash(e: Pick<Editor, "state" | "isEditable">) {
@@ -554,12 +697,12 @@ function updateSlash(e: Pick<Editor, "state" | "isEditable">) {
   void nextTick(positionSlash);
 }
 function positionSlash() {
-  if (!slashOpen.value || !editor.value) return;
+  if ((!slashOpen.value && !personOpen.value) || !editor.value) return;
   const rect = editor.value.view.coordsAtPos(editor.value.state.selection.from),
     below = window.innerHeight - rect.bottom - 12,
     above = below < 220 && rect.top > 220,
-    width = Math.min(280, window.innerWidth - 24);
-  slashStyle.value = {
+    width = Math.min(personOpen.value ? 340 : 280, window.innerWidth - 24);
+  const style = {
     position: "fixed",
     width: width + "px",
     left:
@@ -569,6 +712,8 @@ function positionSlash() {
     maxHeight:
       Math.min(350, Math.max(120, above ? rect.top - 18 : below)) + "px",
   };
+  if (personOpen.value) personStyle.value = style;
+  else slashStyle.value = style;
 }
 function persistInitialHeadingIds() {
   if (readOnly.value || !synced.value) return;
@@ -962,6 +1107,10 @@ const provider = new HocuspocusProvider({
   },
   onUnsyncedChanges({ number }) {
     unsynced.value = number;
+    if (!number && !disposed && currentPeople().join(",") !== fetchedPeople) {
+      clearTimeout(peopleTimer);
+      peopleTimer = setTimeout(() => void refreshPeople(), 150);
+    }
   },
   onStateless({ payload }) {
     try {
@@ -1023,13 +1172,23 @@ onMounted(() => {
   window.addEventListener("scroll", positionSlash, true);
   window.addEventListener("resize", positionSlash);
   annotationTimer = setInterval(() => {
-    if (window.document.visibilityState === "visible") void refreshComments();
+    if (window.document.visibilityState === "visible") {
+      void refreshComments();
+      void refreshPeople();
+    }
   }, 5000);
 });
 watch([editor, synced], () => {
-  if (editor.value && synced.value) void refreshComments();
+  if (editor.value && synced.value) {
+    void refreshComments();
+    void refreshPeople();
+  }
 });
 watch(() => props.focusedComment, scheduleHighlights);
+watch(
+  [() => props.targetPerson, () => props.personVisit, editor, synced],
+  () => void visitPerson(),
+);
 watch(
   [status, synced, readOnly, editor, denied, accessRank, () => props.paused],
   () => {
@@ -1046,6 +1205,8 @@ watch(
 );
 onBeforeUnmount(() => {
   disposed = true;
+  peopleRequest++;
+  clearTimeout(peopleTimer);
   annotationRequest++;
   clearInterval(annotationTimer);
   cancelAnimationFrame(annotationFrame);
@@ -1071,6 +1232,15 @@ onBeforeUnmount(() => {
     <p v-if="headingMessage" class="heading-link-notice" role="status">
       {{ headingMessage }}
     </p>
+    <PersonMentionPicker
+      v-if="personOpen"
+      ref="personPicker"
+      :style="personStyle"
+      :page-id="pageId"
+      :query="personQuery"
+      @close="personOpen = false"
+      @select="insertPerson"
+    />
     <DocumentLinkPicker
       :open="showDocumentLink"
       :preview="linkAsPreview"

@@ -16,7 +16,7 @@ Work through these areas in order, preserving working features and committing/pu
    - [x] Page discussion threads, replies, author editing, moderation and resolve/reopen.
    - [x] Text-anchored comments with relative positions and changed/deleted text handling.
    - [x] Discussion mentions and permission-filtered inbox for mentions/replies.
-   - [ ] Inline people mentions in documents.
+   - [x] Inline people mentions in documents with current identity resolution and inbox navigation.
    - [ ] User-visible activity with current permission checks.
 3. Databases
    - [ ] Relations, formulas and rollups with permission-safe queries/exports.

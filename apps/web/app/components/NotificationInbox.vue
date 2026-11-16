@@ -191,9 +191,11 @@ onBeforeUnmount(() => {
               item.actor.email || "Former member"
             }}</span
             ><span class="inbox-kind">{{
-              item.kind === "comment_mention"
-                ? "mentioned you in a comment"
-                : "replied to your discussion"
+              item.kind === "document_mention"
+                ? "mentioned you in a document"
+                : item.kind === "comment_mention"
+                  ? "mentioned you in a comment"
+                  : "replied to your discussion"
             }}</span
             ><strong>{{ item.title }}</strong
             ><span class="inbox-excerpt">{{ item.excerpt }}</span

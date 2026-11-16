@@ -14,6 +14,7 @@ import {
   documentSchemaVersion,
 } from "@orvyn/editor";
 import * as Y from "yjs";
+import { documentPeople } from "@orvyn/editor/mentions";
 import { documentReferences, newDocumentAssets } from "@orvyn/editor/links";
 import { createHash } from "node:crypto";
 
@@ -293,6 +294,17 @@ const server = new Server<Identity>({
         if (next.length > 2 * 1024 * 1024) deny();
         const json = yDocToDocument(candidate);
         if (next.equals(row.rows[0].state)) return;
+        const people = documentPeople(json),
+          oldPeople = new Set(documentPeople(row.rows[0].document));
+        if (
+          !(
+            await c.query(
+              "SELECT orvyn_document_people_allowed($1,$2::uuid[]) AS allowed",
+              [documentName, people.filter((id) => !oldPeople.has(id))],
+            )
+          ).rows[0].allowed
+        )
+          deny();
         const additions = newDocumentAssets(json, row.rows[0].document);
         if (
           additions.length &&
@@ -322,6 +334,11 @@ const server = new Server<Identity>({
         await c.query("SELECT orvyn_replace_page_references($1,$2::jsonb)", [
           p.id,
           JSON.stringify(documentReferences(json, origin)),
+        ]);
+        await c.query("SELECT orvyn_sync_document_people($1,$2,$3::uuid[])", [
+          p.id,
+          connection.context.userId,
+          people,
         ]);
         await c.query(
           "INSERT INTO page_revisions(page_id,version,title,document,author_id) VALUES($1,$2,$3,$4,$5)",

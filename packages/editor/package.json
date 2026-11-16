@@ -41,6 +41,10 @@
     "./comments": {
       "types": "./dist/comment-anchors.d.ts",
       "default": "./dist/comment-anchors.js"
+    },
+    "./mentions": {
+      "types": "./dist/mention-model.d.ts",
+      "default": "./dist/mention-model.js"
     }
   }
 }

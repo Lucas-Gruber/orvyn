@@ -6,14 +6,15 @@ export async function mentionPeople(
   page: any,
   query = "",
   ids?: string[],
+  limit = 20,
 ) {
   return (
     await c.query(
       `SELECT u.id,u.email FROM users u JOIN spaces s ON s.id=$1
      WHERE (u.id=s.owner_id OR EXISTS(SELECT 1 FROM space_members m WHERE m.space_id=s.id AND m.user_id=u.id))
      AND ($3::uuid[] IS NULL OR u.id=ANY($3)) AND strpos(lower(u.email),lower($4))>0
-     AND orvyn_page_role($2,u.id)>=10 ORDER BY u.email,u.id LIMIT 20`,
-      [page.space_id, page.id, ids || null, query],
+     AND orvyn_page_role($2,u.id)>=10 ORDER BY u.email,u.id LIMIT $5`,
+      [page.space_id, page.id, ids || null, query, limit],
     )
   ).rows as { id: string; email: string }[];
 }

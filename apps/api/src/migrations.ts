@@ -465,6 +465,37 @@ CREATE TABLE notifications (
 CREATE INDEX notifications_recipient ON notifications(recipient_id,created_at DESC,id DESC);
 CREATE INDEX notifications_unread ON notifications(recipient_id) WHERE read_at IS NULL;`,
   },
+  {
+    version: 26,
+    sql: `ALTER TABLE pages ALTER COLUMN document_schema_version SET DEFAULT 9;
+ALTER TABLE notifications ALTER COLUMN comment_id DROP NOT NULL;
+ALTER TABLE notifications ALTER COLUMN thread_id DROP NOT NULL;
+ALTER TABLE notifications DROP CONSTRAINT notifications_kind_check;
+ALTER TABLE notifications ADD CONSTRAINT notifications_kind_check CHECK(kind IN ('comment_mention','thread_reply','document_mention'));
+ALTER TABLE notifications ADD CONSTRAINT notifications_source_check CHECK((kind='document_mention' AND comment_id IS NULL AND thread_id IS NULL) OR (kind IN ('comment_mention','thread_reply') AND comment_id IS NOT NULL AND thread_id IS NOT NULL));
+CREATE UNIQUE INDEX notifications_document_mention ON notifications(recipient_id,page_id) WHERE kind='document_mention';
+CREATE TABLE document_people (
+ page_id uuid NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
+ user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ PRIMARY KEY(page_id,user_id)
+);
+CREATE INDEX document_people_user ON document_people(user_id);
+CREATE FUNCTION orvyn_document_people_allowed(target uuid,ids uuid[]) RETURNS boolean LANGUAGE sql STABLE AS $$
+ SELECT coalesce(array_length(ids,1),0)<=100 AND NOT EXISTS(SELECT 1 FROM unnest(ids) person WHERE orvyn_page_role(target,person)<10)
+$$;
+CREATE FUNCTION orvyn_sync_document_people(target uuid,actor uuid,ids uuid[]) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+ IF orvyn_page_role(target,actor)<30 OR coalesce(array_length(ids,1),0)>100 THEN RAISE EXCEPTION 'Invalid document people' USING ERRCODE='23514'; END IF;
+ DELETE FROM document_people WHERE page_id=target AND NOT(user_id=ANY(ids));
+ DELETE FROM notifications WHERE page_id=target AND kind='document_mention' AND NOT(recipient_id=ANY(ids));
+ WITH added AS (
+  INSERT INTO document_people(page_id,user_id) SELECT target,u.id FROM users u WHERE u.id=ANY(ids) ON CONFLICT DO NOTHING RETURNING user_id
+ )
+ INSERT INTO notifications(recipient_id,page_id,actor_id,kind)
+ SELECT user_id,target,actor,'document_mention' FROM added WHERE user_id<>actor AND orvyn_page_role(target,user_id)>=10
+ ON CONFLICT(recipient_id,page_id) WHERE kind='document_mention' DO UPDATE SET actor_id=actor,read_at=NULL,created_at=clock_timestamp();
+END $$;`,
+  },
 ] as const;
 
 export async function migrate(pool: Pool, target = migrations.at(-1)!.version) {

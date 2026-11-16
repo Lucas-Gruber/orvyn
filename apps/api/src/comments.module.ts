@@ -20,6 +20,7 @@ import { z } from "@orvyn/shared";
 import { fail, mutation, user } from "./runtime.js";
 import { transaction, audit, rateLimit } from "./auth/security.js";
 import { pageAccess, pageWrite } from "./permissions/access.js";
+import { documentPeople, validPersonId } from "@orvyn/editor/mentions";
 import {
   validCommentAnchor,
   resolveStoredCommentAnchor,
@@ -221,6 +222,24 @@ async function submitted(
 
 @Controller("api/v1")
 class CommentsController {
+  @Get("pages/:id/people-references") async referencedPeople(
+    @Req() req: any,
+    @Param("id") id: string,
+    @Query("ids") input = "",
+  ) {
+    const uid = await user(req);
+    if (typeof input !== "string" || input.length > 3700)
+      fail(400, "Invalid people references");
+    const ids = [...new Set(input ? input.split(",") : [])];
+    if (ids.length > 100 || ids.some((id) => !validPersonId(id)))
+      fail(400, "Invalid people references");
+    return transaction(async (c) => {
+      const page = await context(c, uid, id),
+        referenced = new Set(documentPeople(page.document)),
+        requested = ids.filter((id) => referenced.has(id));
+      return requested.length ? mentionPeople(c, page, "", requested, 100) : [];
+    });
+  }
   @Get("pages/:id/mention-people") async people(
     @Req() req: any,
     @Param("id") id: string,
