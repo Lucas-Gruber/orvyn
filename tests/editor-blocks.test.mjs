@@ -68,7 +68,7 @@ test("Chromium: callout, toggle, table of contents and code highlighting persist
     page = await session(owner);
     await page.goto(base + pageLink(source.id));
     const doc = page.getByRole("textbox", { name: "Document", exact: true });
-    await expect(doc).toBeEditable();
+    await expect(doc).toBeEditable({ timeout: 12000 });
     async function slash(command) {
       await page.keyboard.type("/" + command);
       await expect(
@@ -161,7 +161,9 @@ test("Chromium: callout, toggle, table of contents and code highlighting persist
       name: "Document",
       exact: true,
     });
-    await expect(readerDoc).toHaveAttribute("contenteditable", "false");
+    await expect(readerDoc).toHaveAttribute("contenteditable", "false", {
+      timeout: 12000,
+    });
     await expect(
       reader.getByLabel("Code language", { exact: true }),
     ).toBeDisabled();

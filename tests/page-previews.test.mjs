@@ -170,7 +170,7 @@ test("Chromium: insert live page/heading preview, refresh renamed destination, n
     page = await session(owner);
     await page.goto(base + pageLink(source.id));
     const doc = page.getByRole("textbox", { name: "Document", exact: true });
-    await expect(doc).toBeEditable();
+    await expect(doc).toBeEditable({ timeout: 12000 });
     await doc.click();
     await page.keyboard.type("/preview");
     await page

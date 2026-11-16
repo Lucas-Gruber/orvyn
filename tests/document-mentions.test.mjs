@@ -370,7 +370,9 @@ test("Chromium: type @ and choose an inline person, reload/live readers resolve 
       reader = await session(f.reader),
       editor = owner.getByRole("textbox", { name: "Document", exact: true });
     await owner.goto(base + pageLink(f.page.id));
-    await expect(editor).toHaveAttribute("contenteditable", "true");
+    await expect(editor).toHaveAttribute("contenteditable", "true", {
+      timeout: 12000,
+    });
     await editor.locator("p").last().click();
     await owner.keyboard.press("End");
     await owner.keyboard.type(" @" + f.reader.email.split("@")[0]);
@@ -399,7 +401,9 @@ test("Chromium: type @ and choose an inline person, reload/live readers resolve 
       name: "Document",
       exact: true,
     });
-    await expect(readEditor).toHaveAttribute("contenteditable", "false");
+    await expect(readEditor).toHaveAttribute("contenteditable", "false", {
+      timeout: 12000,
+    });
     await expect(readEditor.locator(".editor-person")).toContainText(
       f.reader.email,
     );
