@@ -180,7 +180,28 @@ test("a stalled SMTP greeting cannot block authentication expiry or attachment r
     );
     s3.destroy();
     if (db) await db.end();
-    if (created) await root.query("DROP DATABASE " + name + " WITH (FORCE)");
+    if (created) {
+      // Pool.end() closes local clients before PostgreSQL has necessarily read
+      // every Terminate/FIN. Forcing DROP in that gap can send a fatal protocol
+      // error back into this test's closing pool. The worker has exited, so no
+      // new fixture connections can be created; wait for their normal teardown.
+      const deadline = Date.now() + 3000;
+      while (
+        (
+          await root.query(
+            "SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname=$1",
+            [name],
+          )
+        ).rows[0].n
+      ) {
+        assert.ok(
+          Date.now() < deadline,
+          "Worker fixture connections must close before dropping its database",
+        );
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      await root.query("DROP DATABASE " + name);
+    }
     await root.end();
   }
 });
