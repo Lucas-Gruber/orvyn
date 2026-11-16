@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+  Inbox,
   Info,
   Image,
   MessageSquare,
@@ -64,6 +65,7 @@ const props = withDefaults(defineProps<{ name: string; size?: number }>(), {
 });
 const icons: Record<string, any> = {
   info: Info,
+  inbox: Inbox,
   image: Image,
   comments: MessageSquare,
   refresh: RefreshCw,

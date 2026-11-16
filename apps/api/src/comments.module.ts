@@ -10,6 +10,11 @@ import {
   Param,
   Query,
 } from "@nestjs/common";
+import {
+  mentionPeople,
+  syncCommentMentions,
+  notifyThreadReply,
+} from "./comment-mentions.js";
 import type { PoolClient } from "pg";
 import { z } from "@orvyn/shared";
 import { fail, mutation, user } from "./runtime.js";
@@ -22,7 +27,14 @@ import {
 } from "@orvyn/editor/comments";
 
 const messageInput = z
-  .object({ body: z.string().trim().min(1).max(10000), requestId: z.uuid() })
+  .object({
+    body: z.string().trim().min(1).max(10000),
+    requestId: z.uuid(),
+    mentions: z
+      .array(z.uuid().transform((id) => id.toLowerCase()))
+      .max(20)
+      .default([]),
+  })
   .strict();
 const threadInput = messageInput.extend({
   anchor: z.custom<CommentAnchor>(validCommentAnchor).nullable().optional(),
@@ -31,6 +43,10 @@ const editInput = z
   .object({
     body: z.string().trim().min(1).max(10000),
     version: z.number().int().positive(),
+    mentions: z
+      .array(z.uuid().transform((id) => id.toLowerCase()))
+      .max(20)
+      .default([]),
   })
   .strict();
 const resolveInput = z
@@ -143,7 +159,7 @@ async function detail(
   if (!t) fail(404, "Thread not found");
   const messages = (
     await c.query(
-      `SELECT c.*,${authorName} AS author_email FROM comments c JOIN comment_threads t ON t.id=c.thread_id JOIN pages p ON p.id=t.page_id JOIN spaces s ON s.id=p.space_id LEFT JOIN users u ON u.id=c.author_id WHERE c.thread_id=$1 AND ($2='' OR (c.created_at,c.id)<(SELECT a.created_at,a.id FROM comments a WHERE a.thread_id=$1 AND a.id::text=$2)) ORDER BY c.created_at DESC,c.id DESC LIMIT $3`,
+      `SELECT c.*,${authorName} AS author_email,(SELECT coalesce(jsonb_agg(jsonb_build_object('id',u.id,'email',CASE WHEN (u.id=s.owner_id OR EXISTS(SELECT 1 FROM space_members m WHERE m.space_id=s.id AND m.user_id=u.id)) AND orvyn_page_role(p.id,u.id)>=10 THEN u.email ELSE NULL END)),'[]'::jsonb) FROM comment_mentions cm JOIN users u ON u.id=cm.user_id WHERE cm.comment_id=c.id) AS mentions FROM comments c JOIN comment_threads t ON t.id=c.thread_id JOIN pages p ON p.id=t.page_id JOIN spaces s ON s.id=p.space_id LEFT JOIN users u ON u.id=c.author_id WHERE c.thread_id=$1 AND ($2='' OR (c.created_at,c.id)<(SELECT a.created_at,a.id FROM comments a WHERE a.thread_id=$1 AND a.id::text=$2)) ORDER BY c.created_at DESC,c.id DESC LIMIT $3`,
       [threadId, before, limit + 1],
     )
   ).rows;
@@ -157,6 +173,7 @@ async function detail(
     messages: messages.reverse().map((m) => ({
       id: m.id,
       version: m.version,
+      mentions: m.mentions,
       body: m.deleted_at ? null : m.body,
       createdAt: m.created_at,
       editedAt: m.edited_at,
@@ -179,7 +196,7 @@ async function submitted(
 ) {
   const old = (
     await c.query(
-      "SELECT c.body,c.thread_id,t.page_id,c.deleted_at,t.deleted_at AS thread_deleted,(t.anchor IS NOT DISTINCT FROM $3::jsonb) AS same_anchor FROM comments c JOIN comment_threads t ON t.id=c.thread_id WHERE c.author_id=$1 AND c.request_key=$2",
+      "SELECT c.body,(SELECT coalesce(array_agg(cm.user_id ORDER BY cm.user_id),'{}'::uuid[]) FROM comment_mentions cm WHERE cm.comment_id=c.id) AS mentions,c.thread_id,t.page_id,c.deleted_at,t.deleted_at AS thread_deleted,(t.anchor IS NOT DISTINCT FROM $3::jsonb) AS same_anchor FROM comments c JOIN comment_threads t ON t.id=c.thread_id WHERE c.author_id=$1 AND c.request_key=$2",
       [
         uid,
         input.requestId,
@@ -193,6 +210,8 @@ async function submitted(
     (!threadId && !old.same_anchor) ||
     (threadId && old.thread_id !== threadId) ||
     old.body !== input.body ||
+    JSON.stringify(old.mentions) !==
+      JSON.stringify([...new Set(input.mentions)].sort()) ||
     old.deleted_at ||
     old.thread_deleted
   )
@@ -202,6 +221,20 @@ async function submitted(
 
 @Controller("api/v1")
 class CommentsController {
+  @Get("pages/:id/mention-people") async people(
+    @Req() req: any,
+    @Param("id") id: string,
+    @Query("q") q = "",
+  ) {
+    const uid = await user(req);
+    if (typeof q !== "string" || q.length > 100)
+      fail(400, "Invalid person search");
+    return transaction(async (c) => {
+      const page = await context(c, uid, id);
+      if (page.access_rank < 20) fail(404, "Page not found");
+      return mentionPeople(c, page, q.trim());
+    });
+  }
   @Get("pages/:id/thread-anchors") async anchors(
     @Req() req: any,
     @Param("id") id: string,
@@ -288,6 +321,14 @@ class CommentsController {
       );
       if (!added.rowCount)
         fail(409, "This draft was already submitted; refresh before retrying");
+      await syncCommentMentions(
+        c,
+        page,
+        uid,
+        added.rows[0].id,
+        input.mentions,
+        input.body,
+      );
       await audit(c, uid, "comment.thread_created");
       return detail(c, uid, page, t.id);
     });
@@ -329,6 +370,15 @@ class CommentsController {
         "UPDATE comment_threads SET version=version+1,updated_at=now() WHERE id=$1",
         [thread.id],
       );
+      await syncCommentMentions(
+        c,
+        page,
+        uid,
+        added.rows[0].id,
+        input.mentions,
+        input.body,
+      );
+      await notifyThreadReply(c, page, uid, thread.id, added.rows[0].id);
       await audit(c, uid, "comment.replied");
       return detail(c, uid, page, thread.id);
     });
@@ -389,6 +439,7 @@ class CommentsController {
     mutation(req);
     const uid = await user(req),
       input = parse(editInput, body);
+    await rateLimit("comments:" + uid, 240);
     return transaction(async (c) => {
       const { page, thread, message } = await this.commentContext(c, uid, id);
       if (message.author_id !== uid)
@@ -402,6 +453,14 @@ class CommentsController {
       await c.query(
         "UPDATE comment_threads SET version=version+1,updated_at=now() WHERE id=$1",
         [thread.id],
+      );
+      await syncCommentMentions(
+        c,
+        page,
+        uid,
+        message.id,
+        input.mentions,
+        input.body,
       );
       await audit(c, uid, "comment.edited");
       return detail(c, uid, page, thread.id);
@@ -429,6 +488,12 @@ class CommentsController {
         "UPDATE comment_threads SET version=version+1,updated_at=now() WHERE id=$1",
         [thread.id],
       );
+      await c.query("DELETE FROM comment_mentions WHERE comment_id=$1", [
+        message.id,
+      ]);
+      await c.query("DELETE FROM notifications WHERE comment_id=$1", [
+        message.id,
+      ]);
       await audit(c, uid, "comment.deleted");
       return detail(c, uid, page, thread.id);
     });

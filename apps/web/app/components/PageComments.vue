@@ -2,6 +2,7 @@
 import {
   commentDraftsKey,
   type CommentDraftState,
+  type CommentPerson,
 } from "../composables/commentDrafts";
 import type { CommentAnchor } from "@orvyn/editor/comments";
 const props = defineProps<{
@@ -20,6 +21,7 @@ const cache = inject(commentDraftsKey, new Map()),
     keys: new Map<string, { body: string; key: string }>(),
   };
 cache.set(props.pageId, savedDraft);
+savedDraft.replyMentions ??= new Map();
 const emit = defineEmits<{
     close: [];
     changed: [pageId: string];
@@ -39,6 +41,9 @@ const emit = defineEmits<{
   busy = ref(false),
   error = ref(""),
   draft = ref(savedDraft.body),
+  draftMentions = ref<CommentPerson[]>(savedDraft.mentions || []),
+  replyMentions = ref<CommentPerson[]>([]),
+  editMentions = ref<CommentPerson[]>([]),
   draftAnchor = ref<CommentAnchor | null>(savedDraft.anchor || null),
   reply = ref(""),
   editing = ref<any>(),
@@ -51,6 +56,10 @@ let generation = 0,
   timer: ReturnType<typeof setInterval> | undefined;
 const keys = savedDraft.keys;
 watch(draft, (value) => (savedDraft.body = value));
+watch(draftMentions, (value) => (savedDraft.mentions = value));
+watch(replyMentions, (value) => {
+  if (selected.value) savedDraft.replyMentions!.set(selected.value.id, value);
+});
 watch(draftAnchor, (value) => (savedDraft.anchor = value));
 watch(selected, (thread) =>
   emit("select", { pageId: props.pageId, thread: thread || null }),
@@ -210,6 +219,7 @@ async function choose(t: any) {
   if (selected.value) savedDraft.replies.set(selected.value.id, reply.value);
   selected.value = t;
   reply.value = savedDraft.replies.get(t.id) || "";
+  replyMentions.value = savedDraft.replyMentions!.get(t.id) || [];
   messages.value = [];
   await run(() => loadThread(t.id));
 }
@@ -224,6 +234,9 @@ async function post(first: boolean) {
     token = generation,
     epoch = viewEpoch,
     anchor = draftAnchor.value,
+    mentions = (first ? draftMentions.value : replyMentions.value).map(
+      (person) => person.id,
+    ),
     id = selected.value?.id,
     scope = first ? props.pageId + JSON.stringify(anchor) : id;
   if (!body.trim() || !canComment.value) return;
@@ -235,7 +248,8 @@ async function post(first: boolean) {
         method: "POST",
         body: {
           body,
-          requestId: requestKey(scope, body),
+          requestId: requestKey(scope, JSON.stringify({ body, mentions })),
+          mentions,
           ...(first ? { anchor } : {}),
         },
       });
@@ -243,8 +257,12 @@ async function post(first: boolean) {
       keys.delete(scope);
       if (first) {
         draft.value = "";
+        draftMentions.value = [];
         draftAnchor.value = null;
-      } else reply.value = "";
+      } else {
+        reply.value = "";
+        replyMentions.value = [];
+      }
       messagePaged.value = false;
       await loadList();
     }
@@ -271,7 +289,11 @@ async function saveEdit() {
   await run(async () => {
     const data = await $fetch<any>("/api/v1/comments/" + message.id, {
       method: "PATCH",
-      body: { version: message.version, body: editText.value },
+      body: {
+        version: message.version,
+        body: editText.value,
+        mentions: editMentions.value.map((person) => person.id),
+      },
     });
     if (adoptMutation(data, token, epoch)) {
       editing.value = undefined;
@@ -457,6 +479,11 @@ onBeforeUnmount(() => {
                   @click="
                     editing = message;
                     editText = message.body;
+                    editMentions = message.mentions.filter(
+                      (person: CommentPerson) =>
+                        person.email &&
+                        message.body.includes('@' + person.email),
+                    );
                   "
                 >
                   Edit comment</button
@@ -472,9 +499,11 @@ onBeforeUnmount(() => {
             </div>
             <form v-if="editing?.id === message.id" @submit.prevent="saveEdit">
               <label class="sr-only" for="edit-comment-text">Edit comment</label
-              ><textarea
+              ><CommentComposer
                 id="edit-comment-text"
                 v-model="editText"
+                v-model:mentions="editMentions"
+                :page-id="pageId"
                 rows="4"
                 maxlength="10000"
                 required
@@ -508,9 +537,11 @@ onBeforeUnmount(() => {
           @submit.prevent="post(false)"
         >
           <label for="reply-comment">Reply</label
-          ><textarea
+          ><CommentComposer
             id="reply-comment"
             v-model="reply"
+            v-model:mentions="replyMentions"
+            :page-id="pageId"
             rows="4"
             maxlength="10000"
             placeholder="Add to the discussion…"
@@ -577,9 +608,11 @@ onBeforeUnmount(() => {
             </button>
           </div>
           <label for="new-comment">New comment</label
-          ><textarea
+          ><CommentComposer
             id="new-comment"
             v-model="draft"
+            v-model:mentions="draftMentions"
+            :page-id="pageId"
             rows="4"
             maxlength="10000"
             placeholder="Start a discussion…"

@@ -1,6 +1,12 @@
 import type { InjectionKey } from "vue";
 import type { CommentAnchor } from "@orvyn/editor/comments";
+export interface CommentPerson {
+  id: string;
+  email: string | null;
+}
 export interface CommentDraftState {
+  mentions?: CommentPerson[];
+  replyMentions?: Map<string, CommentPerson[]>;
   body: string;
   anchor?: CommentAnchor | null;
   replies: Map<string, string>;

@@ -15,8 +15,9 @@ Work through these areas in order, preserving working features and committing/pu
 2. Collaboration
    - [x] Page discussion threads, replies, author editing, moderation and resolve/reopen.
    - [x] Text-anchored comments with relative positions and changed/deleted text handling.
-   - [ ] Mentions in discussions and documents.
-   - [ ] Notifications and user-visible activity with current permission checks.
+   - [x] Discussion mentions and permission-filtered inbox for mentions/replies.
+   - [ ] Inline people mentions in documents.
+   - [ ] User-visible activity with current permission checks.
 3. Databases
    - [ ] Relations, formulas and rollups with permission-safe queries/exports.
    - [ ] Database/record templates.

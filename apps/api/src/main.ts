@@ -12,6 +12,7 @@ import { AuthModule } from "./auth.module.js";
 import { SpacesModule } from "./spaces.module.js";
 import { PagesModule } from "./pages.module.js";
 import { HealthModule } from "./health.module.js";
+import { NotificationsModule } from "./notifications.module.js";
 import { CommentsModule } from "./comments.module.js";
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { CommentsModule } from "./comments.module.js";
     PagesModule,
     HealthModule,
     CommentsModule,
+    NotificationsModule,
   ],
 })
 class App {}

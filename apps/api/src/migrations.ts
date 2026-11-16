@@ -443,6 +443,28 @@ CREATE INDEX comments_thread ON comments(thread_id,created_at DESC,id DESC);
     version: 24,
     sql: `ALTER TABLE comment_threads ADD COLUMN anchor jsonb CHECK(anchor IS NULL OR (jsonb_typeof(anchor)='object' AND pg_column_size(anchor)<=8192));`,
   },
+  {
+    version: 25,
+    sql: `CREATE TABLE comment_mentions (
+ comment_id uuid NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
+ user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ PRIMARY KEY(comment_id,user_id)
+);
+CREATE INDEX comment_mentions_user ON comment_mentions(user_id);
+CREATE TABLE notifications (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+ recipient_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ page_id uuid NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
+ actor_id uuid REFERENCES users(id) ON DELETE SET NULL,
+ kind text NOT NULL CHECK(kind IN ('comment_mention','thread_reply')),
+ comment_id uuid NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
+ thread_id uuid NOT NULL REFERENCES comment_threads(id) ON DELETE CASCADE,
+ created_at timestamptz NOT NULL DEFAULT clock_timestamp(),read_at timestamptz,
+ UNIQUE(recipient_id,comment_id)
+);
+CREATE INDEX notifications_recipient ON notifications(recipient_id,created_at DESC,id DESC);
+CREATE INDEX notifications_unread ON notifications(recipient_id) WHERE read_at IS NULL;`,
+  },
 ] as const;
 
 export async function migrate(pool: Pool, target = migrations.at(-1)!.version) {

@@ -118,6 +118,19 @@ function openCommentThread(id: string) {
   commentVisit.value++;
   showComments.value = true;
 }
+async function visitNotification(item: any) {
+  if (navigating.value)
+    throw new Error("Wait for the current page to finish opening.");
+  navigating.value = true;
+  try {
+    await openPage(item.pageId);
+    view.value = "workspace";
+    openCommentThread(item.threadId);
+    if (mobile.value) sidebarOpen.value = false;
+  } finally {
+    navigating.value = false;
+  }
+}
 function selectComment(value: { pageId: string; thread: any | null }) {
   if (value.pageId !== page.value?.id) return;
   commentAnchorStatus.value = "active";
@@ -1138,6 +1151,7 @@ onBeforeUnmount(() => {
         </button></UiMenu
       >
       <nav class="sidebar-nav" aria-label="Workspace">
+        <NotificationInbox :key="me?.id" :visit="visitNotification" />
         <button @click="openSearch">
           <AppIcon name="search" :size="17" />Search<kbd>Ctrl K</kbd></button
         ><button
