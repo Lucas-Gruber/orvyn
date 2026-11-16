@@ -34,3 +34,5 @@ Permission-checked document/heading preview cards: [docs/PAGE_PREVIEWS.md](docs/
 Opt-in YouTube/Vimeo/Loom players: [docs/VIDEO_EMBEDS.md](docs/VIDEO_EMBEDS.md).
 
 Responsive columns and selection formatting: [docs/EDITOR_LAYOUT.md](docs/EDITOR_LAYOUT.md).
+
+Block selection, drag handles and keyboard movement: [docs/BLOCK_CONTROLS.md](docs/BLOCK_CONTROLS.md).

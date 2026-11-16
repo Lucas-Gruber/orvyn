@@ -42,6 +42,7 @@ const openPage = inject(pageNavigationKey),
   selectedLinkText = ref(""),
   linkMessage = ref(""),
   headingMessage = ref("");
+const blockMenuPosition = ref<{ left: number; top: number }>();
 let insertionRange = { from: 0, to: 0 };
 const document = new Y.Doc(),
   editor = shallowRef<Editor>(),
@@ -266,18 +267,27 @@ function initialize() {
                 );
               },
             })
-          : extension.name === "headingIdentity"
+          : extension.name === "orvynBlockControls"
             ? extension.configure({
-                onCopy: copyHeadingLink,
-                activeHeading: () => props.targetHeading || "",
+                onMenu: (rect: DOMRect) => {
+                  blockMenuPosition.value = {
+                    left: rect.left,
+                    top: rect.bottom + 4,
+                  };
+                },
               })
-            : extension.name === "orvynDatabase"
-              ? extension.extend({
-                  addNodeView() {
-                    return VueNodeViewRenderer(EmbeddedDatabaseNode);
-                  },
+            : extension.name === "headingIdentity"
+              ? extension.configure({
+                  onCopy: copyHeadingLink,
+                  activeHeading: () => props.targetHeading || "",
                 })
-              : extension,
+              : extension.name === "orvynDatabase"
+                ? extension.extend({
+                    addNodeView() {
+                      return VueNodeViewRenderer(EmbeddedDatabaseNode);
+                    },
+                  })
+                : extension,
       ),
       Collaboration.configure({ document }),
       CollaborationCaret.configure({
@@ -1002,7 +1012,12 @@ onBeforeUnmount(() => {
       <button type="button" @click="linkDialog?.close()">Cancel</button>
     </dialog>
     <template v-if="editor"
-      ><FloatingFormatMenu :editor="editor" @link="openDocumentLink()" />
+      ><EditorBlockMenu
+        :editor="editor"
+        :position="blockMenuPosition"
+        @close="blockMenuPosition = undefined"
+      />
+      <FloatingFormatMenu :editor="editor" @link="openDocumentLink()" />
       <div class="editor-toolbar" aria-label="Text formatting">
         <button
           title="Link to document · Ctrl+K"

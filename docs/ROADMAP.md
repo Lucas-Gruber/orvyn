@@ -9,7 +9,7 @@ Work through these areas in order, preserving working features and committing/pu
    - [x] Internal document/heading preview cards.
    - [x] Opt-in YouTube/Vimeo/Loom video embeds.
    - [x] Two/three-column layouts and a floating selection formatting toolbar.
-   - [ ] Multi-block selection/movement and drag handles.
+   - [x] Whole document-block selection, movement, drag handles, duplication and deletion.
    - [ ] Page/space icons and covers, folders and hierarchy dragging.
 2. Collaboration
    - [ ] Page/thread/text-anchored comments, resolve/reopen and mentions.

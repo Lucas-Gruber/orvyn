@@ -8,4 +8,4 @@ Selecting text shows a floating toolbar for bold, italic, underline, strikethrou
 
 Schema version 8 adds columns and column child nodes, with structural validation requiring exactly two or three nonempty block containers. Migration 20 updates new-page defaults without replacing old document histories. Upgrade all web/API/collaboration replicas together and reload older editor tabs.
 
-Schema tests cover round trips, invalid counts and standalone columns. Chromium tests cover insertion, both columns' content, formatted/linked selections, exit shortcuts, a second reader, mobile stacking/no overflow and reload persistence. Generic block selection/movement and drag handles remain unfinished.
+Schema tests cover round trips, invalid counts and standalone columns. Chromium tests cover insertion, both columns' content, formatted/linked selections, exit shortcuts, a second reader, mobile stacking/no overflow and reload persistence. Document-level block selection/movement and native drag handles are described in BLOCK_CONTROLS.md.

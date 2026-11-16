@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { BubbleMenu } from "@tiptap/vue-3/menus";
 import type { NodeViewProps } from "@tiptap/vue-3";
+import { BlockSelection } from "@orvyn/editor";
 const props = defineProps<{ editor: NodeViewProps["editor"] }>(),
   emit = defineEmits<{ link: [] }>();
 function visible({
@@ -14,6 +15,7 @@ function visible({
     props.editor.isEditable &&
     (props.editor.isFocused || element.contains(document.activeElement)) &&
     !state.selection.empty &&
+    !(state.selection instanceof BlockSelection) &&
     !!state.doc.textBetween(state.selection.from, state.selection.to).trim() &&
     !props.editor.isActive("codeBlock")
   );
