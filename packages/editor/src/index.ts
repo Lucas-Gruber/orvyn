@@ -19,8 +19,10 @@ import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import { common, createLowlight } from "lowlight";
 import { ImageBlock, FileBlock } from "./asset-blocks.js";
 import { PagePreviewBlock } from "./page-preview.js";
+import { VideoEmbedBlock } from "./video-embed.js";
+import { validVideo } from "./embed-model.js";
 const lowlight = createLowlight(common);
-export const documentSchemaVersion = 6;
+export const documentSchemaVersion = 7;
 export function editorExtensions(collaborative = false): AnyExtension[] {
   return [
     StarterKit.configure({
@@ -43,6 +45,7 @@ export function editorExtensions(collaborative = false): AnyExtension[] {
     ImageBlock,
     FileBlock,
     PagePreviewBlock,
+    VideoEmbedBlock,
     CodeBlockLowlight.configure({ lowlight, defaultLanguage: "plaintext" }),
   ];
 }
@@ -85,6 +88,13 @@ export function validateDocument(input: unknown) {
       throw Error("Invalid attachment block");
     if (n.type.name === "heading" && ![1, 2, 3].includes(n.attrs.level))
       throw Error("Invalid heading level");
+    if (
+      n.type.name === "orvynVideo" &&
+      (!validVideo(n.attrs.provider, n.attrs.resourceId) ||
+        typeof n.attrs.title !== "string" ||
+        n.attrs.title.length > 160)
+    )
+      throw Error("Invalid video embed");
     if (
       n.type.name === "orvynPagePreview" &&
       (typeof n.attrs.pageId !== "string" ||

@@ -30,3 +30,5 @@ Callouts, toggles, tables of contents and syntax-highlighted code: [docs/EDITOR_
 Inline images/files and attachment permissions: [docs/EDITOR_MEDIA.md](docs/EDITOR_MEDIA.md). Ordered remaining work: [docs/ROADMAP.md](docs/ROADMAP.md).
 
 Permission-checked document/heading preview cards: [docs/PAGE_PREVIEWS.md](docs/PAGE_PREVIEWS.md).
+
+Opt-in YouTube/Vimeo/Loom players: [docs/VIDEO_EMBEDS.md](docs/VIDEO_EMBEDS.md).

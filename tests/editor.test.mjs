@@ -9,6 +9,10 @@ import {
   pageLink,
   headingFromHash,
 } from "../packages/editor/dist/index.js";
+import {
+  parseVideoUrl,
+  videoSource,
+} from "../packages/editor/dist/embed-model.js";
 test("shared editor schema upgrades paragraphs, round-trips Yjs and rejects unsafe structures", () => {
   const doc = normalizeDocument({
     type: "doc",
@@ -315,5 +319,74 @@ test("page preview nodes round-trip references without embedding destination con
           content: [{ type: "orvynPagePreview", attrs }],
         }),
       /preview/,
+    );
+});
+test("video embeds allow only canonical provider resource IDs and never arbitrary iframe URLs", () => {
+  const id = "AbCdEf012_-";
+  for (const href of [
+    "https://youtu.be/" + id,
+    "https://www.youtube.com/watch?v=" + id + "&tracking=discard",
+    "https://www.youtube-nocookie.com/embed/" + id,
+  ])
+    assert.deepEqual(parseVideoUrl(href), {
+      provider: "youtube",
+      resourceId: id,
+    });
+  assert.equal(
+    videoSource("youtube", id),
+    "https://www.youtube-nocookie.com/embed/" + id,
+  );
+  assert.deepEqual(parseVideoUrl("https://vimeo.com/123456789"), {
+    provider: "vimeo",
+    resourceId: "123456789",
+  });
+  assert.deepEqual(
+    parseVideoUrl("https://www.loom.com/share/" + "a".repeat(32)),
+    { provider: "loom", resourceId: "a".repeat(32) },
+  );
+  for (const href of [
+    "http://youtube.com/watch?v=" + id,
+    "https://youtube.com.evil.test/watch?v=" + id,
+    "https://youtube.com@127.0.0.1/watch?v=" + id,
+    "https://127.0.0.1/",
+    "javascript:alert(1)",
+    "data:text/html,iframe",
+    "https://vimeo.com/123?h=private",
+    "https://www.youtube.com:444/watch?v=" + id,
+  ])
+    assert.equal(parseVideoUrl(href), null);
+  const doc = normalizeDocument({
+      type: "doc",
+      content: [
+        {
+          type: "orvynVideo",
+          attrs: {
+            provider: "youtube",
+            resourceId: id,
+            title: "A video",
+            src: "https://evil.test",
+          },
+        },
+      ],
+    }),
+    ydoc = documentToYDoc(doc);
+  try {
+    assert.deepEqual(yDocToDocument(ydoc), doc);
+  } finally {
+    ydoc.destroy();
+  }
+  assert.ok(!JSON.stringify(doc).includes("evil.test"));
+  for (const attrs of [
+    { provider: "unknown", resourceId: id },
+    { provider: "youtube", resourceId: '"><script>' },
+    { provider: "vimeo", resourceId: "123", title: "a".repeat(161) },
+  ])
+    assert.throws(
+      () =>
+        validateDocument({
+          type: "doc",
+          content: [{ type: "orvynVideo", attrs }],
+        }),
+      /video embed/,
     );
 });

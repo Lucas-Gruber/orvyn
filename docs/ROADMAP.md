@@ -7,7 +7,7 @@ Work through these areas in order, preserving working features and committing/pu
    - [x] Callouts, collapsible sections, dynamic outlines and highlighted code.
    - [x] Private images/files embedded in document content.
    - [x] Internal document/heading preview cards.
-   - [ ] Supported external embeds.
+   - [x] Opt-in YouTube/Vimeo/Loom video embeds.
    - [ ] Columns, floating formatting toolbar and multi-block selection/movement.
    - [ ] Page/space icons and covers, folders and hierarchy dragging.
 2. Collaboration

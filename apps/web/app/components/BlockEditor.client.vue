@@ -10,6 +10,7 @@ import TableOfContentsNode from "./TableOfContentsNode.vue";
 import CodeBlockNode from "./CodeBlockNode.vue";
 import AssetNode from "./AssetNode.vue";
 import PagePreviewNode from "./PagePreviewNode.vue";
+import VideoEmbedNode from "./VideoEmbedNode.vue";
 import { editorPageKey } from "../composables/editorContext";
 import {
   editorExtensions,
@@ -35,6 +36,7 @@ const openPage = inject(pageNavigationKey),
   showDocumentLink = ref(false),
   linkAsPreview = ref(false),
   showAsset = ref(false),
+  showVideo = ref(false),
   assetImage = ref(true),
   selectedLinkText = ref(""),
   linkMessage = ref(""),
@@ -82,6 +84,12 @@ interface SlashCommand {
   aliases?: string[];
 }
 const commands: SlashCommand[] = [
+  {
+    label: "Embed",
+    aliases: ["video", "einbetten"],
+    keepSelection: true,
+    run: () => void openVideo(),
+  },
   {
     label: "Image",
     aliases: ["bild", "photo"],
@@ -225,6 +233,7 @@ function initialize() {
           "orvynImage",
           "orvynFile",
           "orvynPagePreview",
+          "orvynVideo",
         ].includes(extension.name)
           ? extension.extend({
               addNodeView() {
@@ -238,6 +247,7 @@ function initialize() {
                       orvynImage: AssetNode,
                       orvynFile: AssetNode,
                       orvynPagePreview: PagePreviewNode,
+                      orvynVideo: VideoEmbedNode,
                     } as Record<string, any>
                   )[extension.name],
                 );
@@ -298,6 +308,11 @@ function initialize() {
               (event.key === "ArrowDown" ? 1 : -1) +
               Math.max(filtered.value.length, 1)) %
             Math.max(filtered.value.length, 1);
+          void nextTick(() =>
+            root.value
+              ?.querySelector<HTMLElement>('.slash-menu [aria-selected="true"]')
+              ?.scrollIntoView({ block: "nearest" }),
+          );
           return true;
         }
         if (event.key === "Enter") {
@@ -546,6 +561,41 @@ function insertAsset(file: { fileId: string; label: string }) {
 }
 function closeAsset() {
   showAsset.value = false;
+  pickerSelectionActive = false;
+  editor.value?.commands.focus();
+}
+async function openVideo() {
+  if (!editor.value?.isEditable) return;
+  insertionRange = { ...slashRange };
+  pickerSelectionActive = true;
+  slashOpen.value = false;
+  try {
+    await flush();
+    showVideo.value = true;
+  } catch {
+    pickerSelectionActive = false;
+    linkMessage.value = "Save pending changes before inserting a video.";
+  }
+}
+function insertVideo(value: {
+  provider: string;
+  resourceId: string;
+  title: string;
+}) {
+  if (!editor.value?.isEditable) return;
+  pickerSelectionActive = false;
+  editor.value
+    .chain()
+    .focus()
+    .insertContentAt(insertionRange, [
+      { type: "orvynVideo", attrs: value },
+      { type: "paragraph" },
+    ])
+    .run();
+  showVideo.value = false;
+}
+function closeVideo() {
+  showVideo.value = false;
   pickerSelectionActive = false;
   editor.value?.commands.focus();
 }
@@ -836,6 +886,11 @@ onBeforeUnmount(() => {
       :image="assetImage"
       @close="closeAsset"
       @select="insertAsset"
+    />
+    <VideoEmbedPicker
+      :open="showVideo"
+      @close="closeVideo"
+      @select="insertVideo"
     />
     <div class="editor-status">
       <span role="status">{{ saveStatus }}</span>

@@ -358,6 +358,10 @@ CREATE TRIGGER record_file_notify AFTER INSERT OR UPDATE OR DELETE ON files FOR 
     version: 18,
     sql: `ALTER TABLE pages ALTER COLUMN document_schema_version SET DEFAULT 6;`,
   },
+  {
+    version: 19,
+    sql: `ALTER TABLE pages ALTER COLUMN document_schema_version SET DEFAULT 7;`,
+  },
 ] as const;
 
 export async function migrate(pool: Pool, target = migrations.at(-1)!.version) {

@@ -32,6 +32,10 @@
     "./links": {
       "types": "./dist/links.d.ts",
       "default": "./dist/links.js"
+    },
+    "./embeds": {
+      "types": "./dist/embed-model.d.ts",
+      "default": "./dist/embed-model.js"
     }
   }
 }

@@ -147,6 +147,7 @@ try {
           "tests/editor-blocks.test.mjs",
           "tests/editor-assets.test.mjs",
           "tests/page-previews.test.mjs",
+          "tests/video-embeds.test.mjs",
         ];
   const tests = spawn(
     process.execPath,
