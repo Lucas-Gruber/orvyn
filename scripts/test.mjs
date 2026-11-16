@@ -48,16 +48,22 @@ const port = async () => {
   return p;
 };
 async function ready(address, child) {
-  for (let i = 0; i < 100; i++) {
-    if (child.exitCode !== null)
+  const deadline = Date.now() + 30000;
+  let last = "No response";
+  while (Date.now() < deadline) {
+    if (child.exitCode !== null || child.signalCode !== null)
       throw Error("Test service exited during startup");
     try {
-      const r = await fetch(address);
+      const r = await fetch(address, { signal: AbortSignal.timeout(1000) });
       if (r.ok) return;
-    } catch {}
+      last = "HTTP " + r.status;
+      await r.body?.cancel();
+    } catch (error) {
+      last = error.message;
+    }
     await new Promise((r) => setTimeout(r, 100));
   }
-  throw Error("Test service did not become ready");
+  throw Error(`Test service did not become ready within 30s: ${address} (${last})`);
 }
 function start(args, env) {
   const c = spawn(process.execPath, args, {
@@ -66,6 +72,7 @@ function start(args, env) {
     stdio: ["ignore", "pipe", "pipe"],
   });
   children.push(c);
+  c.stdout.resume();
   c.stderr.on("data", (b) => process.stderr.write(b));
   return c;
 }
