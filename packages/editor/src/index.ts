@@ -7,12 +7,24 @@ import TaskItem from "@tiptap/extension-task-item";
 import { TableKit } from "@tiptap/extension-table";
 import { prosemirrorJSONToYDoc, yDocToProsemirrorJSON } from "y-prosemirror";
 import * as Y from "yjs";
-export const documentSchemaVersion = 3;
+import {
+  CalloutBlock,
+  ToggleBlock,
+  ToggleSummary,
+  ToggleContent,
+  TableOfContentsBlock,
+  calloutTones,
+} from "./content-blocks.js";
+import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
+import { common, createLowlight } from "lowlight";
+const lowlight = createLowlight(common);
+export const documentSchemaVersion = 4;
 export function editorExtensions(collaborative = false): AnyExtension[] {
   return [
     StarterKit.configure({
       undoRedo: collaborative ? false : undefined,
       trailingNode: false,
+      codeBlock: false,
       heading: { levels: [1, 2, 3] },
       link: { openOnClick: false, defaultProtocol: "https" },
     }),
@@ -21,6 +33,12 @@ export function editorExtensions(collaborative = false): AnyExtension[] {
     TableKit.configure({ table: { resizable: false } }),
     DatabaseBlock,
     HeadingIdentity,
+    CalloutBlock,
+    ToggleBlock,
+    ToggleSummary,
+    ToggleContent,
+    TableOfContentsBlock,
+    CodeBlockLowlight.configure({ lowlight, defaultLanguage: "plaintext" }),
   ];
 }
 export const schema: ReturnType<typeof getSchema> =
@@ -52,6 +70,8 @@ export function validateDocument(input: unknown) {
     }
     if (n.type.name === "heading" && ![1, 2, 3].includes(n.attrs.level))
       throw Error("Invalid heading level");
+    if (n.type.name === "orvynCallout" && !calloutTones.includes(n.attrs.tone))
+      throw Error("Invalid callout tone");
     if (
       n.type.name === "heading" &&
       n.attrs.id !== null &&
@@ -149,6 +169,13 @@ export { default as TaskItem } from "@tiptap/extension-task-item";
 export { TableKit } from "@tiptap/extension-table";
 
 export { DatabaseBlock } from "./database-node.js";
+export {
+  CalloutBlock,
+  ToggleBlock,
+  ToggleSummary,
+  ToggleContent,
+  TableOfContentsBlock,
+} from "./content-blocks.js";
 export {
   HeadingIdentity,
   documentHeadings,

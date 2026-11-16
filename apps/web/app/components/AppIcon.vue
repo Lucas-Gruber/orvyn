@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import {
+  Info,
+  Lightbulb,
+  TriangleAlert,
   Search,
   Plus,
   ChevronDown,
@@ -57,6 +60,9 @@ const props = withDefaults(defineProps<{ name: string; size?: number }>(), {
   size: 18,
 });
 const icons: Record<string, any> = {
+  info: Info,
+  lightbulb: Lightbulb,
+  warning: TriangleAlert,
   search: Search,
   plus: Plus,
   chevronDown: ChevronDown,

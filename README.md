@@ -24,3 +24,5 @@ Structured databases and tested view behavior: [docs/DATABASES.md](docs/DATABASE
 Workspace navigation, themes, keyboard behavior and UI verification: [docs/UI.md](docs/UI.md).
 
 Slash commands and links to documents or specific headings: [docs/DOCUMENT_LINKS.md](docs/DOCUMENT_LINKS.md).
+
+Callouts, toggles, tables of contents and syntax-highlighted code: [docs/EDITOR_BLOCKS.md](docs/EDITOR_BLOCKS.md).

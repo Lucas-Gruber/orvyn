@@ -174,3 +174,70 @@ test("linked database references round-trip through Yjs and reject unsafe identi
       /database block reference/,
     );
 });
+test("structured editor blocks round-trip nested content and reject invalid callout/toggle structures", () => {
+  const doc = normalizeDocument({
+    type: "doc",
+    content: [
+      {
+        type: "orvynCallout",
+        attrs: { tone: "warning" },
+        content: [
+          {
+            type: "paragraph",
+            content: [{ type: "text", text: "Keep this exact text" }],
+          },
+        ],
+      },
+      {
+        type: "orvynToggle",
+        content: [
+          {
+            type: "orvynToggleSummary",
+            content: [{ type: "text", text: "Details" }],
+          },
+          {
+            type: "orvynToggleContent",
+            content: [
+              {
+                type: "paragraph",
+                content: [{ type: "text", text: "Nested body" }],
+              },
+            ],
+          },
+        ],
+      },
+      { type: "orvynToc" },
+      {
+        type: "codeBlock",
+        attrs: { language: "javascript" },
+        content: [
+          { type: "text", text: 'const text = "<script> stays code";' },
+        ],
+      },
+    ],
+  });
+  const ydoc = documentToYDoc(doc);
+  try {
+    assert.deepEqual(yDocToDocument(ydoc), doc);
+  } finally {
+    ydoc.destroy();
+  }
+  for (const content of [
+    [
+      {
+        type: "orvynCallout",
+        attrs: { tone: "url(javascript:alert(1))" },
+        content: [{ type: "paragraph" }],
+      },
+    ],
+    [{ type: "orvynToggle", content: [{ type: "paragraph" }] }],
+    [
+      {
+        type: "orvynToggleSummary",
+        content: [{ type: "text", text: "Standalone" }],
+      },
+    ],
+    [{ type: "orvynToc", content: [{ type: "paragraph" }] }],
+  ])
+    assert.throws(() => validateDocument({ type: "doc", content }));
+});

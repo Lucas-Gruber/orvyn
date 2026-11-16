@@ -16,6 +16,7 @@
   --accent-soft: #b09aff17;
   --error: #f49c9c;
   --success: #83c8a8;
+  --warning: #dfb779;
   --shadow: 0 18px 70px #0005;
   color-scheme: dark;
 }
@@ -116,6 +117,7 @@
   --accent-soft: #7952c80e;
   --error: #b93d4a;
   --success: #348360;
+  --warning: #906719;
   --shadow: 0 18px 70px #27232f20;
   color-scheme: light;
 }

@@ -4,6 +4,11 @@ import Collaboration from "@tiptap/extension-collaboration";
 import CollaborationCaret from "@tiptap/extension-collaboration-caret";
 import { HocuspocusProvider } from "@hocuspocus/provider";
 import EmbeddedDatabaseNode from "./EmbeddedDatabaseNode.vue";
+import CalloutNode from "./CalloutNode.vue";
+import ToggleNode from "./ToggleNode.vue";
+import TableOfContentsNode from "./TableOfContentsNode.vue";
+import CodeBlockNode from "./CodeBlockNode.vue";
+import { editorPageKey } from "../composables/editorContext";
 import {
   editorExtensions,
   documentHeadings,
@@ -22,6 +27,7 @@ const props = defineProps<{
   targetHeading?: string;
   headingVisit?: number;
 }>();
+provide(editorPageKey, () => props.pageId);
 const openPage = inject(pageNavigationKey),
   root = ref<HTMLElement>(),
   showDocumentLink = ref(false),
@@ -71,6 +77,35 @@ interface SlashCommand {
   aliases?: string[];
 }
 const commands: SlashCommand[] = [
+  {
+    label: "Callout",
+    aliases: ["note", "hinweis"],
+    run: (e) =>
+      e
+        .chain()
+        .focus()
+        .insertContent({
+          type: "orvynCallout",
+          attrs: { tone: "info" },
+          content: [{ type: "paragraph" }],
+        })
+        .run(),
+  },
+  {
+    label: "Toggle",
+    aliases: ["collapse", "aufklappen"],
+    run: (e: Editor) => e.chain().focus().insertToggle().run(),
+  },
+  {
+    label: "Table of contents",
+    aliases: ["toc", "outline", "inhaltsverzeichnis"],
+    run: (e) =>
+      e
+        .chain()
+        .focus()
+        .insertContent([{ type: "orvynToc" }, { type: "paragraph" }])
+        .run(),
+  },
   {
     label: "Paragraph",
     run: (e: Editor) => e.chain().focus().setParagraph().run(),
@@ -157,18 +192,35 @@ function initialize() {
   editor.value = new Editor({
     extensions: [
       ...editorExtensions(true).map((extension) =>
-        extension.name === "headingIdentity"
-          ? extension.configure({
-              onCopy: copyHeadingLink,
-              activeHeading: () => props.targetHeading || "",
+        ["orvynCallout", "orvynToggle", "orvynToc", "codeBlock"].includes(
+          extension.name,
+        )
+          ? extension.extend({
+              addNodeView() {
+                return VueNodeViewRenderer(
+                  (
+                    {
+                      orvynCallout: CalloutNode,
+                      orvynToggle: ToggleNode,
+                      orvynToc: TableOfContentsNode,
+                      codeBlock: CodeBlockNode,
+                    } as Record<string, any>
+                  )[extension.name],
+                );
+              },
             })
-          : extension.name === "orvynDatabase"
-            ? extension.extend({
-                addNodeView() {
-                  return VueNodeViewRenderer(EmbeddedDatabaseNode);
-                },
+          : extension.name === "headingIdentity"
+            ? extension.configure({
+                onCopy: copyHeadingLink,
+                activeHeading: () => props.targetHeading || "",
               })
-            : extension,
+            : extension.name === "orvynDatabase"
+              ? extension.extend({
+                  addNodeView() {
+                    return VueNodeViewRenderer(EmbeddedDatabaseNode);
+                  },
+                })
+              : extension,
       ),
       Collaboration.configure({ document }),
       CollaborationCaret.configure({
@@ -695,22 +747,20 @@ onBeforeUnmount(() => {
       @select="insertDocumentLink"
     />
     <div class="editor-status">
-      <span role="status">{{ saveStatus }}</span><span
-        >{{ peers.length }} present</span
+      <span role="status">{{ saveStatus }}</span>
+      <div
+        v-if="peers.length > 1"
+        class="presence"
+        aria-label="People on this page"
       >
-    </div>
-    <div
-      v-if="peers.length > 1"
-      class="presence"
-      aria-label="People on this page"
-    >
-      <span
-        v-for="peer in peers.slice(0, 5)"
-        :key="peer.id"
-        class="presence-avatar"
-        :title="peer.name"
-        >{{ peer.name.slice(0, 2).toUpperCase() }}</span
-      >
+        <span
+          v-for="peer in peers.slice(0, 5)"
+          :key="peer.id"
+          class="presence-avatar"
+          :title="peer.name"
+          >{{ peer.name.slice(0, 2).toUpperCase() }}</span
+        >
+      </div>
     </div>
     <dialog
       ref="linkDialog"
@@ -1065,9 +1115,6 @@ button:disabled {
   margin-bottom: 6px;
   min-height: 19px;
 }
-.editor-status > span:last-child {
-  display: none;
-}
 .editor-toolbar {
   gap: 2px;
   align-items: center;
@@ -1319,5 +1366,13 @@ button:disabled {
   padding: 8px 12px;
   box-shadow: var(--shadow);
   font-size: 0.85rem;
+}
+</style>
+
+<style>
+.editor-status .presence {
+  position: static;
+  margin: 0;
+  align-items: center;
 }
 </style>
