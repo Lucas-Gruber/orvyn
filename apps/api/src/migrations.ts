@@ -496,6 +496,42 @@ BEGIN
  ON CONFLICT(recipient_id,page_id) WHERE kind='document_mention' DO UPDATE SET actor_id=actor,read_at=NULL,created_at=clock_timestamp();
 END $$;`,
   },
+  {
+    version: 27,
+    sql: `CREATE TABLE activity_events (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+ space_id uuid NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+ page_id uuid,
+ actor_id uuid REFERENCES users(id) ON DELETE SET NULL,
+ kind text NOT NULL CHECK(length(kind) BETWEEN 1 AND 100),
+ min_rank smallint NOT NULL DEFAULT 10 CHECK(min_rank IN (10,40,50)),
+ bucket timestamptz,
+ created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+ updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+ FOREIGN KEY(space_id,page_id) REFERENCES pages(space_id,id) ON DELETE CASCADE,
+ UNIQUE(page_id,actor_id,kind,bucket)
+);
+CREATE INDEX activity_space ON activity_events(space_id,created_at DESC,id DESC);
+CREATE INDEX activity_page ON activity_events(page_id,created_at DESC,id DESC) WHERE page_id IS NOT NULL;
+CREATE FUNCTION orvyn_record_activity(target_page uuid,target_space uuid,actor uuid,event text,minimum_rank integer DEFAULT 10,merge_edits boolean DEFAULT false) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE
+ scope uuid;
+ recorded timestamptz := clock_timestamp();
+ window_start timestamptz;
+BEGIN
+ IF target_page IS NOT NULL THEN
+  SELECT space_id INTO scope FROM pages WHERE id=target_page;
+  IF scope IS NULL OR (target_space IS NOT NULL AND target_space<>scope) THEN RAISE EXCEPTION 'Invalid activity source' USING ERRCODE='23514'; END IF;
+ ELSE scope := target_space;
+ END IF;
+ IF scope IS NULL THEN RAISE EXCEPTION 'Activity requires a space' USING ERRCODE='23514'; END IF;
+ IF merge_edits AND target_page IS NOT NULL THEN window_start := date_bin(interval '5 minutes',recorded,'2000-01-01'::timestamptz); END IF;
+ INSERT INTO activity_events(space_id,page_id,actor_id,kind,min_rank,bucket,created_at,updated_at)
+ VALUES(scope,target_page,actor,event,minimum_rank,window_start,recorded,recorded)
+ ON CONFLICT(page_id,actor_id,kind,bucket) DO UPDATE SET updated_at=excluded.updated_at;
+END $$;
+`,
+  },
 ] as const;
 
 export async function migrate(pool: Pool, target = migrations.at(-1)!.version) {

@@ -344,6 +344,10 @@ const server = new Server<Identity>({
           "INSERT INTO page_revisions(page_id,version,title,document,author_id) VALUES($1,$2,$3,$4,$5)",
           [p.id, p.version, p.title, p.document, connection.context.userId],
         );
+        await c.query(
+          "SELECT orvyn_record_activity($1,NULL,$2,'page.updated',10,true)",
+          [p.id, connection.context.userId],
+        );
       } finally {
         candidate.destroy();
       }

@@ -257,6 +257,10 @@ class TransferController {
           "INSERT INTO page_revisions(page_id,version,title,document,author_id) VALUES($1,$2,$3,$4,$5)",
           [p.id, p.version, p.title, p.document, uid],
         );
+        await c.query(
+          "SELECT orvyn_record_activity($1,NULL,$2,'database.csv_imported')",
+          [p.id, uid],
+        );
       }
       const outcome = {
         createdRecords: ids.length,

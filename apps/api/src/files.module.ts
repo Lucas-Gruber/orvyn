@@ -156,7 +156,7 @@ class FilesController {
           [row.id],
         );
         if (!r.rowCount) fail(409, "Upload could not be completed");
-        await audit(c, uid, "file.uploaded");
+        await audit(c, uid, "file.uploaded", { pageId: id });
         return r.rows[0];
       });
     } catch (error) {
@@ -242,7 +242,7 @@ class FilesController {
         "UPDATE files SET state='deleted',deleted_at=now() WHERE id=$1",
         [file.id],
       );
-      await audit(c, uid, "file.deleted");
+      await audit(c, uid, "file.deleted", { pageId: file.page_id });
       return { ok: true };
     });
   }

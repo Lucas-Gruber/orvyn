@@ -49,6 +49,8 @@ const sidebarOpen = ref(true),
   showAppearance = ref(false),
   showPageAppearance = ref(false),
   showComments = ref(false),
+  showActivity = ref(false),
+  activityPageId = ref(""),
   commentsInline = ref(false),
   pendingCommentAnchor = ref<CommentAnchor | null>(null),
   requestedCommentThread = ref(""),
@@ -99,6 +101,13 @@ let titleTimer: ReturnType<typeof setTimeout> | undefined,
   searchGeneration = 0;
 let viewport: MediaQueryList | undefined,
   commentViewport: MediaQueryList | undefined;
+watch(
+  () => space.value?.id,
+  () => {
+    showActivity.value = false;
+    activityPageId.value = "";
+  },
+);
 function commentViewportChanged(event: { matches: boolean }) {
   commentsInline.value = event.matches;
 }
@@ -133,6 +142,21 @@ async function visitNotification(item: any) {
       personVisit.value++;
     }
     if (mobile.value) sidebarOpen.value = false;
+  } finally {
+    navigating.value = false;
+  }
+}
+function openActivity(forPage = false) {
+  activityPageId.value = forPage ? page.value?.id || "" : "";
+  showActivity.value = true;
+}
+async function visitActivity(id: string) {
+  if (navigating.value)
+    throw new Error("Wait for the current page to finish opening.");
+  navigating.value = true;
+  try {
+    await openPage(id);
+    view.value = "workspace";
   } finally {
     navigating.value = false;
   }
@@ -414,6 +438,7 @@ async function select(s: any, location = true) {
 }
 function edit(p: any) {
   closeComments();
+  showActivity.value = false;
   showPageAppearance.value = false;
   targetHeading.value = "";
   targetPerson.value = "";
@@ -1159,6 +1184,9 @@ onBeforeUnmount(() => {
       >
       <nav class="sidebar-nav" aria-label="Workspace">
         <NotificationInbox :key="me?.id" :visit="visitNotification" />
+        <button :disabled="!space" @click="openActivity()">
+          <AppIcon name="history" :size="17" />Activity
+        </button>
         <button @click="openSearch">
           <AppIcon name="search" :size="17" />Search<kbd>Ctrl K</kbd></button
         ><button
@@ -1369,6 +1397,8 @@ onBeforeUnmount(() => {
               >Comments</span
             ></button
           ><UiMenu label="Page actions"
+            ><button role="menuitem" @click="openActivity(true)">
+              <AppIcon name="history" :size="16" />Page activity</button
             ><button
               v-if="page.access_rank >= 30"
               role="menuitem"
@@ -1946,6 +1976,15 @@ onBeforeUnmount(() => {
       ><span><kbd>Enter</kbd> Open</span><span><kbd>Esc</kbd> Close</span>
     </div></UiDialog
   >
+  <LazyActivityPanel
+    v-if="space"
+    :key="'activity-' + me?.id + '-' + space.id"
+    :open="showActivity"
+    :space-id="space.id"
+    :page-id="activityPageId"
+    :visit="visitActivity"
+    @close="showActivity = false"
+  />
   <LazyPageComments
     v-if="page"
     :key="'comments-' + page.id"

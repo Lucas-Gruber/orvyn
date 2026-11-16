@@ -138,7 +138,7 @@ class DatabasesController {
         "INSERT INTO page_revisions(page_id,version,title,document,author_id) VALUES($1,$2,$3,$4,$5)",
         [p.id, p.version, p.title, p.document, uid],
       );
-      await audit(c, uid, "database.created");
+      await audit(c, uid, "database.created", { pageId: p.id });
       return { page: p, ...(await this.metadata(uid, p.id, c)) };
     });
   }
@@ -184,7 +184,9 @@ class DatabasesController {
         "INSERT INTO database_properties(database_id,name,type,config,position) VALUES($1,$2,$3,$4,$5) RETURNING id,name,type,config,position",
         [context.page.id, input.name, input.type, config, position],
       );
-      await audit(c, uid, "database.property_created");
+      await audit(c, uid, "database.property_created", {
+        pageId: context.page.id,
+      });
       return r.rows[0];
     });
   }
@@ -208,7 +210,9 @@ class DatabasesController {
         [name, context.page.id, property],
       );
       if (!r.rowCount) fail(404, "Property not found");
-      await audit(c, uid, "database.property_renamed");
+      await audit(c, uid, "database.property_renamed", {
+        pageId: context.page.id,
+      });
       return r.rows[0];
     });
   }
@@ -242,7 +246,7 @@ class DatabasesController {
           context.views.length,
         ],
       );
-      await audit(c, uid, "database.view_created");
+      await audit(c, uid, "database.view_created", { pageId: context.page.id });
       return r.rows[0];
     });
   }
@@ -278,7 +282,7 @@ class DatabasesController {
         ],
       );
       if (!r.rowCount) fail(409, "View changed or unavailable; reload first");
-      await audit(c, uid, "database.view_updated");
+      await audit(c, uid, "database.view_updated", { pageId: context.page.id });
       return r.rows[0];
     });
   }
@@ -374,7 +378,7 @@ class DatabasesController {
         "INSERT INTO page_revisions(page_id,version,title,document,author_id) VALUES($1,$2,$3,$4,$5)",
         [p.id, p.version, p.title, p.document, uid],
       );
-      await audit(c, uid, "database.record_created");
+      await audit(c, uid, "database.record_created", { pageId: p.id });
       return recordSnapshot(c, uid, context.page.id, p.id, context.properties);
     });
   }
@@ -415,7 +419,7 @@ class DatabasesController {
         uid,
         page.id,
       ]);
-      await audit(c, uid, "database.record_updated");
+      await audit(c, uid, "database.record_updated", { pageId: page.id });
       return recordSnapshot(
         c,
         uid,

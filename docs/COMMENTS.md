@@ -16,7 +16,7 @@ Migration 24 stores bounded Yjs relative positions on the thread, separate from 
 
 Highlights and markers are local ProseMirror decorations; fetching or opening comments does not write CRDT updates, document revisions or user-visible text. The latest 200 unresolved anchors are fetched on sync and every five seconds while visible, with immediate refresh after local discussion changes. Opening an older/resolved thread adds its reference locally. Every fetch checks current permissions. Live role messages distinguish Viewer, Commenter and Editor even though the first two share read-only document state.
 
-Discussion mentions and an in-app inbox are documented in NOTIFICATIONS.md. Inline document mentions are documented in EDITOR_MENTIONS.md; user-facing activity follows separately. Thread links, rich comment formatting, comment attachments and persistent/offline drafts are not implemented yet.
+Discussion mentions and an in-app inbox are documented in NOTIFICATIONS.md. Inline document mentions are documented in EDITOR_MENTIONS.md; the page/space activity timeline is documented in ACTIVITY.md. Thread links, rich comment formatting, comment attachments and persistent/offline drafts are not implemented yet.
 
 API tests cover all roles, author/moderator boundaries, retries, concurrent edits, stale resolution, closed-thread replies, deleted text, scoped pagination, former-member metadata, trash/restore and inherited access changes. Chromium tests cover posting/replies/editing/deletion, resolve/reopen, cross-page draft preservation, literal script text, reader controls, persistence and desktop-to-mobile drawer switching.
 

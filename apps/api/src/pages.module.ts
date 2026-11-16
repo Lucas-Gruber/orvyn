@@ -193,7 +193,7 @@ class PagesController {
         "INSERT INTO page_revisions(page_id,version,title,document,author_id) VALUES($1,$2,$3,$4,$5)",
         [p.id, p.version, p.title, p.document, uid],
       );
-      await audit(c, uid, "page.created");
+      await audit(c, uid, "page.created", { pageId: p.id });
       return pageAccess(c, uid, p.id);
     });
   }
@@ -263,7 +263,7 @@ class PagesController {
         uid,
         people,
       ]);
-      await audit(c, uid, "page.updated");
+      await audit(c, uid, "page.updated", { pageId: p.id, merge: true });
       return { ...saved, access_rank: p.access_rank };
     });
   }
@@ -285,7 +285,7 @@ class PagesController {
         "UPDATE pages SET title=$1,title_version=title_version+1,version=version+1,last_edited_by=$3 WHERE id=$2 RETURNING title,title_version",
         [title, p.id, uid],
       );
-      await audit(c, uid, "page.title_updated");
+      await audit(c, uid, "page.title_updated", { pageId: p.id });
       return r.rows[0];
     });
   }
@@ -315,7 +315,7 @@ class PagesController {
         "UPDATE pages SET icon=$2,cover_preset=$3,cover_file_id=$4,appearance_version=appearance_version+1,version=version+1,last_edited_by=$5 WHERE id=$1 RETURNING id,icon,cover_preset,cover_file_id,appearance_version",
         [p.id, input.icon, input.coverPreset, input.coverFileId, uid],
       );
-      await audit(c, uid, "page.appearance_updated");
+      await audit(c, uid, "page.appearance_updated", { pageId: p.id });
       return saved.rows[0];
     });
   }
@@ -387,7 +387,7 @@ class PagesController {
       await c.query("UPDATE spaces SET version=version+1 WHERE id=$1", [
         p.space_id,
       ]);
-      await audit(c, uid, "page.permissions_changed");
+      await audit(c, uid, "page.permissions_changed", { pageId: p.id });
       return { ok: true };
     });
   }
@@ -493,7 +493,7 @@ class PagesController {
         await c.query("UPDATE spaces SET version=version+1 WHERE id=$1", [
           p.space_id,
         ]);
-      await audit(c, uid, "page.moved");
+      await audit(c, uid, "page.moved", { pageId: p.id });
       return pageAccess(c, uid, p.id);
     });
   }
@@ -522,7 +522,7 @@ class PagesController {
         "UPDATE pages SET deleted_at=now(),version=version+1 WHERE id=$1",
         [p.id],
       );
-      await audit(c, uid, "page.trashed");
+      await audit(c, uid, "page.trashed", { pageId: p.id });
       return { ok: true };
     });
   }
@@ -552,7 +552,7 @@ class PagesController {
         "UPDATE pages SET deleted_at=NULL,version=version+1 WHERE id=$1 RETURNING *",
         [p.id],
       );
-      await audit(c, uid, "page.restored");
+      await audit(c, uid, "page.restored", { pageId: p.id });
       return r.rows[0];
     });
   }

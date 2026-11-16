@@ -75,11 +75,30 @@ export async function transaction<T>(fn: (c: PoolClient) => Promise<T>) {
     c.release();
   }
 }
-export async function audit(c: PoolClient, uid: string | null, event: string) {
+export async function audit(
+  c: PoolClient,
+  uid: string | null,
+  event: string,
+  target?: {
+    pageId?: string;
+    spaceId?: string;
+    minRank?: 10 | 40 | 50;
+    merge?: boolean;
+  },
+) {
   await c.query("INSERT INTO audit_events(actor_id,event) VALUES($1,$2)", [
     uid,
     event,
   ]);
+  if (target)
+    await c.query("SELECT orvyn_record_activity($1,$2,$3,$4,$5,$6)", [
+      target.pageId || null,
+      target.spaceId || null,
+      uid,
+      event,
+      target.minRank || 10,
+      target.merge || false,
+    ]);
 }
 export async function rateLimit(key: string, max = 30) {
   const r = await db.query(

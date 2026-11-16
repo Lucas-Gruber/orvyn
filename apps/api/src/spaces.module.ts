@@ -35,7 +35,7 @@ class SpacesController {
         "INSERT INTO spaces(owner_id,name) VALUES($1,$2) RETURNING id,name,kind,version,icon,cover_preset,appearance_version",
         [uid, text(body?.name, 120)],
       );
-      await audit(c, uid, "space.created");
+      await audit(c, uid, "space.created", { spaceId: r.rows[0].id });
       return { ...r.rows[0], role: "Owner" };
     });
   }
@@ -71,7 +71,7 @@ class SpacesController {
         "UPDATE spaces SET icon=$2,cover_preset=$3,appearance_version=appearance_version+1 WHERE id=$1 RETURNING id,icon,cover_preset,appearance_version",
         [s.id, input.icon, input.coverPreset],
       );
-      await audit(c, uid, "space.appearance_updated");
+      await audit(c, uid, "space.appearance_updated", { spaceId: s.id });
       return { ...saved.rows[0], cover_file_id: null };
     });
   }
@@ -114,7 +114,10 @@ class SpacesController {
         "UPDATE spaces SET kind='team',version=version+1 WHERE id=$1 RETURNING id,name,kind,version",
         [s.id],
       );
-      await audit(c, uid, "space.converted_to_team");
+      await audit(c, uid, "space.converted_to_team", {
+        spaceId: s.id,
+        minRank: 40,
+      });
       return { ...r.rows[0], role: "Owner" };
     });
   }
@@ -186,7 +189,10 @@ class SpacesController {
         "Orvyn space invitation",
         `You have been invited to ${s.name} as ${role}.\n\n${url}\n\nSign in with this verified email address to accept. This invitation expires in 7 days. Existing private pages are not included.`,
       );
-      await audit(c, uid, "space.invitation_created");
+      await audit(c, uid, "space.invitation_created", {
+        spaceId: s.id,
+        minRank: 40,
+      });
       return { ok: true };
     });
   }
@@ -243,7 +249,10 @@ class SpacesController {
       await c.query("UPDATE spaces SET version=version+1 WHERE id=$1", [
         s.rows[0].id,
       ]);
-      await audit(c, uid, "space.invitation_accepted");
+      await audit(c, uid, "space.invitation_accepted", {
+        spaceId: s.rows[0].id,
+        minRank: 40,
+      });
       return { ok: true };
     });
   }
@@ -265,7 +274,10 @@ class SpacesController {
       );
       if (!r.rowCount) fail(404, "Member not found");
       await c.query("UPDATE spaces SET version=version+1 WHERE id=$1", [s.id]);
-      await audit(c, uid, "space.member_role_changed");
+      await audit(c, uid, "space.member_role_changed", {
+        spaceId: s.id,
+        minRank: 40,
+      });
       return { ok: true };
     });
   }
@@ -299,7 +311,10 @@ class SpacesController {
         [s.id, member],
       );
       await c.query("UPDATE spaces SET version=version+1 WHERE id=$1", [s.id]);
-      await audit(c, uid, "space.member_removed");
+      await audit(c, uid, "space.member_removed", {
+        spaceId: s.id,
+        minRank: 40,
+      });
       return { ok: true };
     });
   }

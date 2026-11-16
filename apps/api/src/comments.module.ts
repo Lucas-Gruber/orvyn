@@ -348,7 +348,7 @@ class CommentsController {
         input.mentions,
         input.body,
       );
-      await audit(c, uid, "comment.thread_created");
+      await audit(c, uid, "comment.thread_created", { pageId: page.id });
       return detail(c, uid, page, t.id);
     });
   }
@@ -398,7 +398,7 @@ class CommentsController {
         input.body,
       );
       await notifyThreadReply(c, page, uid, thread.id, added.rows[0].id);
-      await audit(c, uid, "comment.replied");
+      await audit(c, uid, "comment.replied", { pageId: page.id });
       return detail(c, uid, page, thread.id);
     });
   }
@@ -427,6 +427,7 @@ class CommentsController {
         c,
         uid,
         input.resolved ? "comment.resolved" : "comment.reopened",
+        { pageId: page.id },
       );
       return detail(c, uid, page, thread.id);
     });
@@ -481,7 +482,7 @@ class CommentsController {
         input.mentions,
         input.body,
       );
-      await audit(c, uid, "comment.edited");
+      await audit(c, uid, "comment.edited", { pageId: page.id });
       return detail(c, uid, page, thread.id);
     });
   }
@@ -513,7 +514,7 @@ class CommentsController {
       await c.query("DELETE FROM notifications WHERE comment_id=$1", [
         message.id,
       ]);
-      await audit(c, uid, "comment.deleted");
+      await audit(c, uid, "comment.deleted", { pageId: page.id });
       return detail(c, uid, page, thread.id);
     });
   }
