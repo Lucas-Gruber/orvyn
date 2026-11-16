@@ -412,6 +412,16 @@ test("Chromium: slash commands, document links, permanent heading links, renames
     await expect(heading).toBeInViewport();
     await expect(heading).toBeFocused();
     await expect(page).toHaveURL(new RegExp("#h-" + headingId + "$"));
+    await page.locator("summary").filter({ hasText: "Backlinks" }).click();
+    await page
+      .locator(".page-backlinks")
+      .getByRole("button", { name: /Project notes Writing/ })
+      .click();
+    await expect(page.getByLabel("Page title", { exact: true })).toHaveValue(
+      "Project notes",
+    );
+    await anchor.click();
+    await expect(heading).toHaveAttribute("data-link-target", "true");
     await expect(document).toBeEditable();
     // Editing the heading text must keep its identity and incoming links.
     await heading.click();
@@ -459,6 +469,12 @@ test("Chromium: slash commands, document links, permanent heading links, renames
     await page.goto(base + pageLink(source.id));
     await expect(document).toBeEditable();
     await document.press("Control+End");
+    await page.evaluate(
+      () =>
+        new Promise((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(resolve)),
+        ),
+    );
     await page.keyboard.press("Enter");
     await page.keyboard.press("Control+b");
     await page.keyboard.type("Read the architecture");
@@ -505,6 +521,12 @@ test("Chromium: slash commands, document links, permanent heading links, renames
     );
     assert.ok(linkedText.marks.some((mark) => mark.type === "link"));
     await document.press("Control+End");
+    await page.evaluate(
+      () =>
+        new Promise((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(resolve)),
+        ),
+    );
     await page.keyboard.press("Enter");
     await document.evaluate((element, id) => {
       const data = new DataTransfer();
@@ -535,6 +557,12 @@ test("Chromium: slash commands, document links, permanent heading links, renames
       pastedHeadings.length,
     );
     await document.press("Control+End");
+    await page.evaluate(
+      () =>
+        new Promise((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(resolve)),
+        ),
+    );
     await page.keyboard.press("Enter");
     await page.keyboard.type("/page");
     await page.keyboard.press("Enter");

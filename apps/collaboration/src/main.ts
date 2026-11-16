@@ -14,6 +14,7 @@ import {
   documentSchemaVersion,
 } from "@orvyn/editor";
 import * as Y from "yjs";
+import { documentReferences } from "@orvyn/editor/links";
 import { createHash } from "node:crypto";
 
 type Identity = {
@@ -300,6 +301,10 @@ const server = new Server<Identity>({
             ],
           )
         ).rows[0];
+        await c.query("SELECT orvyn_replace_page_references($1,$2::jsonb)", [
+          p.id,
+          JSON.stringify(documentReferences(json, origin)),
+        ]);
         await c.query(
           "INSERT INTO page_revisions(page_id,version,title,document,author_id) VALUES($1,$2,$3,$4,$5)",
           [p.id, p.version, p.title, p.document, connection.context.userId],

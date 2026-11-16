@@ -9,6 +9,36 @@ export function headingFromHash(hash: string) {
 }
 export const pageLink = (pageId: string, headingId = "") =>
   `/?page=${encodeURIComponent(pageId)}${validHeadingId(headingId) ? "#h-" + headingId : ""}`;
+export function documentReferences(document: any, origin: string) {
+  const references = new Map<string, { pageId: string; headingId: string }>(),
+    base = new URL(origin);
+  function walk(node: any) {
+    for (const mark of node.marks || []) {
+      if (mark.type !== "link" || typeof mark.attrs?.href !== "string")
+        continue;
+      try {
+        const url = new URL(mark.attrs.href, base),
+          pageId = url.searchParams.get("page");
+        if (
+          url.origin !== base.origin ||
+          url.pathname !== "/" ||
+          !pageId ||
+          !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(
+            pageId,
+          )
+        )
+          continue;
+        const headingId = headingFromHash(url.hash);
+        references.set(pageId + ":" + headingId, { pageId, headingId });
+      } catch {
+        /* Non-URL text is not an internal reference. */
+      }
+    }
+    for (const child of node.content || []) walk(child);
+  }
+  walk(document);
+  return [...references.values()];
+}
 function text(node: any): string {
   return node.text || (node.content || []).map(text).join("");
 }

@@ -1420,6 +1420,7 @@ onBeforeUnmount(() => {
               />{{ child.title }}
             </button>
           </section>
+          <PageBacklinks :key="page.id" :page-id="page.id" />
           <details
             class="page-attachments-disclosure"
             :open="showAttachments"

@@ -3,6 +3,7 @@ import {
   documentSchemaVersion,
   documentHeadings,
 } from "@orvyn/editor";
+import { documentReferences } from "@orvyn/editor/links";
 import {
   Module,
   Controller,
@@ -92,6 +93,37 @@ class PagesController {
   @Get("pages/:id") async get(@Req() req: any, @Param("id") id: string) {
     return pageAccess(db, await user(req), id);
   }
+  @Get("pages/:id/backlinks") async backlinks(
+    @Req() req: any,
+    @Res({ passthrough: true }) res: any,
+    @Param("id") id: string,
+    @Query("after") after = "",
+    @Query("limit") input = "50",
+  ) {
+    const uid = await user(req),
+      limit = Number(input);
+    await pageAccess(db, uid, id);
+    if (
+      !Number.isInteger(limit) ||
+      limit < 1 ||
+      limit > 100 ||
+      (after && !/^[a-f0-9-]{36}$/.test(after))
+    )
+      fail(400, "Invalid pagination");
+    const result = await db.query(
+      `SELECT p.id,p.title,p.kind,p.space_id,s.name AS space_name
+      FROM pages p JOIN spaces s ON s.id=p.space_id
+      WHERE p.id<>$1::uuid AND p.id::text>$3 AND orvyn_page_role(p.id,$2)>=10
+      AND EXISTS(SELECT 1 FROM page_references r WHERE r.source_id=p.id AND r.target_id=$1::uuid)
+      ORDER BY p.id LIMIT $4`,
+      [id, uid, after, limit + 1],
+    );
+    if (result.rows.length > limit) {
+      result.rows.pop();
+      res.setHeader("X-Next-Cursor", result.rows.at(-1).id);
+    }
+    return result.rows;
+  }
   @Get("pages/:id/headings") async headings(
     @Req() req: any,
     @Param("id") id: string,
@@ -148,6 +180,12 @@ class PagesController {
         [input.title, input.document, p.id, uid, documentSchemaVersion],
       );
       const saved = r.rows[0];
+      await c.query("SELECT orvyn_replace_page_references($1,$2::jsonb)", [
+        saved.id,
+        JSON.stringify(
+          documentReferences(input.document, process.env.ORVYN_ORIGIN!),
+        ),
+      ]);
       await c.query(
         "INSERT INTO page_revisions(page_id,version,title,document,author_id) VALUES($1,$2,$3,$4,$5)",
         [saved.id, saved.version, saved.title, saved.document, uid],

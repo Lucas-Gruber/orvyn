@@ -1,4 +1,5 @@
-import { Pool } from "pg";
+import { Pool, type PoolClient } from "pg";
+import { documentReferences } from "@orvyn/editor/links";
 export const migrations = [
   {
     version: 1,
@@ -303,6 +304,42 @@ CREATE TRIGGER record_file_notify AFTER INSERT OR UPDATE OR DELETE ON files FOR 
     version: 14,
     sql: `ALTER TABLE pages ALTER COLUMN document_schema_version SET DEFAULT 3;`,
   },
+  {
+    version: 15,
+    sql: `CREATE TABLE page_references(
+      source_id uuid NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
+      target_id uuid NOT NULL, heading_id text NOT NULL DEFAULT '',
+      PRIMARY KEY(source_id,target_id,heading_id));
+    CREATE INDEX page_references_target ON page_references(target_id,source_id);
+    CREATE FUNCTION orvyn_replace_page_references(source uuid,refs jsonb) RETURNS void LANGUAGE plpgsql AS $$
+    BEGIN
+      DELETE FROM page_references WHERE source_id=source;
+      INSERT INTO page_references(source_id,target_id,heading_id)
+      SELECT source,(r->>'pageId')::uuid,coalesce(r->>'headingId','') FROM jsonb_array_elements(refs) r
+      ON CONFLICT DO NOTHING;
+    END $$;`,
+    async after(c: PoolClient) {
+      let cursor = "";
+      for (;;) {
+        const batch = await c.query(
+          "SELECT id,document FROM pages WHERE id::text>$1 ORDER BY id LIMIT 100",
+          [cursor],
+        );
+        for (const page of batch.rows)
+          await c.query("SELECT orvyn_replace_page_references($1,$2::jsonb)", [
+            page.id,
+            JSON.stringify(
+              documentReferences(
+                page.document,
+                process.env.ORVYN_ORIGIN || "http://localhost:3000",
+              ),
+            ),
+          ]);
+        if (batch.rowCount !== 100) break;
+        cursor = batch.rows.at(-1).id;
+      }
+    },
+  },
 ] as const;
 
 export async function migrate(pool: Pool, target = migrations.at(-1)!.version) {
@@ -324,6 +361,7 @@ export async function migrate(pool: Pool, target = migrations.at(-1)!.version) {
       if (migration.version > target || applied.has(migration.version))
         continue;
       await c.query(migration.sql);
+      if ("after" in migration) await migration.after(c);
       await c.query("INSERT INTO schema_migrations(version) VALUES($1)", [
         migration.version,
       ]);

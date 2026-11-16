@@ -40,7 +40,44 @@ test("migrations install, upgrade existing records, serialize and roll back fail
         ],
       )
     ).rows[0].id;
+    const linkedLegacy = (
+      await db.query(
+        "INSERT INTO pages(space_id,title,document) VALUES($1,'Legacy reference',$2) RETURNING id",
+        [
+          oldSpace,
+          {
+            type: "doc",
+            content: [
+              {
+                type: "paragraph",
+                content: [
+                  {
+                    type: "text",
+                    text: "Existing link",
+                    marks: [
+                      {
+                        type: "link",
+                        attrs: { href: "/?page=" + oldPage, target: "_self" },
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      )
+    ).rows[0].id;
     await Promise.all([migrate(db), migrate(db)]);
+    assert.equal(
+      (
+        await db.query(
+          "SELECT source_id FROM page_references WHERE target_id=$1",
+          [oldPage],
+        )
+      ).rows[0].source_id,
+      linkedLegacy,
+    );
     const row = (
       await db.query(
         "SELECT email,password_hash,email_verified FROM users WHERE id=$1",
