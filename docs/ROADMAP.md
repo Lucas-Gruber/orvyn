@@ -11,7 +11,7 @@ Work through these areas in order, preserving working features and committing/pu
    - [x] Two/three-column layouts and a floating selection formatting toolbar.
    - [x] Whole document-block selection, movement, drag handles, duplication and deletion.
    - [x] Page/space emoji icons and preset covers; private image covers for pages.
-   - [ ] Folders and hierarchy dragging.
+   - [x] Folders, hierarchy dragging and keyboard reorder/nest/outdent.
 2. Collaboration
    - [ ] Page/thread/text-anchored comments, resolve/reopen and mentions.
    - [ ] Notifications and user-visible activity with current permission checks.

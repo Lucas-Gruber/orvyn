@@ -38,3 +38,5 @@ Responsive columns and selection formatting: [docs/EDITOR_LAYOUT.md](docs/EDITOR
 Block selection, drag handles and keyboard movement: [docs/BLOCK_CONTROLS.md](docs/BLOCK_CONTROLS.md).
 
 Page and space icons/covers: [docs/PAGE_APPEARANCE.md](docs/PAGE_APPEARANCE.md).
+
+Folders and sidebar hierarchy movement: [docs/PAGE_HIERARCHY.md](docs/PAGE_HIERARCHY.md).

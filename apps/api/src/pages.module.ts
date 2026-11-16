@@ -25,6 +25,11 @@ import {
 } from "@nestjs/common";
 import { db, fail, text, mutation, user } from "./runtime.js";
 import { appearanceInput } from "@orvyn/shared";
+import {
+  placementInput,
+  placementParent,
+  placementRank,
+} from "./page-placement.js";
 import { transaction, audit } from "./auth/security.js";
 import {
   spaceAccess,
@@ -172,12 +177,15 @@ class PagesController {
     mutation(req);
     const uid = await user(req),
       title = text(body?.title, 300);
+    const kind = body?.kind ?? "page";
+    if (!["page", "folder"].includes(kind))
+      fail(400, "Choose a page or folder");
     return transaction(async (c) => {
       const s = await spaceAccess(c, uid, id, 30, true);
-      const parent = await newPageParent(c, uid, s.id, body.parentId);
+      const parent = await newPageParent(c, uid, s.id, body.parentId, 0, kind);
       const r = await c.query(
-        "INSERT INTO pages(space_id,title,parent_id,created_by,last_edited_by) VALUES($1,$2,$3,$4,$4) RETURNING *",
-        [s.id, title, parent, uid],
+        "INSERT INTO pages(space_id,title,parent_id,kind,created_by,last_edited_by) VALUES($1,$2,$3,$4,$5,$5) RETURNING *",
+        [s.id, title, parent, kind, uid],
       );
       const p = r.rows[0];
       await c.query(
@@ -372,19 +380,37 @@ class PagesController {
     @Body() body: any,
   ) {
     mutation(req);
-    const uid = await user(req);
+    const uid = await user(req),
+      placement = placementInput(body);
     if (
-      !Number.isSafeInteger(body?.version) ||
-      !Number.isSafeInteger(body?.sortOrder) ||
-      Math.abs(body.sortOrder) > 1000000
+      !Number.isSafeInteger(
+        placement ? body?.structureVersion : body?.version,
+      ) ||
+      (placement ? body?.structureVersion : body?.version) < 1 ||
+      (!placement &&
+        (!Number.isSafeInteger(body?.sortOrder) ||
+          Math.abs(body.sortOrder) > 1000000))
     )
-      fail(400, "Page version and sort order required");
+      fail(
+        400,
+        placement
+          ? "Hierarchy version required"
+          : "Page version and sort order required",
+      );
     return transaction(async (c) => {
       const p = await pageWrite(c, uid, id),
         descendants = await subtree(c, p.id);
-      if (p.kind === "record" && body.parentId !== p.parent_id)
+      const requestedParent = placement
+        ? await placementParent(c, uid, p, placement)
+        : body.parentId;
+      if (p.kind === "record" && requestedParent !== p.parent_id)
         fail(400, "Record pages must remain in their database");
-      if (p.version !== body.version) fail(409, "Page changed; reload first");
+      if (
+        placement
+          ? p.structure_version !== body.structureVersion
+          : p.version !== body.version
+      )
+        fail(409, "Hierarchy changed; reload first");
       const denied = await c.query(
         "SELECT id FROM pages WHERE id=ANY($1::uuid[]) AND orvyn_page_role(id,$2,true)<30",
         [descendants.map((d) => d.id), uid],
@@ -396,8 +422,10 @@ class PagesController {
         );
       let parent = null,
         parentDepth = -1;
-      if (body.parentId !== null) {
-        const dest = await pageAccess(c, uid, text(body.parentId, 36), 30);
+      if (requestedParent !== null) {
+        const dest = await pageAccess(c, uid, text(requestedParent, 36), 30);
+        if (dest.kind === "database" && p.kind !== "record")
+          fail(400, "Only record pages belong directly inside a database");
         if (dest.space_id !== p.space_id)
           fail(400, "Cross-space moves are not supported");
         if (descendants.some((d) => d.id === dest.id))
@@ -411,26 +439,43 @@ class PagesController {
       }
       if (parentDepth + 1 + Math.max(...descendants.map((d) => d.depth)) > 63)
         fail(400, "Page hierarchy exceeds 64 levels");
+      const changedParent = parent !== p.parent_id,
+        sortRank = placement
+          ? await placementRank(c, p, parent, placement)
+          : body.sortOrder;
       // Freeze the old audience on the moved root so a new parent cannot broaden access.
-      const audience = await c.query(
-        "SELECT m.user_id,m.role,orvyn_page_role($1,m.user_id) AS rank FROM space_members m WHERE m.space_id=$2",
-        [p.id, p.space_id],
-      );
-      await c.query("DELETE FROM page_permissions WHERE page_id=$1", [p.id]);
-      for (const member of audience.rows.filter((m) => m.rank >= 10)) {
-        const role = Object.entries(roleRanks).find(
-          ([, rank]) => rank === member.rank,
-        )![0];
-        await c.query("INSERT INTO page_permissions VALUES($1,$2,$3)", [
-          p.id,
-          member.user_id,
-          role,
-        ]);
+      if (changedParent) {
+        const audience = await c.query(
+          "SELECT m.user_id,m.role,orvyn_page_role($1,m.user_id) AS rank FROM space_members m WHERE m.space_id=$2",
+          [p.id, p.space_id],
+        );
+        await c.query("DELETE FROM page_permissions WHERE page_id=$1", [p.id]);
+        for (const member of audience.rows.filter((m) => m.rank >= 10)) {
+          const role = Object.entries(roleRanks).find(
+            ([, rank]) => rank === member.rank,
+          )![0];
+          await c.query("INSERT INTO page_permissions VALUES($1,$2,$3)", [
+            p.id,
+            member.user_id,
+            role,
+          ]);
+        }
       }
-      const r = await c.query(
-        "UPDATE pages SET parent_id=$1,sort_order=$2,visibility='restricted',version=version+1 WHERE id=$3 RETURNING *",
-        [parent, body.sortOrder, p.id],
+      await c.query(
+        "UPDATE pages SET parent_id=$1,sort_order=$2,sort_rank=$4,visibility=CASE WHEN $5 THEN 'restricted' ELSE visibility END,structure_version=structure_version+1,version=version+1,last_edited_by=$6 WHERE id=$3",
+        [
+          parent,
+          placement ? p.sort_order : body.sortOrder,
+          p.id,
+          sortRank,
+          changedParent,
+          uid,
+        ],
       );
+      if (!changedParent && (placement || p.sort_order === body.sortOrder))
+        await c.query("UPDATE spaces SET version=version+1 WHERE id=$1", [
+          p.space_id,
+        ]);
       await audit(c, uid, "page.moved");
       return pageAccess(c, uid, p.id);
     });

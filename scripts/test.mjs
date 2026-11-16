@@ -152,6 +152,7 @@ try {
           "tests/block-controls.test.mjs",
           "tests/appearance.test.mjs",
           "tests/editor-batching.test.mjs",
+          "tests/hierarchy.test.mjs",
         ];
   const tests = spawn(
     process.execPath,

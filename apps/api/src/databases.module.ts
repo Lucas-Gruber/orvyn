@@ -83,7 +83,14 @@ class DatabasesController {
       name = text(body?.name, 120);
     return transaction(async (c) => {
       const s = await spaceAccess(c, uid, id, 30, true),
-        parent = await newPageParent(c, uid, s.id, body.parentId, 1);
+        parent = await newPageParent(
+          c,
+          uid,
+          s.id,
+          body.parentId,
+          1,
+          "database",
+        );
       const p = (
         await c.query(
           "INSERT INTO pages(space_id,title,parent_id,kind,created_by,last_edited_by) VALUES($1,$2,$3,'database',$4,$4) RETURNING *",
@@ -326,7 +333,14 @@ class DatabasesController {
         values = valuesFor(context.properties, input.values);
       await checkPeople(c, context.page.space_id, context.properties, values);
       await checkFiles(c, null, context.properties, values);
-      await newPageParent(c, uid, context.page.space_id, context.page.id);
+      await newPageParent(
+        c,
+        uid,
+        context.page.space_id,
+        context.page.id,
+        0,
+        "record",
+      );
       const p = (
         await c.query(
           "INSERT INTO pages(space_id,parent_id,title,kind,created_by,last_edited_by,visibility) VALUES($1,$2,$3,'record',$4,$4,$5) RETURNING *",

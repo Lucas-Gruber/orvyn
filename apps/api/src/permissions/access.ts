@@ -78,10 +78,15 @@ export async function newPageParent(
   spaceId: string,
   parentId: unknown,
   extraDepth = 0,
+  childKind: "page" | "folder" | "database" | "record" = "page",
 ) {
   if (parentId === null || parentId === undefined) return null;
   if (typeof parentId !== "string") return fail(400, "Invalid parent page");
   const parent = await pageAccess(c, uid, parentId, 30);
+  if (parent.kind === "database" && childKind !== "record")
+    fail(400, "Only record pages belong directly inside a database");
+  if (childKind === "record" && parent.kind !== "database")
+    fail(400, "Record pages belong in a database");
   if (parent.space_id !== spaceId)
     return fail(400, "Parent must belong to this space");
   const d = await c.query(

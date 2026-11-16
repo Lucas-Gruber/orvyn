@@ -212,7 +212,14 @@ class TransferController {
         );
       if (converted.errors.length)
         fail(400, "CSV contains invalid values; preview it again");
-      await newPageParent(c, uid, context.page.space_id, context.page.id);
+      await newPageParent(
+        c,
+        uid,
+        context.page.space_id,
+        context.page.id,
+        0,
+        "record",
+      );
       await c.query("SELECT set_config('orvyn.bulk_database',$1,true)", [
         context.page.id,
       ]);

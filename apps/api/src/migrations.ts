@@ -379,6 +379,46 @@ ALTER TABLE spaces ADD COLUMN cover_preset text CHECK(cover_preset IN ('aurora',
 ALTER TABLE spaces ADD COLUMN appearance_version integer NOT NULL DEFAULT 1;
 `,
   },
+  {
+    version: 22,
+    sql: `
+ALTER TABLE pages DROP CONSTRAINT pages_kind_check;
+ALTER TABLE pages ADD CONSTRAINT pages_kind_check CHECK(kind IN ('page','folder','database','record','whiteboard'));
+ALTER TABLE pages ADD COLUMN sort_rank double precision NOT NULL DEFAULT 0 CHECK(sort_rank BETWEEN -1e15 AND 1e15);
+ALTER TABLE pages ADD COLUMN structure_version integer NOT NULL DEFAULT 1;
+CREATE OR REPLACE FUNCTION orvyn_page_timestamp() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF (to_jsonb(NEW)-'sort_rank') IS NOT DISTINCT FROM (to_jsonb(OLD)-'sort_rank') THEN RETURN NEW; END IF;
+ NEW.updated_at=now(); RETURN NEW;
+END $$;
+CREATE OR REPLACE FUNCTION orvyn_record_page_notify() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE target uuid;
+BEGIN
+ IF (to_jsonb(NEW)-'sort_rank') IS NOT DISTINCT FROM (to_jsonb(OLD)-'sort_rank') THEN RETURN NULL; END IF;
+ IF NEW.kind='record' THEN
+  SELECT database_id INTO target FROM database_records WHERE page_id=NEW.id;
+  IF NEW.title IS DISTINCT FROM OLD.title OR NEW.deleted_at IS DISTINCT FROM OLD.deleted_at THEN UPDATE database_records SET version=version+1 WHERE page_id=NEW.id; END IF;
+  IF target IS NOT NULL THEN PERFORM pg_notify('orvyn_database_changed',json_build_object('databaseId',target,'recordId',NEW.id)::text); END IF;
+ END IF;
+ RETURN NULL;
+END $$;
+WITH ranked AS(SELECT id,row_number() OVER(PARTITION BY space_id,parent_id ORDER BY sort_order,title,id)*1024 AS rank FROM pages) UPDATE pages p SET sort_rank=r.rank FROM ranked r WHERE p.id=r.id;
+CREATE INDEX pages_sibling_rank ON pages(space_id,parent_id,sort_rank DESC) WHERE deleted_at IS NULL;
+CREATE FUNCTION orvyn_new_page_rank() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE previous double precision;
+BEGIN
+ IF NEW.sort_rank<>0 THEN RETURN NEW; END IF;
+ IF NEW.parent_id IS NULL THEN
+  SELECT sort_rank INTO previous FROM pages WHERE space_id=NEW.space_id AND parent_id IS NULL AND deleted_at IS NULL ORDER BY sort_rank DESC LIMIT 1;
+ ELSE
+  SELECT sort_rank INTO previous FROM pages WHERE space_id=NEW.space_id AND parent_id=NEW.parent_id AND deleted_at IS NULL ORDER BY sort_rank DESC LIMIT 1;
+ END IF;
+ NEW.sort_rank=coalesce(previous,0)+1024;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER page_initial_rank BEFORE INSERT ON pages FOR EACH ROW EXECUTE FUNCTION orvyn_new_page_rank();
+`,
+  },
 ] as const;
 
 export async function migrate(pool: Pool, target = migrations.at(-1)!.version) {

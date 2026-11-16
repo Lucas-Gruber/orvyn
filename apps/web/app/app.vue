@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { pageNavigationKey } from "./composables/pageNavigation";
 import { headingFromHash, validHeadingId } from "@orvyn/editor/links";
+import { pageOrder } from "./utils/pageTree";
 const route = useRoute(),
   router = useRouter();
 const booting = ref(true),
@@ -38,6 +39,7 @@ const sidebarOpen = ref(true),
   showDelete = ref(false),
   showAppearance = ref(false),
   showPageAppearance = ref(false),
+  movingPage = ref(false),
   showAttachments = ref(false),
   fullWidth = ref(false),
   moveParent = ref(""),
@@ -104,16 +106,11 @@ const recentPages = computed(() =>
       .map((id) => pages.value.find((p) => p.id === id))
       .filter(Boolean),
   );
+const knownPageIds = computed(() => new Set(pages.value.map((p) => p.id)));
 const roots = computed(() =>
   pages.value
-    .filter(
-      (p) =>
-        !p.parent_id ||
-        !pages.value.some((parent) => parent.id === p.parent_id),
-    )
-    .sort(
-      (a, b) => a.sort_order - b.sort_order || a.title.localeCompare(b.title),
-    ),
+    .filter((p) => !p.parent_id || !knownPageIds.value.has(p.parent_id))
+    .sort(pageOrder),
 );
 const breadcrumbPages = computed(() => {
   const ancestors: any[] = [];
@@ -129,13 +126,14 @@ const breadcrumbPages = computed(() => {
   return ancestors;
 });
 const childPages = computed(() =>
-  pages.value.filter(
-    (p) => p.parent_id === page.value?.id && p.kind !== "record",
-  ),
+  pages.value
+    .filter((p) => p.parent_id === page.value?.id && p.kind !== "record")
+    .sort(pageOrder),
 );
 const moveTargets = computed(() =>
   pages.value.filter((candidate) => {
-    if (candidate.access_rank < 30) return false;
+    if (candidate.access_rank < 30 || candidate.kind === "database")
+      return false;
     const seen = new Set<string>();
     let current = candidate;
     while (current && !seen.has(current.id)) {
@@ -481,7 +479,10 @@ async function createSpace() {
     await select(s);
   });
 }
-async function createPage(parentId: string | null = null) {
+async function createPage(
+  parentId: string | null = null,
+  kind: "page" | "folder" = "page",
+) {
   if (!space.value || !canCreate.value || pageLoading.value) return;
   pageLoading.value = true;
   try {
@@ -489,8 +490,9 @@ async function createPage(parentId: string | null = null) {
     page.value = undefined;
     view.value = "workspace";
     const p = await api(`spaces/${space.value.id}/pages`, "POST", {
-      title: "Untitled",
+      title: kind === "folder" ? "Untitled folder" : "Untitled",
       parentId,
+      kind,
     });
     await loadPages();
     edit(p);
@@ -552,6 +554,46 @@ async function movePage() {
     await refreshPage();
     notice.value = "Page moved.";
   });
+}
+async function moveHierarchy(value: {
+  id: string;
+  placement: "before" | "after" | "inside" | "root";
+  targetId: string | null;
+  targetParentId?: string | null;
+}) {
+  if (movingPage.value || navigating.value) return;
+  movingPage.value = true;
+  try {
+    await navigate(async () => {
+      await beforeNavigate();
+      const current = await api("pages/" + value.id),
+        moved = await api("pages/" + value.id + "/move", "POST", {
+          ...value,
+          structureVersion: current.structure_version,
+        });
+      await loadPages();
+      if (page.value?.id === moved.id) Object.assign(page.value, moved);
+      if (moved.parent_id && !expanded.value.includes(moved.parent_id))
+        expanded.value.push(moved.parent_id);
+      if (
+        value.placement === "inside" &&
+        !expanded.value.includes(value.targetId!)
+      )
+        expanded.value.push(value.targetId!);
+      notice.value =
+        moved.parent_id !== current.parent_id
+          ? "Page moved. Its previous audience is preserved; parent restrictions still apply."
+          : "Page order updated.";
+      await nextTick();
+      document
+        .querySelector<HTMLButtonElement>(
+          '.workspace-tree [data-page="' + CSS.escape(moved.id) + '"]',
+        )
+        ?.focus();
+    });
+  } finally {
+    movingPage.value = false;
+  }
 }
 async function trashPage() {
   await navigate(async () => {
@@ -1065,7 +1107,12 @@ onBeforeUnmount(() => {
               ><button role="menuitem" @click="navigate(() => createPage())">
                 <AppIcon name="file" :size="16" />New page</button
               ><button role="menuitem" @click="showDatabaseCreate = true">
-                <AppIcon name="database" :size="16" />New database
+                <AppIcon name="database" :size="16" />New database</button
+              ><button
+                role="menuitem"
+                @click="navigate(() => createPage(null, 'folder'))"
+              >
+                <AppIcon name="folder" :size="16" />New folder
               </button></UiMenu
             >
           </div>
@@ -1078,9 +1125,11 @@ onBeforeUnmount(() => {
             :active-id="page?.id"
             :can-create="canCreate"
             :expanded="expanded"
+            :moving="movingPage || navigating"
             @toggle="toggleExpanded"
             @open="navigate(() => openPage($event))"
             @create="navigate(() => createPage($event))"
+            @move="moveHierarchy"
           /><button
             v-if="nextCursor"
             class="sidebar-link"
@@ -1216,6 +1265,16 @@ onBeforeUnmount(() => {
               @click="showPageAppearance = true"
             >
               <AppIcon name="palette" :size="16" />Icon and cover</button
+            ><button
+              v-if="
+                canCreate &&
+                ['page', 'folder'].includes(page.kind) &&
+                page.access_rank >= 30
+              "
+              role="menuitem"
+              @click="navigate(() => createPage(page.id, 'folder'))"
+            >
+              <AppIcon name="folder" :size="16" />New subfolder</button
             ><button
               v-if="page.kind === 'record' && page.parent_id"
               role="menuitem"
@@ -1448,8 +1507,22 @@ onBeforeUnmount(() => {
             :heading-visit="headingVisit"
             :user="me"
           />
-          <section v-if="childPages.length" class="page-subpages">
-            <h2>In this page</h2>
+          <section
+            v-if="childPages.length || page.kind === 'folder'"
+            class="page-subpages"
+          >
+            <h2>
+              {{
+                page.kind === "folder" ? "Pages in this folder" : "In this page"
+              }}
+            </h2>
+            <p v-if="page.kind === 'folder' && !childPages.length" class="hint">
+              {{
+                page.access_rank >= 30
+                  ? "Add a page, or drag one here from the sidebar."
+                  : "No pages to show."
+              }}
+            </p>
             <button
               v-for="child in childPages"
               :key="child.id"
@@ -1459,6 +1532,24 @@ onBeforeUnmount(() => {
                 child.title
               }}
             </button>
+            <div
+              v-if="
+                page.kind === 'folder' && canCreate && page.access_rank >= 30
+              "
+              class="actions"
+            >
+              <button
+                class="ghost"
+                @click="navigate(() => createPage(page.id))"
+              >
+                <AppIcon name="plus" :size="16" />New page in this folder</button
+              ><button
+                class="ghost"
+                @click="navigate(() => createPage(page.id, 'folder'))"
+              >
+                <AppIcon name="folder" :size="16" />New subfolder
+              </button>
+            </div>
           </section>
           <PageBacklinks :key="page.id" :page-id="page.id" />
           <details
@@ -1547,13 +1638,15 @@ onBeforeUnmount(() => {
                       ? "Database"
                       : p.kind === "record"
                         ? "Record"
-                        : "Page"
+                        : p.kind === "folder"
+                          ? "Folder"
+                          : "Page"
                   }}</small
                 >
               </button>
             </div>
             <div class="home-section-title">
-              <AppIcon name="folder" :size="15" />Pages &amp; databases
+              <AppIcon name="folder" :size="15" />Pages, folders &amp; databases
             </div>
             <div class="home-page-list">
               <button
@@ -1566,7 +1659,13 @@ onBeforeUnmount(() => {
                 <PageSymbol :icon="p.icon" :kind="p.kind" :size="17" /><span>{{
                   p.title
                 }}</span
-                ><small>{{ p.kind === "database" ? "Database" : "Page" }}</small
+                ><small>{{
+                  p.kind === "database"
+                    ? "Database"
+                    : p.kind === "folder"
+                      ? "Folder"
+                      : "Page"
+                }}</small
                 ><AppIcon name="arrowRight" :size="14" />
               </button></div
           ></template>
