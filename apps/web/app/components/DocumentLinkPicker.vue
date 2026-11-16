@@ -1,5 +1,9 @@
 <script setup lang="ts">
-const props = defineProps<{ open: boolean; selectedText: string }>(),
+const props = defineProps<{
+    open: boolean;
+    selectedText: string;
+    preview?: boolean;
+  }>(),
   emit = defineEmits<{
     close: [];
     select: [target: { pageId: string; headingId: string; label: string }];
@@ -91,7 +95,7 @@ onBeforeUnmount(() => {
 <template>
   <UiDialog
     :open="open"
-    title="Link to document"
+    :title="preview ? 'Insert page preview' : 'Link to document'"
     :error="error"
     @close="emit('close')"
   >
@@ -145,8 +149,10 @@ onBeforeUnmount(() => {
       <h3 class="link-destination">
         <AppIcon name="file" :size="18" />{{ selected.title }}
       </h3>
-      <label for="document-link-label">Link text (optional)</label
+      <label v-if="!preview" for="document-link-label"
+        >Link text (optional)</label
       ><input
+        v-if="!preview"
         id="document-link-label"
         v-model="label"
         maxlength="1000"
@@ -158,7 +164,9 @@ onBeforeUnmount(() => {
         :disabled="loading"
         @click="insert()"
       >
-        <AppIcon name="link" :size="16" />Link entire document
+        <AppIcon name="link" :size="16" />{{
+          preview ? "Preview entire document" : "Link entire document"
+        }}
       </button>
       <h3 class="link-section-title">Or choose a heading</h3>
       <div class="document-link-results">
@@ -166,7 +174,9 @@ onBeforeUnmount(() => {
           v-for="heading in headings"
           :key="heading.id"
           type="button"
-          :aria-label="'Link to heading ' + heading.text"
+          :aria-label="
+            (preview ? 'Preview heading ' : 'Link to heading ') + heading.text
+          "
           :style="{ paddingLeft: 12 + (heading.level - 1) * 14 + 'px' }"
           @click="insert(heading)"
         >

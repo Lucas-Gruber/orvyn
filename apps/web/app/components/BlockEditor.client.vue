@@ -9,6 +9,7 @@ import ToggleNode from "./ToggleNode.vue";
 import TableOfContentsNode from "./TableOfContentsNode.vue";
 import CodeBlockNode from "./CodeBlockNode.vue";
 import AssetNode from "./AssetNode.vue";
+import PagePreviewNode from "./PagePreviewNode.vue";
 import { editorPageKey } from "../composables/editorContext";
 import {
   editorExtensions,
@@ -32,6 +33,7 @@ provide(editorPageKey, () => props.pageId);
 const openPage = inject(pageNavigationKey),
   root = ref<HTMLElement>(),
   showDocumentLink = ref(false),
+  linkAsPreview = ref(false),
   showAsset = ref(false),
   assetImage = ref(true),
   selectedLinkText = ref(""),
@@ -170,6 +172,14 @@ const commands: SlashCommand[] = [
     },
   },
   {
+    label: "Page preview",
+    aliases: ["vorschau", "page card"],
+    keepSelection: true,
+    run: () => {
+      void openDocumentLink(true, true);
+    },
+  },
+  {
     label: "Linked database",
     keepSelection: true,
     run: () => {
@@ -214,6 +224,7 @@ function initialize() {
           "codeBlock",
           "orvynImage",
           "orvynFile",
+          "orvynPagePreview",
         ].includes(extension.name)
           ? extension.extend({
               addNodeView() {
@@ -226,6 +237,7 @@ function initialize() {
                       codeBlock: CodeBlockNode,
                       orvynImage: AssetNode,
                       orvynFile: AssetNode,
+                      orvynPagePreview: PagePreviewNode,
                     } as Record<string, any>
                   )[extension.name],
                 );
@@ -395,7 +407,8 @@ function persistInitialHeadingIds() {
     "heading-identity",
   );
 }
-async function openDocumentLink(fromSlash = false) {
+async function openDocumentLink(fromSlash = false, asPreview = false) {
+  linkAsPreview.value = asPreview;
   if (!editor.value?.isEditable) return;
   // Native selectionchange can arrive after a fast shortcut; use the actual
   // selection in this editor instead of replacing a stale/collapsed range.
@@ -445,6 +458,22 @@ function insertDocumentLink(target: {
 }) {
   if (!editor.value?.isEditable) return;
   pickerSelectionActive = false;
+  if (linkAsPreview.value) {
+    editor.value
+      .chain()
+      .focus()
+      .insertContentAt(insertionRange, [
+        {
+          type: "orvynPagePreview",
+          attrs: { pageId: target.pageId, headingId: target.headingId || null },
+        },
+        { type: "paragraph" },
+      ])
+      .run();
+    showDocumentLink.value = false;
+    return;
+  }
+
   if (
     insertionRange.from < insertionRange.to &&
     selectedLinkText.value &&
@@ -796,6 +825,7 @@ onBeforeUnmount(() => {
     </p>
     <DocumentLinkPicker
       :open="showDocumentLink"
+      :preview="linkAsPreview"
       :selected-text="selectedLinkText"
       @close="closeDocumentLink"
       @select="insertDocumentLink"

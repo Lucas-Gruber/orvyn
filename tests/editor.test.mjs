@@ -284,3 +284,36 @@ test("attachment blocks preserve IDs and labels without accepting external image
       /attachment block/,
     );
 });
+test("page preview nodes round-trip references without embedding destination content", () => {
+  const pageId = "e199da77-1d93-4aa1-bac9-e29888aa0ee7",
+    headingId = "05452401-b3f4-42d0-9e98-a584bb192b24",
+    doc = normalizeDocument({
+      type: "doc",
+      content: [
+        {
+          type: "orvynPagePreview",
+          attrs: {
+            pageId,
+            headingId,
+            title: "Must not persist cached private metadata",
+          },
+        },
+      ],
+    });
+  assert.deepEqual({ ...doc.content[0].attrs }, { pageId, headingId });
+  const ydoc = documentToYDoc(doc);
+  try {
+    assert.deepEqual(yDocToDocument(ydoc), doc);
+  } finally {
+    ydoc.destroy();
+  }
+  for (const attrs of [{ pageId: "bad" }, { pageId, headingId: '"><script>' }])
+    assert.throws(
+      () =>
+        validateDocument({
+          type: "doc",
+          content: [{ type: "orvynPagePreview", attrs }],
+        }),
+      /preview/,
+    );
+});

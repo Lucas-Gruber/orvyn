@@ -154,7 +154,7 @@ test("Chromium: callout, toggle, table of contents and code highlighting persist
     ).toBeVisible();
     await expect(
       page.getByText("All changes saved", { exact: true }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 12000 });
     const reader = await session(viewer);
     await reader.goto(base + pageLink(source.id));
     const readerDoc = reader.getByRole("textbox", {

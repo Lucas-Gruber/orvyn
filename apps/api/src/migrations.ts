@@ -354,6 +354,10 @@ CREATE TRIGGER record_file_notify AFTER INSERT OR UPDATE OR DELETE ON files FOR 
         AND (NOT r.image OR f.media_type IN ('image/png','image/jpeg','image/gif','image/webp'))));
   $$;`,
   },
+  {
+    version: 18,
+    sql: `ALTER TABLE pages ALTER COLUMN document_schema_version SET DEFAULT 6;`,
+  },
 ] as const;
 
 export async function migrate(pool: Pool, target = migrations.at(-1)!.version) {

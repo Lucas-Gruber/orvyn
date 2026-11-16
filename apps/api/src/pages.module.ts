@@ -3,7 +3,12 @@ import {
   documentSchemaVersion,
   documentHeadings,
 } from "@orvyn/editor";
-import { documentReferences, newDocumentAssets } from "@orvyn/editor/links";
+import {
+  documentReferences,
+  newDocumentAssets,
+  documentExcerpt,
+  validHeadingId,
+} from "@orvyn/editor/links";
 import {
   Module,
   Controller,
@@ -92,6 +97,33 @@ class PagesController {
   }
   @Get("pages/:id") async get(@Req() req: any, @Param("id") id: string) {
     return pageAccess(db, await user(req), id);
+  }
+  @Get("pages/:id/preview") async preview(
+    @Req() req: any,
+    @Res({ passthrough: true }) res: any,
+    @Param("id") id: string,
+    @Query("heading") heading = "",
+  ) {
+    res.setHeader("Cache-Control", "private, no-store");
+    const p = await pageAccess(db, await user(req), id);
+    if (heading && !validHeadingId(heading))
+      fail(400, "Invalid heading reference");
+    const space = (
+      await db.query("SELECT name FROM spaces WHERE id=$1", [p.space_id])
+    ).rows[0];
+    return {
+      id: p.id,
+      title: p.title,
+      kind: p.kind,
+      spaceName: space.name,
+      excerpt: p.kind === "database" ? "" : documentExcerpt(p.document),
+      heading: heading
+        ? documentHeadings(p.document).find((h) => h.id === heading) || null
+        : null,
+      missingHeading:
+        !!heading &&
+        !documentHeadings(p.document).some((h) => h.id === heading),
+    };
   }
   @Get("pages/:id/backlinks") async backlinks(
     @Req() req: any,

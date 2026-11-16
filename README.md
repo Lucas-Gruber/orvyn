@@ -28,3 +28,5 @@ Slash commands and links to documents or specific headings: [docs/DOCUMENT_LINKS
 Callouts, toggles, tables of contents and syntax-highlighted code: [docs/EDITOR_BLOCKS.md](docs/EDITOR_BLOCKS.md).
 
 Inline images/files and attachment permissions: [docs/EDITOR_MEDIA.md](docs/EDITOR_MEDIA.md). Ordered remaining work: [docs/ROADMAP.md](docs/ROADMAP.md).
+
+Permission-checked document/heading preview cards: [docs/PAGE_PREVIEWS.md](docs/PAGE_PREVIEWS.md).

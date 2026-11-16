@@ -34,6 +34,21 @@ export function documentReferences(document: any, origin: string) {
   const references = new Map<string, { pageId: string; headingId: string }>(),
     base = new URL(origin);
   function walk(node: any) {
+    if (
+      node.type === "orvynPagePreview" &&
+      typeof node.attrs?.pageId === "string" &&
+      /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(
+        node.attrs.pageId,
+      )
+    ) {
+      const headingId = validHeadingId(node.attrs.headingId)
+        ? node.attrs.headingId
+        : "";
+      references.set(node.attrs.pageId + ":" + headingId, {
+        pageId: node.attrs.pageId,
+        headingId,
+      });
+    }
     for (const mark of node.marks || []) {
       if (mark.type !== "link" || typeof mark.attrs?.href !== "string")
         continue;
@@ -59,6 +74,23 @@ export function documentReferences(document: any, origin: string) {
   }
   walk(document);
   return [...references.values()];
+}
+export function documentExcerpt(document: any) {
+  const chunks: string[] = [];
+  function walk(node: any) {
+    if (
+      ["paragraph", "heading", "codeBlock", "orvynToggleSummary"].includes(
+        node.type,
+      )
+    ) {
+      const value = text(node).trim();
+      if (value) chunks.push(value);
+      return;
+    }
+    for (const child of node.content || []) walk(child);
+  }
+  walk(document);
+  return chunks.join(" ").replace(/\s+/g, " ").trim().slice(0, 280);
 }
 function text(node: any): string {
   return node.text || (node.content || []).map(text).join("");
