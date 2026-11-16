@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { pageNavigationKey } from "./composables/pageNavigation";
 import { headingFromHash, validHeadingId } from "@orvyn/editor/links";
+import type { CommentAnchor } from "@orvyn/editor/comments";
 import { pageOrder } from "./utils/pageTree";
 import {
   commentDraftsKey,
@@ -47,6 +48,11 @@ const sidebarOpen = ref(true),
   showPageAppearance = ref(false),
   showComments = ref(false),
   commentsInline = ref(false),
+  pendingCommentAnchor = ref<CommentAnchor | null>(null),
+  requestedCommentThread = ref(""),
+  commentVisit = ref(0),
+  focusedComment = ref<any>(),
+  commentAnchorStatus = ref<"active" | "changed" | "missing">("active"),
   movingPage = ref(false),
   showAttachments = ref(false),
   fullWidth = ref(false),
@@ -76,7 +82,11 @@ const themes = [
   ],
   theme = ref("cybercade");
 const titleInput = ref<HTMLInputElement>(),
-  editorHandle = ref<{ flush: () => Promise<void> }>(),
+  editorHandle = ref<{
+    flush: () => Promise<void>;
+    refreshComments: () => Promise<void>;
+    focusComment: () => void;
+  }>(),
   titleConflict = ref<{ title: string; version: number }>(),
   titleStatus = ref(""),
   serverTitle = ref("");
@@ -89,6 +99,49 @@ let viewport: MediaQueryList | undefined,
   commentViewport: MediaQueryList | undefined;
 function commentViewportChanged(event: { matches: boolean }) {
   commentsInline.value = event.matches;
+}
+function closeComments() {
+  showComments.value = false;
+  pendingCommentAnchor.value = null;
+  requestedCommentThread.value = "";
+  focusedComment.value = undefined;
+}
+function commentOnText(anchor: CommentAnchor) {
+  pendingCommentAnchor.value = anchor;
+  requestedCommentThread.value = "";
+  focusedComment.value = undefined;
+  showComments.value = true;
+}
+function openCommentThread(id: string) {
+  pendingCommentAnchor.value = null;
+  requestedCommentThread.value = id;
+  commentVisit.value++;
+  showComments.value = true;
+}
+function selectComment(value: { pageId: string; thread: any | null }) {
+  if (value.pageId !== page.value?.id) return;
+  commentAnchorStatus.value = "active";
+  focusedComment.value = value.thread || undefined;
+}
+async function jumpToComment(thread: any) {
+  focusedComment.value = thread;
+  if (!commentsInline.value) showComments.value = false;
+  await nextTick();
+  editorHandle.value?.focusComment();
+}
+function editorAccess(value: { pageId: string; rank: number }) {
+  if (value.pageId !== page.value?.id) return;
+  page.value.access_rank = value.rank;
+  const known = pages.value.find((p) => p.id === value.pageId);
+  if (known) known.access_rank = value.rank;
+}
+function anchorStatusChanged(value: {
+  pageId: string;
+  id: string;
+  status: "active" | "changed" | "missing";
+}) {
+  if (value.pageId === page.value?.id && value.id === focusedComment.value?.id)
+    commentAnchorStatus.value = value.status;
 }
 function viewportChanged(event: { matches: boolean }) {
   mobile.value = event.matches;
@@ -341,7 +394,7 @@ async function select(s: any, location = true) {
   if (mobile.value) sidebarOpen.value = false;
 }
 function edit(p: any) {
-  showComments.value = false;
+  closeComments();
   showPageAppearance.value = false;
   targetHeading.value = "";
   page.value = p;
@@ -1538,6 +1591,12 @@ onBeforeUnmount(() => {
             :key="page.id"
             :page-id="page.id"
             :space-id="page.space_id"
+            :access-rank="page.access_rank"
+            :focused-comment="focusedComment"
+            @comment="commentOnText"
+            @thread="openCommentThread"
+            @access="editorAccess"
+            @anchor-status="anchorStatusChanged"
             :paused="navigating || pageLoading"
             :target-heading="targetHeading"
             :heading-visit="headingVisit"
@@ -1870,7 +1929,14 @@ onBeforeUnmount(() => {
     :open="showComments"
     :page-id="page.id"
     :modal="!commentsInline"
-    @close="showComments = false"
+    :anchor="pendingCommentAnchor"
+    :requested-thread="requestedCommentThread"
+    :request-visit="commentVisit"
+    :anchor-status="commentAnchorStatus"
+    @close="closeComments"
+    @select="selectComment"
+    @jump="jumpToComment"
+    @changed="(id) => id === page?.id && editorHandle?.refreshComments()"
   />
   <PageAppearanceDialog
     v-if="page"

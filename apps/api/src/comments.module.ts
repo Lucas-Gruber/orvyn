@@ -15,10 +15,18 @@ import { z } from "@orvyn/shared";
 import { fail, mutation, user } from "./runtime.js";
 import { transaction, audit, rateLimit } from "./auth/security.js";
 import { pageAccess, pageWrite } from "./permissions/access.js";
+import {
+  validCommentAnchor,
+  resolveStoredCommentAnchor,
+  type CommentAnchor,
+} from "@orvyn/editor/comments";
 
 const messageInput = z
   .object({ body: z.string().trim().min(1).max(10000), requestId: z.uuid() })
   .strict();
+const threadInput = messageInput.extend({
+  anchor: z.custom<CommentAnchor>(validCommentAnchor).nullable().optional(),
+});
 const editInput = z
   .object({
     body: z.string().trim().min(1).max(10000),
@@ -103,6 +111,7 @@ function threadDTO(t: any, page: any, uid: string) {
     createdAt: t.created_at,
     updatedAt: t.updated_at,
     resolvedAt: t.resolved_at,
+    anchor: t.anchor || null,
     canResolve:
       page.access_rank >= 30 ||
       (page.access_rank >= 20 && t.created_by === uid),
@@ -165,18 +174,23 @@ async function submitted(
   c: PoolClient,
   uid: string,
   page: any,
-  input: z.infer<typeof messageInput>,
+  input: z.infer<typeof threadInput>,
   threadId?: string,
 ) {
   const old = (
     await c.query(
-      "SELECT c.body,c.thread_id,t.page_id,c.deleted_at,t.deleted_at AS thread_deleted FROM comments c JOIN comment_threads t ON t.id=c.thread_id WHERE c.author_id=$1 AND c.request_key=$2",
-      [uid, input.requestId],
+      "SELECT c.body,c.thread_id,t.page_id,c.deleted_at,t.deleted_at AS thread_deleted,(t.anchor IS NOT DISTINCT FROM $3::jsonb) AS same_anchor FROM comments c JOIN comment_threads t ON t.id=c.thread_id WHERE c.author_id=$1 AND c.request_key=$2",
+      [
+        uid,
+        input.requestId,
+        input.anchor ? JSON.stringify(input.anchor) : null,
+      ],
     )
   ).rows[0];
   if (!old) return null;
   if (
     old.page_id !== page.id ||
+    (!threadId && !old.same_anchor) ||
     (threadId && old.thread_id !== threadId) ||
     old.body !== input.body ||
     old.deleted_at ||
@@ -188,6 +202,24 @@ async function submitted(
 
 @Controller("api/v1")
 class CommentsController {
+  @Get("pages/:id/thread-anchors") async anchors(
+    @Req() req: any,
+    @Param("id") id: string,
+  ) {
+    const uid = await user(req);
+    return transaction(async (c) => {
+      const page = await context(c, uid, id);
+      return {
+        accessRank: page.access_rank,
+        anchors: (
+          await c.query(
+            "SELECT id,anchor FROM comment_threads WHERE page_id=$1 AND anchor IS NOT NULL AND resolved_at IS NULL AND deleted_at IS NULL ORDER BY created_at DESC,id DESC LIMIT 200",
+            [page.id],
+          )
+        ).rows,
+      };
+    });
+  }
   @Get("pages/:id/threads") async list(
     @Req() req: any,
     @Param("id") id: string,
@@ -223,16 +255,31 @@ class CommentsController {
   ) {
     mutation(req);
     const uid = await user(req),
-      input = parse(messageInput, body);
+      input = parse(threadInput, body);
     await rateLimit("comments:" + uid, 240);
     return transaction(async (c) => {
       const page = await context(c, uid, id, true),
         old = await submitted(c, uid, page, input);
       if (old) return old;
+      if (input.anchor) {
+        const state = (
+          await c.query("SELECT state FROM editor_documents WHERE page_id=$1", [
+            page.id,
+          ])
+        ).rows[0]?.state;
+        const resolved = state
+          ? resolveStoredCommentAnchor(state, input.anchor)
+          : null;
+        if (!resolved || resolved.changed)
+          fail(
+            409,
+            "The selected text changed. Select the text again, or remove the text reference.",
+          );
+      }
       const t = (
         await c.query(
-          "INSERT INTO comment_threads(page_id,created_by) VALUES($1,$2) RETURNING id",
-          [page.id, uid],
+          "INSERT INTO comment_threads(page_id,created_by,anchor) VALUES($1,$2,$3) RETURNING id",
+          [page.id, uid, input.anchor || null],
         )
       ).rows[0];
       const added = await c.query(

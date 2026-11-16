@@ -23,6 +23,7 @@ type Identity = {
   sessionHash: string;
   spaceId: string;
   visibleRecords: Set<string>;
+  notifiedRank: number;
 };
 const db = new Pool({ connectionString: process.env.DATABASE_URL });
 const live = new Set<Connection<Identity>>();
@@ -155,10 +156,15 @@ async function revalidate() {
             connection.document.name,
           );
           const readOnly = rank < 30;
-          if (readOnly !== connection.readOnly) {
+          if (rank !== connection.context.notifiedRank) {
+            connection.context.notifiedRank = rank;
             connection.readOnly = readOnly;
             connection.sendStateless(
-              JSON.stringify({ type: "permissions", readOnly }),
+              JSON.stringify({
+                type: "permissions",
+                readOnly,
+                accessRank: rank,
+              }),
             );
           }
         } catch {
@@ -201,6 +207,7 @@ const server = new Server<Identity>({
       ...identity,
       spaceId: p.rows[0].space_id,
       visibleRecords: new Set<string>(),
+      notifiedRank: p.rows[0].rank,
     };
   },
   async connected({ connection }) {

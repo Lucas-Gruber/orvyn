@@ -37,6 +37,10 @@
     "./embeds": {
       "types": "./dist/embed-model.d.ts",
       "default": "./dist/embed-model.js"
+    },
+    "./comments": {
+      "types": "./dist/comment-anchors.d.ts",
+      "default": "./dist/comment-anchors.js"
     }
   }
 }

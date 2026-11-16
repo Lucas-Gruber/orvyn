@@ -23,6 +23,7 @@ import { VideoEmbedBlock } from "./video-embed.js";
 import { validVideo } from "./embed-model.js";
 import { ColumnsBlock, ColumnBlock } from "./columns.js";
 import { BlockControls } from "./block-controls.js";
+import { CommentHighlights } from "./comment-highlights.js";
 const lowlight = createLowlight(common);
 export const documentSchemaVersion = 8;
 export function editorExtensions(collaborative = false): AnyExtension[] {
@@ -51,6 +52,7 @@ export function editorExtensions(collaborative = false): AnyExtension[] {
     ColumnsBlock,
     ColumnBlock,
     BlockControls,
+    CommentHighlights,
     CodeBlockLowlight.configure({ lowlight, defaultLanguage: "plaintext" }),
   ];
 }
@@ -209,6 +211,10 @@ export { TableKit } from "@tiptap/extension-table";
 
 export { DatabaseBlock } from "./database-node.js";
 export { ColumnsBlock, ColumnBlock } from "./columns.js";
+export {
+  CommentHighlights,
+  type CommentHighlight,
+} from "./comment-highlights.js";
 export {
   BlockControls,
   BlockSelection,

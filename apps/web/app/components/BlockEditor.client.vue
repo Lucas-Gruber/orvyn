@@ -23,14 +23,38 @@ import {
 } from "@orvyn/editor";
 import { pageNavigationKey } from "../composables/pageNavigation";
 import * as Y from "yjs";
+import {
+  anchorForRange,
+  commentAnchorResolver,
+  type CommentAnchor,
+} from "@orvyn/editor/comments";
 const props = defineProps<{
   pageId: string;
   spaceId: string;
   user: any;
+  accessRank: number;
+  focusedComment?: { id: string; pageId: string; anchor: CommentAnchor | null };
   paused?: boolean;
   targetHeading?: string;
   headingVisit?: number;
 }>();
+const emit = defineEmits<{
+  comment: [anchor: CommentAnchor];
+  thread: [id: string];
+  access: [value: { pageId: string; rank: number }];
+  anchorStatus: [
+    value: {
+      pageId: string;
+      id: string;
+      status: "active" | "changed" | "missing";
+    },
+  ];
+}>();
+const accessRank = ref(props.accessRank);
+watch(
+  () => props.accessRank,
+  (rank) => (accessRank.value = rank),
+);
 provide(editorPageKey, () => props.pageId);
 const openPage = inject(pageNavigationKey),
   root = ref<HTMLElement>(),
@@ -43,6 +67,111 @@ const openPage = inject(pageNavigationKey),
   linkMessage = ref(""),
   headingMessage = ref("");
 const blockMenuPosition = ref<{ left: number; top: number }>();
+let commentAnchors: { id: string; anchor: CommentAnchor }[] = [],
+  annotationFrame = 0,
+  annotationRequest = 0,
+  disposed = false;
+let annotationTimer: ReturnType<typeof setInterval> | undefined;
+function reportAccess(rank: number) {
+  accessRank.value = rank;
+  emit("access", { pageId: props.pageId, rank });
+}
+function refreshHighlights() {
+  if (!editor.value || !synced.value || disposed) return;
+  const resolve = commentAnchorResolver(document),
+    all = new Map(commentAnchors.map((anchor) => [anchor.id, anchor.anchor]));
+  if (
+    props.focusedComment?.anchor &&
+    props.focusedComment.pageId === props.pageId
+  )
+    all.set(props.focusedComment.id, props.focusedComment.anchor);
+  const focused = props.focusedComment;
+  if (focused?.anchor && focused.pageId === props.pageId) {
+    const range = resolve(focused.anchor);
+    emit("anchorStatus", {
+      pageId: props.pageId,
+      id: focused.id,
+      status: !range ? "missing" : range.changed ? "changed" : "active",
+    });
+  }
+  editor.value.commands.setCommentHighlights(
+    [...all].flatMap(([id, anchor]) => {
+      const range = resolve(anchor);
+      return range
+        ? [{ id, from: range.from, to: range.to, changed: range.changed }]
+        : [];
+    }),
+  );
+}
+function scheduleHighlights() {
+  if (!annotationFrame && !disposed)
+    annotationFrame = requestAnimationFrame(() => {
+      annotationFrame = 0;
+      refreshHighlights();
+    });
+}
+async function refreshComments() {
+  if (disposed || !synced.value || denied.value) return;
+  const token = ++annotationRequest;
+  try {
+    const data = await $fetch<any>(
+      `/api/v1/pages/${props.pageId}/thread-anchors`,
+    );
+    if (disposed || token !== annotationRequest) return;
+    commentAnchors = data.anchors;
+    reportAccess(data.accessRank);
+    scheduleHighlights();
+  } catch (e: any) {
+    if (disposed || token !== annotationRequest) return;
+    commentAnchors = [];
+    scheduleHighlights();
+    if ([401, 403, 404].includes(e.statusCode || e.status)) reportAccess(0);
+  }
+}
+function focusComment() {
+  refreshHighlights();
+  const id = props.focusedComment?.id;
+  if (!id) return;
+  const marker = editor.value?.view.dom.querySelector<HTMLButtonElement>(
+    'button.comment-marker[data-comment-thread="' + CSS.escape(id) + '"]',
+  );
+  marker?.scrollIntoView({ block: "center" });
+  marker?.focus({ preventScroll: true });
+}
+async function prepareComment() {
+  const e = editor.value;
+  if (!e || accessRank.value < 20 || !synced.value || denied.value) return;
+  const selected = window.getSelection();
+  if (
+    selected?.anchorNode &&
+    selected.focusNode &&
+    e.view.dom.contains(selected.anchorNode) &&
+    e.view.dom.contains(selected.focusNode)
+  ) {
+    const from = e.view.posAtDOM(selected.anchorNode, selected.anchorOffset),
+      to = e.view.posAtDOM(selected.focusNode, selected.focusOffset);
+    e.commands.setTextSelection({
+      from: Math.min(from, to),
+      to: Math.max(from, to),
+    });
+  }
+  const anchor = anchorForRange(
+    document,
+    e.state.selection.from,
+    e.state.selection.to,
+  );
+  if (!anchor) {
+    linkMessage.value = "Select up to 2,000 characters to comment on.";
+    return;
+  }
+  try {
+    await flush();
+    emit("comment", anchor);
+  } catch {
+    linkMessage.value =
+      "Save pending changes before commenting on selected text.";
+  }
+}
 let insertionRange = { from: 0, to: 0 };
 const document = new Y.Doc(),
   editor = shallowRef<Editor>(),
@@ -267,27 +396,32 @@ function initialize() {
                 );
               },
             })
-          : extension.name === "orvynBlockControls"
+          : extension.name === "orvynCommentHighlights"
             ? extension.configure({
-                onMenu: (rect: DOMRect) => {
-                  blockMenuPosition.value = {
-                    left: rect.left,
-                    top: rect.bottom + 4,
-                  };
-                },
+                onOpen: (id: string) => emit("thread", id),
+                active: () => props.focusedComment?.id || "",
               })
-            : extension.name === "headingIdentity"
+            : extension.name === "orvynBlockControls"
               ? extension.configure({
-                  onCopy: copyHeadingLink,
-                  activeHeading: () => props.targetHeading || "",
+                  onMenu: (rect: DOMRect) => {
+                    blockMenuPosition.value = {
+                      left: rect.left,
+                      top: rect.bottom + 4,
+                    };
+                  },
                 })
-              : extension.name === "orvynDatabase"
-                ? extension.extend({
-                    addNodeView() {
-                      return VueNodeViewRenderer(EmbeddedDatabaseNode);
-                    },
+              : extension.name === "headingIdentity"
+                ? extension.configure({
+                    onCopy: copyHeadingLink,
+                    activeHeading: () => props.targetHeading || "",
                   })
-                : extension,
+                : extension.name === "orvynDatabase"
+                  ? extension.extend({
+                      addNodeView() {
+                        return VueNodeViewRenderer(EmbeddedDatabaseNode);
+                      },
+                    })
+                  : extension,
       ),
       Collaboration.configure({ document }),
       CollaborationCaret.configure({
@@ -308,6 +442,7 @@ function initialize() {
         role: "textbox",
         "aria-label": "Document",
         "aria-multiline": "true",
+        tabindex: "0",
       },
       handleKeyDown: (_view, event) => {
         if (
@@ -345,6 +480,20 @@ function initialize() {
         return false;
       },
       handleDOMEvents: {
+        keydown: (_view, event) => {
+          if (
+            (event.ctrlKey || event.metaKey) &&
+            event.shiftKey &&
+            event.key.toLowerCase() === "m" &&
+            accessRank.value >= 20
+          ) {
+            event.preventDefault();
+            event.stopPropagation();
+            void prepareComment();
+            return true;
+          }
+          return false;
+        },
         click: (_view, event) => {
           if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
             return false;
@@ -370,6 +519,7 @@ function initialize() {
     },
     onTransaction({ transaction }) {
       tick.value++;
+      if (transaction.docChanged) scheduleHighlights();
       if (pickerSelectionActive && transaction.docChanged) {
         insertionRange = {
           from: transaction.mapping.map(insertionRange.from, 1),
@@ -798,6 +948,7 @@ const provider = new HocuspocusProvider({
     denied.value = false;
   },
   onAuthenticationFailed() {
+    reportAccess(0);
     denied.value = true;
     readOnly.value = true;
     provider.disconnect();
@@ -815,7 +966,11 @@ const provider = new HocuspocusProvider({
   onStateless({ payload }) {
     try {
       const message = JSON.parse(payload);
-      if (message.type === "permissions") readOnly.value = message.readOnly;
+      if (message.type === "permissions") {
+        readOnly.value = message.readOnly;
+        if (typeof message.accessRank === "number")
+          reportAccess(message.accessRank);
+      }
     } catch {}
   },
   onAwarenessChange({ states }) {
@@ -832,6 +987,7 @@ const provider = new HocuspocusProvider({
     ) {
       denied.value = true;
       readOnly.value = true;
+      reportAccess(0);
       provider.disconnect();
     }
   },
@@ -856,7 +1012,7 @@ async function flush() {
     });
   });
 }
-defineExpose({ flush });
+defineExpose({ flush, refreshComments, focusComment });
 function beforeUnload(event: BeforeUnloadEvent) {
   if (!unsynced.value) return;
   event.preventDefault();
@@ -866,18 +1022,33 @@ onMounted(() => window.addEventListener("beforeunload", beforeUnload));
 onMounted(() => {
   window.addEventListener("scroll", positionSlash, true);
   window.addEventListener("resize", positionSlash);
+  annotationTimer = setInterval(() => {
+    if (window.document.visibilityState === "visible") void refreshComments();
+  }, 5000);
 });
-watch([status, synced, readOnly, editor, denied, () => props.paused], () => {
-  persistInitialHeadingIds();
-  editor.value?.setEditable(
-    status.value === "connected" &&
-      synced.value &&
-      !readOnly.value &&
-      !denied.value &&
-      !props.paused,
-  );
+watch([editor, synced], () => {
+  if (editor.value && synced.value) void refreshComments();
 });
+watch(() => props.focusedComment, scheduleHighlights);
+watch(
+  [status, synced, readOnly, editor, denied, accessRank, () => props.paused],
+  () => {
+    persistInitialHeadingIds();
+    editor.value?.setEditable(
+      status.value === "connected" &&
+        synced.value &&
+        !readOnly.value &&
+        !denied.value &&
+        accessRank.value >= 30 &&
+        !props.paused,
+    );
+  },
+);
 onBeforeUnmount(() => {
+  disposed = true;
+  annotationRequest++;
+  clearInterval(annotationTimer);
+  cancelAnimationFrame(annotationFrame);
   window.removeEventListener("beforeunload", beforeUnload);
   window.removeEventListener("scroll", positionSlash, true);
   window.removeEventListener("resize", positionSlash);
@@ -1021,7 +1192,14 @@ onBeforeUnmount(() => {
         :position="blockMenuPosition"
         @close="blockMenuPosition = undefined"
       />
-      <FloatingFormatMenu :editor="editor" @link="openDocumentLink()" />
+      <FloatingFormatMenu
+        :editor="editor"
+        :can-comment="
+          synced && !denied && status === 'connected' && accessRank >= 20
+        "
+        @link="openDocumentLink()"
+        @comment="prepareComment"
+      />
       <div class="editor-toolbar" aria-label="Text formatting">
         <button
           title="Link to document · Ctrl+K"
@@ -1553,5 +1731,39 @@ button:disabled {
   position: static;
   margin: 0;
   align-items: center;
+}
+</style>
+
+<style>
+.block-editor .comment-highlight {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  border-bottom: 2px solid color-mix(in srgb, var(--accent) 65%, transparent);
+}
+.block-editor .comment-highlight.active {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+  border-color: var(--accent);
+}
+.block-editor .comment-highlight.changed {
+  border-bottom-style: dashed;
+}
+.block-editor .comment-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  width: 22px;
+  height: 22px;
+  min-height: 22px;
+  padding: 2px;
+  margin: 0 3px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 0;
+  border-radius: 4px;
+  user-select: none;
+}
+.block-editor .comment-marker:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 </style>

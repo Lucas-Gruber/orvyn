@@ -14,7 +14,8 @@ Work through these areas in order, preserving working features and committing/pu
    - [x] Folders, hierarchy dragging and keyboard reorder/nest/outdent.
 2. Collaboration
    - [x] Page discussion threads, replies, author editing, moderation and resolve/reopen.
-   - [ ] Text-anchored comments and mentions.
+   - [x] Text-anchored comments with relative positions and changed/deleted text handling.
+   - [ ] Mentions in discussions and documents.
    - [ ] Notifications and user-visible activity with current permission checks.
 3. Databases
    - [ ] Relations, formulas and rollups with permission-safe queries/exports.

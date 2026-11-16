@@ -1,14 +1,31 @@
 <script setup lang="ts">
-import { commentDraftsKey } from "../composables/commentDrafts";
-const props = defineProps<{ open: boolean; pageId: string; modal?: boolean }>();
+import {
+  commentDraftsKey,
+  type CommentDraftState,
+} from "../composables/commentDrafts";
+import type { CommentAnchor } from "@orvyn/editor/comments";
+const props = defineProps<{
+  open: boolean;
+  pageId: string;
+  modal?: boolean;
+  anchor?: CommentAnchor | null;
+  requestedThread?: string;
+  requestVisit?: number;
+  anchorStatus?: "active" | "changed" | "missing";
+}>();
 const cache = inject(commentDraftsKey, new Map()),
-  savedDraft = cache.get(props.pageId) || {
+  savedDraft: CommentDraftState = cache.get(props.pageId) || {
     body: "",
     replies: new Map<string, string>(),
     keys: new Map<string, { body: string; key: string }>(),
   };
 cache.set(props.pageId, savedDraft);
-const emit = defineEmits<{ close: [] }>(),
+const emit = defineEmits<{
+    close: [];
+    changed: [pageId: string];
+    select: [value: { pageId: string; thread: any | null }];
+    jump: [thread: any];
+  }>(),
   threads = ref<any[]>([]),
   selected = ref<any>(),
   messages = ref<any[]>([]),
@@ -22,15 +39,65 @@ const emit = defineEmits<{ close: [] }>(),
   busy = ref(false),
   error = ref(""),
   draft = ref(savedDraft.body),
+  draftAnchor = ref<CommentAnchor | null>(savedDraft.anchor || null),
   reply = ref(""),
   editing = ref<any>(),
   editText = ref(""),
   deleting = ref<any>();
 const canComment = computed(() => rank.value >= 20);
 let generation = 0,
+  viewEpoch = 0,
+  handledRequest = "",
   timer: ReturnType<typeof setInterval> | undefined;
 const keys = savedDraft.keys;
 watch(draft, (value) => (savedDraft.body = value));
+watch(draftAnchor, (value) => (savedDraft.anchor = value));
+watch(selected, (thread) =>
+  emit("select", { pageId: props.pageId, thread: thread || null }),
+);
+watch(
+  () => props.anchor,
+  (anchor) => {
+    if (anchor) {
+      viewEpoch++;
+      draftAnchor.value = anchor;
+      selected.value = undefined;
+      editing.value = undefined;
+      filter.value = "open";
+    }
+  },
+  { immediate: true },
+);
+watch(
+  [() => props.requestedThread, () => props.requestVisit, () => props.open],
+  () => {
+    viewEpoch++;
+    handledRequest = "";
+  },
+);
+watch(
+  [
+    () => props.requestedThread,
+    () => props.requestVisit,
+    () => props.open,
+    busy,
+    loading,
+  ],
+  () => {
+    const key = props.requestedThread + ":" + (props.requestVisit || 0);
+    if (
+      !props.open ||
+      !props.requestedThread ||
+      busy.value ||
+      loading.value ||
+      handledRequest === key
+    )
+      return;
+    handledRequest = key;
+    void choose({ id: props.requestedThread });
+  },
+  { flush: "post" },
+);
 watch(reply, (value) => {
   if (selected.value) savedDraft.replies.set(selected.value.id, value);
 });
@@ -69,6 +136,16 @@ function adopt(data: any, expectedGeneration: number) {
   if (at >= 0) threads.value[at] = data.thread;
   return true;
 }
+function adoptMutation(data: any, token: number, epoch: number) {
+  if (
+    !props.open ||
+    generation !== token ||
+    data.thread.pageId !== props.pageId
+  )
+    return false;
+  emit("changed", props.pageId);
+  return epoch === viewEpoch && adopt(data, token);
+}
 async function loadList(append = false) {
   const token = generation,
     page = props.pageId,
@@ -97,11 +174,13 @@ async function loadList(append = false) {
 }
 async function loadThread(id: string, older = false) {
   const token = generation,
+    epoch = viewEpoch,
     prior = messages.value,
     data = await $fetch<any>("/api/v1/threads/" + id, {
       query: { before: older ? messageBefore.value : "" },
     });
-  if (selected.value?.id !== id || !adopt(data, token)) return;
+  if (epoch !== viewEpoch || selected.value?.id !== id || !adopt(data, token))
+    return;
   if (older)
     messages.value = [
       ...data.messages,
@@ -125,6 +204,8 @@ async function run(action: () => Promise<void>) {
   }
 }
 async function choose(t: any) {
+  if (busy.value || loading.value) return;
+  viewEpoch++;
   editing.value = undefined;
   if (selected.value) savedDraft.replies.set(selected.value.id, reply.value);
   selected.value = t;
@@ -141,7 +222,10 @@ async function refresh() {
 async function post(first: boolean) {
   const body = first ? draft.value : reply.value,
     token = generation,
-    id = selected.value?.id;
+    epoch = viewEpoch,
+    anchor = draftAnchor.value,
+    id = selected.value?.id,
+    scope = first ? props.pageId + JSON.stringify(anchor) : id;
   if (!body.trim() || !canComment.value) return;
   await run(async () => {
     const path = first
@@ -149,12 +233,18 @@ async function post(first: boolean) {
         : `threads/${id}/comments`,
       data = await $fetch<any>("/api/v1/" + path, {
         method: "POST",
-        body: { body, requestId: requestKey(first ? props.pageId : id, body) },
+        body: {
+          body,
+          requestId: requestKey(scope, body),
+          ...(first ? { anchor } : {}),
+        },
       });
-    if (adopt(data, token)) {
-      keys.delete(first ? props.pageId : id);
-      if (first) draft.value = "";
-      else reply.value = "";
+    if (adoptMutation(data, token, epoch)) {
+      keys.delete(scope);
+      if (first) {
+        draft.value = "";
+        draftAnchor.value = null;
+      } else reply.value = "";
       messagePaged.value = false;
       await loadList();
     }
@@ -163,17 +253,19 @@ async function post(first: boolean) {
 async function resolve() {
   if (!selected.value?.canResolve) return;
   const token = generation,
+    epoch = viewEpoch,
     thread = selected.value;
   await run(async () => {
     const data = await $fetch<any>("/api/v1/threads/" + thread.id, {
       method: "PATCH",
       body: { version: thread.version, resolved: !thread.resolvedAt },
     });
-    if (adopt(data, token)) await loadList();
+    if (adoptMutation(data, token, epoch)) await loadList();
   });
 }
 async function saveEdit() {
   const token = generation,
+    epoch = viewEpoch,
     message = editing.value;
   if (!message) return;
   await run(async () => {
@@ -181,7 +273,7 @@ async function saveEdit() {
       method: "PATCH",
       body: { version: message.version, body: editText.value },
     });
-    if (adopt(data, token)) {
+    if (adoptMutation(data, token, epoch)) {
       editing.value = undefined;
       await loadList();
     }
@@ -189,6 +281,7 @@ async function saveEdit() {
 }
 async function remove() {
   const token = generation,
+    epoch = viewEpoch,
     message = deleting.value;
   if (!message) return;
   await run(async () => {
@@ -196,7 +289,7 @@ async function remove() {
       method: "DELETE",
       body: { version: message.version },
     });
-    if (adopt(data, token)) {
+    if (adoptMutation(data, token, epoch)) {
       deleting.value = undefined;
       await loadList();
     }
@@ -272,6 +365,7 @@ onBeforeUnmount(() => {
           class="ghost"
           :disabled="busy"
           @click="
+            viewEpoch++;
             selected = undefined;
             editing = undefined;
           "
@@ -308,6 +402,25 @@ onBeforeUnmount(() => {
               :name="selected.resolvedAt ? 'history' : 'check'"
               :size="15"
             />{{ selected.resolvedAt ? "Reopen thread" : "Resolve thread" }}
+          </button>
+        </div>
+        <div v-if="selected.anchor" class="comment-reference">
+          <span class="hint">Comment on selected text</span>
+          <blockquote>{{ selected.anchor.quote }}</blockquote>
+          <p v-if="anchorStatus === 'changed'" class="hint">
+            This text has changed since the discussion started.
+          </p>
+          <p v-else-if="anchorStatus === 'missing'" class="hint">
+            The original text is no longer in this document. The discussion is
+            still available.
+          </p>
+          <button
+            type="button"
+            class="ghost"
+            :disabled="anchorStatus === 'missing'"
+            @click="emit('jump', selected)"
+          >
+            <AppIcon name="link" :size="14" />Show in document
           </button>
         </div>
         <button
@@ -451,6 +564,18 @@ onBeforeUnmount(() => {
           class="comment-composer"
           @submit.prevent="post(true)"
         >
+          <div v-if="draftAnchor" class="comment-reference draft-reference">
+            <span class="hint">Comment on selected text</span>
+            <blockquote>{{ draftAnchor.quote }}</blockquote>
+            <button
+              type="button"
+              class="ghost"
+              :disabled="busy"
+              @click="draftAnchor = null"
+            >
+              Remove text reference
+            </button>
+          </div>
           <label for="new-comment">New comment</label
           ><textarea
             id="new-comment"
@@ -485,6 +610,29 @@ onBeforeUnmount(() => {
   >
 </template>
 <style scoped>
+.comment-reference {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  margin: 12px 0;
+}
+.comment-reference blockquote {
+  border-left: 2px solid var(--accent);
+  padding-left: 10px;
+  margin: 10px 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 150px;
+  overflow: auto;
+  font-size: 0.84rem;
+}
+.comment-reference .hint {
+  font-size: 0.75rem;
+}
+.comment-reference button {
+  font-size: 0.76rem;
+}
+
 .comment-controls,
 .comment-thread-heading {
   display: flex;

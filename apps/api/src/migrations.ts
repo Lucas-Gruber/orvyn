@@ -439,6 +439,10 @@ CREATE TABLE comments (
 CREATE INDEX comments_thread ON comments(thread_id,created_at DESC,id DESC);
 `,
   },
+  {
+    version: 24,
+    sql: `ALTER TABLE comment_threads ADD COLUMN anchor jsonb CHECK(anchor IS NULL OR (jsonb_typeof(anchor)='object' AND pg_column_size(anchor)<=8192));`,
+  },
 ] as const;
 
 export async function migrate(pool: Pool, target = migrations.at(-1)!.version) {
