@@ -45,6 +45,7 @@ const props = defineProps<{
   headingVisit?: number;
   targetPerson?: string;
   personVisit?: number;
+  chromeTarget?: string;
 }>();
 const emit = defineEmits<{
   comment: [anchor: CommentAnchor];
@@ -1369,61 +1370,64 @@ onBeforeUnmount(() => {
       @close="closeVideo"
       @select="insertVideo"
     />
-    <div class="editor-chrome">
-      <h2 class="editor-section-label">Content</h2>
-      <div
-        class="editor-status"
-        :data-state="
-          status !== 'connected'
-            ? 'disconnected'
-            : unsynced
-              ? 'saving'
-              : 'saved'
-        "
-      >
-        <span role="status" class="editor-save-state"
-          ><span class="editor-save-dot" aria-hidden="true" />{{
-            saveStatus
-          }}</span
-        >
+    <Teleport :to="chromeTarget || 'body'" :disabled="!chromeTarget">
+      <div class="editor-chrome">
         <div
-          v-if="peers.length > 1"
-          class="presence"
-          aria-label="People on this page"
+          class="editor-status"
+          :data-state="
+            status !== 'connected'
+              ? 'disconnected'
+              : unsynced
+                ? 'saving'
+                : 'saved'
+          "
         >
-          <span
-            v-for="peer in peers.slice(0, 5)"
-            :key="peer.id"
-            class="presence-avatar"
-            :title="peer.name"
-            >{{ peer.name.slice(0, 2).toUpperCase() }}</span
+          <span role="status" class="editor-save-state" :title="saveStatus"
+            ><AppIcon
+              :name="status === 'connected' && !unsynced ? 'check' : 'clock'"
+              :size="14"
+            /><span class="editor-save-label">{{ saveStatus }}</span></span
           >
+          <div
+            v-if="peers.length > 1"
+            class="presence"
+            aria-label="People on this page"
+          >
+            <span
+              v-for="peer in peers.slice(0, 5)"
+              :key="peer.id"
+              class="presence-avatar"
+              :title="peer.name"
+              >{{ peer.name.slice(0, 2).toUpperCase() }}</span
+            >
+          </div>
+          <button
+            v-if="editor && !readOnly"
+            type="button"
+            class="editor-format-toggle"
+            aria-label="Text formatting"
+            :aria-expanded="formattingOpen"
+            :aria-controls="formattingId"
+            @mousedown.prevent
+            @click="formattingOpen = !formattingOpen"
+          >
+            <AppIcon
+              :name="
+                textStyle === 'paragraph'
+                  ? 'text'
+                  : 'heading' + textStyle.slice(-1)
+              "
+              :size="15"
+            />{{
+              textStyle === "paragraph" ? "Format" : "H" + textStyle.slice(-1)
+            }}<AppIcon
+              :name="formattingOpen ? 'chevronUp' : 'chevronDown'"
+              :size="12"
+            />
+          </button>
         </div>
-        <button
-          v-if="editor && !readOnly"
-          type="button"
-          class="editor-format-toggle"
-          aria-label="Text formatting"
-          :aria-expanded="formattingOpen"
-          :aria-controls="formattingId"
-          @mousedown.prevent
-          @click="formattingOpen = !formattingOpen"
-        >
-          <AppIcon
-            :name="
-              textStyle === 'paragraph'
-                ? 'text'
-                : 'heading' + textStyle.slice(-1)
-            "
-            :size="15"
-          />{{ textStyle === "paragraph" ? "Format" : "H" + textStyle.slice(-1)
-          }}<AppIcon
-            :name="formattingOpen ? 'chevronUp' : 'chevronDown'"
-            :size="12"
-          />
-        </button>
       </div>
-    </div>
+    </Teleport>
     <dialog
       ref="linkDialog"
       aria-labelledby="link-database-title"
@@ -1816,33 +1820,18 @@ button:disabled {
 .editor-chrome {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding-bottom: 10px;
-  margin-bottom: 18px;
-  border-bottom: 1px solid var(--divider);
-}
-.editor-section-label {
-  margin: 0;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--muted);
+  justify-content: flex-end;
+  gap: 8px;
 }
 .editor-save-state {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: 12px;
   white-space: nowrap;
 }
-.editor-save-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--muted);
-}
-.editor-status[data-state="saving"] .editor-save-dot {
-  background: var(--accent);
+.editor-status[data-state="saving"] .editor-save-state {
+  color: var(--accent);
 }
 .editor-status[data-state="disconnected"] .editor-save-state {
   color: var(--warning);
@@ -1902,8 +1891,8 @@ button:disabled {
 .block-editor .tiptap {
   padding: 0;
   min-height: calc(100dvh - 430px);
-  font-size: 1rem;
-  line-height: 1.8;
+  font-size: 16px;
+  line-height: 1.6;
   overflow-wrap: anywhere;
 }
 .block-editor .tiptap:focus-visible {
@@ -1912,8 +1901,8 @@ button:disabled {
 }
 .block-editor .tiptap p {
   color: var(--text);
-  margin: 0 0 0.65em;
-  line-height: 1.8;
+  margin: 0 0 0.5em;
+  line-height: 1.6;
 }
 .block-editor .tiptap p:only-child:empty:before,
 .block-editor .tiptap p:only-child:has(> br:only-child):before {
@@ -1924,22 +1913,22 @@ button:disabled {
   height: 0;
 }
 .block-editor .tiptap h1 {
-  font-size: 1.8rem;
+  font-size: 30px;
   margin: 1.4em 0 0.4em;
   font-weight: 650;
 }
 .block-editor .tiptap h2 {
-  font-size: 1.4rem;
+  font-size: 24px;
   margin: 1.5em 0 0.5em;
   font-weight: 600;
 }
 .block-editor .tiptap h3 {
-  font-size: 1.15rem;
+  font-size: 20px;
   margin: 1.4em 0 0.4em;
   font-weight: 600;
 }
 .block-editor .tiptap h4 {
-  font-size: 1rem;
+  font-size: 18px;
   margin: 1.4em 0 0.4em;
   font-weight: 650;
 }

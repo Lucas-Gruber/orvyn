@@ -204,10 +204,10 @@ defineExpose({ flush, reload: load });
     aria-label="Record properties"
     :aria-busy="loading || saving"
   >
-    <header class="record-properties-heading">
-      <h2>Properties</h2>
-      <small v-if="saving" role="status">Saving properties…</small>
-    </header>
+    <h2 class="sr-only">Properties</h2>
+    <small v-if="saving" role="status" class="property-save-status"
+      >Saving properties…</small
+    >
     <div v-if="error" class="property-save-error" role="alert">
       <p>{{ error }}</p>
       <div v-if="!denied && Object.keys(dirty).length" class="actions">
@@ -270,24 +270,15 @@ defineExpose({ flush, reload: load });
 </template>
 <style scoped>
 .record-properties {
-  padding-block: 16px;
+  position: relative;
+  padding-block: 0 22px;
   margin-bottom: 24px;
-  border-block: 1px solid var(--divider);
+  border-bottom: 1px solid var(--line);
 }
-.record-properties-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 24px;
-  margin-bottom: 7px;
-}
-.record-properties-heading h2 {
-  margin: 0;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 600;
-}
-.record-properties-heading small {
+.property-save-status {
+  position: absolute;
+  right: 0;
+  bottom: 3px;
   color: var(--muted);
   font-size: 11px;
 }
@@ -295,20 +286,16 @@ defineExpose({ flush, reload: load });
   display: grid;
   grid-template-columns: minmax(110px, 160px) minmax(0, 1fr);
   align-items: start;
-  gap: 16px;
-  min-height: 42px;
-  padding: 5px 0;
-  border-bottom: 1px solid var(--line-soft);
-}
-.record-property-row:last-of-type {
-  border-bottom: 0;
+  gap: 12px;
+  min-height: 36px;
+  padding: 1px 0;
 }
 .record-property-label {
   display: flex;
   gap: 9px;
   align-items: center;
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: 14px;
   padding-top: 8px;
   overflow-wrap: anywhere;
 }
@@ -329,7 +316,7 @@ defineExpose({ flush, reload: load });
   border: 1px solid transparent;
   padding: 6px 8px;
   min-height: 32px;
-  font-size: 0.82rem;
+  font-size: 14px;
 }
 .record-property-value :deep(input:hover),
 .record-property-value :deep(select:hover) {
@@ -343,7 +330,7 @@ defineExpose({ flush, reload: load });
   display: block;
   padding: 8px;
   color: var(--muted);
-  font-size: 0.82rem;
+  font-size: 14px;
 }
 .property-save-error {
   padding: 10px 12px;

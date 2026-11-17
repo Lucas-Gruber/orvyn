@@ -457,7 +457,7 @@ hr {
   border-color: transparent;
   padding: 6px 10px;
   color: var(--muted);
-  font-size: 0.88rem;
+  font-size: 14px;
   min-height: 33px;
 }
 .sidebar-nav > button:hover,
@@ -550,7 +550,7 @@ hr {
   min-height: 30px;
   background: transparent;
   border: 0;
-  font-size: 0.85rem;
+  font-size: 14px;
   color: var(--muted);
 }
 .tree-page:hover {
@@ -656,7 +656,7 @@ hr {
   gap: 7px;
   min-width: 0;
   flex: 1;
-  font-size: 0.82rem;
+  font-size: 13px;
   color: var(--muted);
   overflow: hidden;
 }
@@ -697,12 +697,30 @@ hr {
 .topbar-actions .favorite-active {
   color: var(--accent);
 }
+.page-peek .editor-save-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+@media (max-width: 1100px) {
+  .editor-save-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
 .content-area {
   flex: 1;
   min-width: 0;
 }
 .document-page {
-  width: min(100% - 112px, 820px);
+  width: min(100% - 112px, 760px);
   margin: 64px auto 80px;
 }
 .document-page.full-width {
@@ -724,7 +742,8 @@ hr {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 17px;
+  min-height: 28px;
+  margin-bottom: 12px;
 }
 .page-decoration-controls .page-symbol {
   margin-bottom: 0;
@@ -740,9 +759,13 @@ hr {
 }
 .page-cover-action {
   opacity: 0;
-  font-size: 0.75rem;
+  font-size: 13px;
+  color: var(--muted);
+  padding: 4px 6px;
+  min-height: 28px;
 }
-.page-decoration-controls:hover .page-cover-action,
+.document-page:hover .page-cover-action,
+.page-decoration-controls:focus-within .page-cover-action,
 .page-cover-action:focus-visible {
   opacity: 1;
 }
@@ -756,10 +779,13 @@ hr {
   }
 }
 .page-title {
-  font-size: 2.7rem;
-  letter-spacing: -0.045em;
+  display: block;
+  resize: none;
+  overflow: hidden;
+  font-size: 40px;
+  letter-spacing: -0.025em;
   line-height: 1.2;
-  font-weight: 650;
+  font-weight: 700;
   background: transparent !important;
   border: 1px solid transparent;
   border-radius: 5px;
@@ -767,7 +793,7 @@ hr {
   margin: 0;
   width: 100%;
   color: var(--text);
-  min-height: 58px;
+  min-height: 52px;
 }
 .page-title:hover {
   border-color: transparent;
@@ -1677,7 +1703,7 @@ dialog.link-database-dialog::backdrop {
     margin: 35px auto 50px;
   }
   .page-title {
-    font-size: 2.05rem;
+    font-size: 32px;
   }
   .page-symbol {
     height: 45px;
@@ -1768,7 +1794,7 @@ dialog.link-database-dialog::backdrop {
 }
 @media (min-width: 1400px) {
   .workspace-main.side-peek-open {
-    margin-right: min(740px, 52vw);
+    margin-right: min(800px, 55vw);
   }
   .workspace-main.side-peek-open .database-workspace {
     padding-inline: 36px;

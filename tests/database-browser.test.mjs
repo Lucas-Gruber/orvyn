@@ -60,7 +60,7 @@ test("Chromium: five database views, live Kanban drag, record documents and save
       page.getByRole("button", { name: title, exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByText("Live updates connected", { exact: true }),
+      page.getByRole("status", { name: "Live updates connected", exact: true }),
     ).toBeVisible();
     await expect(
       page.getByText("Loading records…", { exact: true }),
@@ -74,7 +74,10 @@ test("Chromium: five database views, live Kanban drag, record documents and save
     await chooseSpace(observer, space);
     await openPageFromSidebar(observer, database);
     await expect(
-      observer.getByText("Live updates connected", { exact: true }),
+      observer.getByRole("status", {
+        name: "Live updates connected",
+        exact: true,
+      }),
     ).toBeVisible();
     await page.getByRole("tab", { name: "Board", exact: true }).click();
     const source = page

@@ -144,15 +144,25 @@ const themes = [
     { id: "light", name: "Light" },
   ],
   theme = ref("cybercade");
-const titleInput = ref<HTMLInputElement>(),
+const titleInput = ref<HTMLTextAreaElement>(),
   editorHandle = ref<{
     flush: () => Promise<void>;
     refreshComments: () => Promise<void>;
     focusComment: () => void;
+    focusStart: () => void;
   }>(),
   titleConflict = ref<{ title: string; version: number }>(),
   titleStatus = ref(""),
   serverTitle = ref("");
+function resizePageTitle() {
+  const input = titleInput.value;
+  if (!input) return;
+  input.style.height = "auto";
+  input.style.height = input.scrollHeight + "px";
+}
+watch([titleInput, () => page.value?.title, fullWidth, sidebarOpen], () =>
+  nextTick(resizePageTitle),
+);
 let titleTimer: ReturnType<typeof setTimeout> | undefined,
   searchTimer: ReturnType<typeof setTimeout> | undefined,
   noticeTimer: ReturnType<typeof setTimeout> | undefined,
@@ -1090,6 +1100,7 @@ onMounted(async () => {
   window.addEventListener("keydown", globalKeys);
   window.addEventListener("popstate", fromHistory);
   window.addEventListener("beforeunload", beforeUnload);
+  window.addEventListener("resize", resizePageTitle);
   await readAccountLink();
   const requestedSpace = String(route.query.space || ""),
     requestedPage = String(route.query.page || "");
@@ -1129,6 +1140,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("keydown", globalKeys);
   window.removeEventListener("popstate", fromHistory);
   window.removeEventListener("beforeunload", beforeUnload);
+  window.removeEventListener("resize", resizePageTitle);
   viewport?.removeEventListener("change", viewportChanged);
   commentViewport?.removeEventListener("change", commentViewportChanged);
 });
@@ -1587,6 +1599,7 @@ onBeforeUnmount(() => {
           >
         </nav>
         <div v-if="view === 'workspace' && page" class="topbar-actions">
+          <div id="page-editor-tools" />
           <span v-if="page.access_rank < 30" class="badge"
             ><AppIcon name="lock" :size="12" />{{
               page.access_rank >= 20 ? "Can comment" : "Read-only"
@@ -1808,14 +1821,14 @@ onBeforeUnmount(() => {
           />
           <div class="page-decoration-controls">
             <button
-              v-if="page.access_rank >= 30"
+              v-if="page.icon && page.access_rank >= 30"
               class="page-symbol page-symbol-button"
               aria-label="Change page icon and cover"
               @click="showPageAppearance = true"
             >
               <PageSymbol :icon="page.icon" :kind="page.kind" :size="48" />
             </button>
-            <div v-else class="page-symbol">
+            <div v-else-if="page.icon" class="page-symbol">
               <PageSymbol :icon="page.icon" :kind="page.kind" :size="48" />
             </div>
             <button
@@ -1823,20 +1836,27 @@ onBeforeUnmount(() => {
               class="ghost page-cover-action"
               @click="showPageAppearance = true"
             >
-              Icon and cover
+              <AppIcon :name="page.icon ? 'palette' : 'plus'" :size="14" />{{
+                page.icon ? "Icon and cover" : "Add icon or cover"
+              }}
             </button>
           </div>
           <div class="page-heading">
             <label for="page-title" class="sr-only">Page title</label
-            ><input
+            ><textarea
               id="page-title"
               ref="titleInput"
               v-model="page.title"
               class="page-title"
+              rows="1"
               maxlength="300"
               :readonly="navigating || pageLoading || page.access_rank < 30"
               placeholder="Untitled"
-              @input="scheduleTitleSave"
+              @input="
+                scheduleTitleSave();
+                resizePageTitle();
+              "
+              @keydown.enter.prevent="editorHandle?.focusStart()"
               @blur="save().catch(() => {})"
             />
             <div class="page-title-state">
@@ -1894,6 +1914,7 @@ onBeforeUnmount(() => {
             :target-person="targetPerson"
             :person-visit="personVisit"
             :user="me"
+            chrome-target="#page-editor-tools"
           />
           <section
             v-if="childPages.length || page.kind === 'folder'"

@@ -313,7 +313,7 @@ test("Chromium: page/space icons, covers, private image selection, stale appeara
       page.getByText("All changes saved", { exact: true }),
     ).toBeVisible({ timeout: 12000 });
     await page
-      .getByRole("button", { name: "Change page icon and cover", exact: true })
+      .getByRole("button", { name: "Add icon or cover", exact: true })
       .click();
     await dialog
       .getByRole("button", { name: "Books icon", exact: true })

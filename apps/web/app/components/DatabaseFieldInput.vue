@@ -22,6 +22,11 @@ const options = computed(() =>
       ]
     : props.property.config.options || [],
 );
+const selectedOption = computed(() =>
+  props.property.config.options?.find(
+    (option) => option.id === props.modelValue,
+  ),
+);
 const focused = ref(false),
   editingValue = ref(""),
   editingDate = ref(false),
@@ -71,18 +76,33 @@ const inputType = computed(
     :checked="modelValue === true"
     :disabled="disabled"
     @change="changed"
-  /><select
+  /><span
     v-else-if="['Select', 'Status'].includes(property.type)"
-    :id="id"
-    :aria-label="property.name"
-    :value="modelValue || ''"
-    :disabled="disabled"
-    @change="changed"
+    class="single-select-field"
+    :class="{ 'is-disabled': disabled }"
   >
-    <option value="">{{ emptyLabel || "Unassigned" }}</option>
-    <option v-for="option in options" :key="option.id" :value="option.id">
-      {{ option.label }}
-    </option></select
+    <span
+      aria-hidden="true"
+      :class="selectedOption ? 'single-select-chip' : 'field-empty'"
+      :data-color="selectedOption?.color"
+    >
+      <span
+        v-if="selectedOption && property.type === 'Status'"
+        class="status-dot"
+      />{{ selectedOption?.label || emptyLabel || "Empty" }}
+    </span>
+    <select
+      :id="id"
+      :aria-label="property.name"
+      :value="modelValue || ''"
+      :disabled="disabled"
+      @change="changed"
+    >
+      <option value="">{{ emptyLabel || "Unassigned" }}</option>
+      <option v-for="option in options" :key="option.id" :value="option.id">
+        {{ option.label }}
+      </option>
+    </select> </span
   ><UiMultiSelect
     v-else-if="['MultiSelect', 'Person'].includes(property.type)"
     :id="id"
@@ -128,6 +148,70 @@ const inputType = computed(
   />
 </template>
 <style scoped>
+.single-select-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  width: 100%;
+  padding: 5px 8px;
+  border-radius: 4px;
+  font-size: 14px;
+}
+.single-select-field:hover {
+  background: var(--surface-hover);
+}
+.single-select-field:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.single-select-field select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+.single-select-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 7px;
+  max-width: 100%;
+  border-radius: 4px;
+  background: var(--surface-hover);
+  color: var(--text);
+  line-height: 22px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+.single-select-chip[data-color="violet"] {
+  background: color-mix(in srgb, #9470ce 18%, var(--bg));
+}
+.single-select-chip[data-color="green"] {
+  background: color-mix(in srgb, #549d76 18%, var(--bg));
+}
+.single-select-chip[data-color="blue"] {
+  background: color-mix(in srgb, #528fce 18%, var(--bg));
+}
+.single-select-chip[data-color="amber"] {
+  background: color-mix(in srgb, #bf9950 18%, var(--bg));
+}
+.field-empty {
+  color: var(--faint);
+}
+.is-disabled {
+  opacity: 0.5;
+}
 .empty-date-field {
   display: block;
   width: 100%;
@@ -138,7 +222,7 @@ const inputType = computed(
   border-radius: 5px;
   background: transparent;
   color: var(--faint);
-  font-size: 0.82rem;
+  font-size: 14px;
   font-weight: 400;
 }
 .empty-date-field:hover {

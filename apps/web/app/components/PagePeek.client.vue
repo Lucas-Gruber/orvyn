@@ -262,6 +262,7 @@ defineExpose({ flush, requestClose: () => close() });
       </div>
     </template>
     <template #actions>
+      <div id="peek-editor-tools" />
       <button
         v-if="page"
         class="icon-button"
@@ -394,13 +395,13 @@ defineExpose({ flush, requestClose: () => close() });
           :focused-comment="focusedComment"
           :target-heading="targetHeading"
           :heading-visit="headingVisit"
+          chrome-target="#peek-editor-tools"
           @access="access"
           @comment="commentOnText"
           @thread="openThread"
           @anchor-status="anchorStatus = $event.status"
         />
         <section class="peek-page-details" aria-label="Page details">
-          <h2>Page details</h2>
           <PageBacklinks :key="'backlinks-' + page.id" :page-id="page.id" />
           <details
             class="page-attachments-disclosure"
@@ -471,12 +472,12 @@ defineExpose({ flush, requestClose: () => close() });
 </template>
 <style>
 .ui-dialog.page-peek {
-  width: min(960px, calc(100vw - 48px));
+  width: min(1040px, calc(100vw - 80px));
   max-height: calc(100dvh - 48px);
   background: var(--bg);
 }
 .ui-dialog.page-peek.drawer {
-  width: min(740px, calc(100vw - 32px));
+  width: min(800px, calc(100vw - 32px));
   max-height: 100dvh;
 }
 .page-peek > .dialog-header {
@@ -487,7 +488,7 @@ defineExpose({ flush, requestClose: () => close() });
   padding: 9px 16px;
   gap: 12px;
   background: var(--bg);
-  border-bottom: 1px solid var(--divider);
+  border-bottom: 1px solid var(--line-soft);
 }
 .ui-dialog.page-peek > .dialog-content,
 .ui-dialog.page-peek.drawer > .dialog-content {
@@ -506,7 +507,7 @@ defineExpose({ flush, requestClose: () => close() });
   gap: 7px;
   min-width: 0;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 .peek-header-context > span {
   white-space: nowrap;
@@ -526,20 +527,30 @@ defineExpose({ flush, requestClose: () => close() });
   margin-inline: 4px;
 }
 .page-peek-body {
-  padding: 32px 40px 40px;
+  padding: 48px 56px 64px;
 }
 .ui-dialog.page-peek:not(.drawer) .page-peek-body {
-  padding: 40px 64px;
+  padding: 56px 80px 80px;
+}
+.peek-page {
+  max-width: 760px;
+  margin-inline: auto;
 }
 .peek-appearance-actions {
   display: flex;
   gap: 5px;
   min-height: 25px;
-  margin-bottom: 9px;
+  margin-bottom: 12px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.peek-page:hover .peek-appearance-actions,
+.peek-page:focus-within .peek-appearance-actions {
+  opacity: 1;
 }
 .peek-appearance-actions > button {
   color: var(--faint);
-  font-size: 11px;
+  font-size: 13px;
   padding: 3px 5px;
   min-height: 25px;
   background: transparent;
@@ -557,7 +568,7 @@ defineExpose({ flush, requestClose: () => close() });
   width: 100%;
   min-height: 42px;
   padding: 0;
-  margin: 0 0 24px;
+  margin: 0 0 28px;
   resize: none;
   overflow: hidden;
   border: 0;
@@ -565,10 +576,10 @@ defineExpose({ flush, requestClose: () => close() });
   background: transparent;
   box-shadow: none;
   font-family: inherit;
-  font-size: clamp(1.65rem, 2.6vw, 2rem);
+  font-size: 40px;
   letter-spacing: -0.025em;
   font-weight: 700;
-  line-height: 1.3;
+  line-height: 1.2;
 }
 .peek-page-title:focus {
   box-shadow: none;
@@ -592,34 +603,27 @@ defineExpose({ flush, requestClose: () => close() });
   margin-right: 6px;
 }
 .page-peek .block-editor .tiptap {
-  min-height: 140px;
+  min-height: 200px;
 }
 .page-peek .record-property-row {
-  grid-template-columns: 145px minmax(0, 1fr);
+  grid-template-columns: 156px minmax(0, 1fr);
 }
 .peek-page-details {
-  border-top: 1px solid var(--divider);
+  border-top: 1px solid var(--line-soft);
   margin-top: 28px;
-  padding-top: 16px;
-}
-.peek-page-details > h2 {
-  margin: 0 0 10px;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 600;
+  padding-top: 12px;
 }
 .peek-page-details > .page-backlinks,
 .peek-page-details > .page-attachments-disclosure {
   margin: 0;
-  padding: 12px 0;
+  padding: 8px 0;
   border: 0;
-  border-bottom: 1px solid var(--line-soft);
 }
 .peek-page-details > .page-backlinks > summary,
 .peek-page-details > .page-attachments-disclosure > summary {
   width: 100%;
   min-height: 20px;
-  font-size: 12px;
+  font-size: 13px;
 }
 .peek-page-details summary > .app-icon:last-child {
   margin-left: auto;
@@ -660,9 +664,17 @@ defineExpose({ flush, requestClose: () => close() });
   .peek-header-context {
     max-width: 100px;
   }
+  .peek-page-title {
+    font-size: 32px;
+  }
   .page-peek .record-property-row {
     grid-template-columns: 112px minmax(0, 1fr);
     gap: 8px;
+  }
+}
+@media (hover: none) {
+  .peek-appearance-actions {
+    opacity: 1;
   }
 }
 </style>

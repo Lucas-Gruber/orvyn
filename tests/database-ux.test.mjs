@@ -40,20 +40,43 @@ test("Chromium: database side/modal/full-page editing, templates, context menus 
           body: { name: "Estimate", type: "Number" },
         })
       ).data,
+      metadata = (await request(`databases/${database.id}`, { cookie })).data,
+      status = metadata.properties.find((p) => p.type === "Status"),
       record = (
         await request(`databases/${database.id}/records`, {
           method: "POST",
           cookie,
           body: {
             title: "Design the writing experience",
-            values: { [hours.id]: 4 },
+            values: { [hours.id]: 4, [status.id]: status.config.options[1].id },
           },
         })
       ).data;
+    for (const [title, estimate, state] of [
+      ["Connect ideas across documents", 3, 0],
+      ["Make database views feel effortless", 5, 1],
+      ["Review keyboard navigation", 2, 2],
+    ]) {
+      const result = await request(`databases/${database.id}/records`, {
+        method: "POST",
+        cookie,
+        body: {
+          title,
+          values: {
+            [hours.id]: estimate,
+            [status.id]: status.config.options[state].id,
+          },
+        },
+      });
+      assert.equal(result.response.status, 201);
+    }
     const context = await browser.newContext({
       viewport: { width: 1600, height: 1050 },
       reducedMotion: "reduce",
     });
+    await context.addInitScript(() =>
+      localStorage.setItem("orvyn.theme", "graphite"),
+    );
     await context.addCookies([
       {
         name: "orvyn_session",
@@ -87,13 +110,7 @@ test("Chromium: database side/modal/full-page editing, templates, context menus 
       peek.getByRole("button", { name: "Back to database", exact: true }),
     ).toHaveCount(1);
     await expect(
-      peek.getByRole("heading", { name: "Properties", exact: true }),
-    ).toBeVisible();
-    await expect(
-      peek.getByRole("heading", { name: "Content", exact: true }),
-    ).toBeVisible();
-    await expect(
-      peek.getByRole("heading", { name: "Page details", exact: true }),
+      peek.getByRole("region", { name: "Record properties", exact: true }),
     ).toBeVisible();
     await expect(
       peek.getByRole("toolbar", { name: "Text formatting", exact: true }),
@@ -102,6 +119,11 @@ test("Chromium: database side/modal/full-page editing, templates, context menus 
       name: "Text formatting",
       exact: true,
     });
+    await expect(
+      peek
+        .locator(".dialog-header")
+        .getByRole("button", { name: "Text formatting", exact: true }),
+    ).toBeVisible();
     await expect(formatting).toHaveAttribute("aria-expanded", "false");
     await formatting.click();
     await expect(
@@ -109,26 +131,6 @@ test("Chromium: database side/modal/full-page editing, templates, context menus 
     ).toBeVisible();
     await formatting.click();
     await expect(formatting).toHaveAttribute("aria-expanded", "false");
-    for (const selector of [
-      ".record-properties",
-      ".editor-chrome",
-      ".peek-page-details",
-    ]) {
-      assert.ok(
-        await peek.locator(selector).evaluate((node) => {
-          const style = getComputedStyle(node),
-            side = node.classList.contains("peek-page-details")
-              ? "Top"
-              : "Bottom";
-          return (
-            parseFloat(style["border" + side + "Width"]) >= 1 &&
-            style["border" + side + "Style"] === "solid" &&
-            style["border" + side + "Color"] !== "rgba(0, 0, 0, 0)"
-          );
-        }),
-        "Page sections have visible separators",
-      );
-    }
     await peek
       .getByRole("button", { name: "Date (empty)", exact: true })
       .click();
@@ -180,6 +182,20 @@ test("Chromium: database side/modal/full-page editing, templates, context menus 
     const editor = peek.getByRole("textbox", { name: "Document", exact: true });
     await expect(editor).toBeEditable();
     await editor.fill("A calm space to write, plan and connect ideas.");
+    await editor.press("End");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("## The writing experience");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type(
+      "Start with the page. Keep properties close, and let the document breathe.",
+    );
+    await page.keyboard.press("Enter");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("## What good looks like");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("- Clear typography and consistent spacing");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("Keyboard shortcuts that stay out of the way");
     await peek
       .getByRole("button", { name: "Open as modal", exact: true })
       .click();
@@ -197,6 +213,31 @@ test("Chromium: database side/modal/full-page editing, templates, context menus 
     await expect(peek).toHaveClass(/drawer/);
     await page.screenshot({
       path: ".local/ui-review/database-side-peek.png",
+      fullPage: true,
+    });
+    await page.screenshot({
+      path: ".local/ui-review/database-side-peek-dark.png",
+      fullPage: true,
+    });
+    await page
+      .getByRole("button", { name: "Account menu", exact: true })
+      .click();
+    await page
+      .getByRole("menuitem", { name: "Appearance", exact: true })
+      .click();
+    const appearance = page.getByRole("dialog", {
+      name: "Appearance",
+      exact: true,
+    });
+    await appearance
+      .getByRole("button", { name: "Light", exact: true })
+      .click();
+    await appearance
+      .getByRole("button", { name: "Close dialog", exact: true })
+      .click();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    await page.screenshot({
+      path: ".local/ui-review/database-side-peek-light.png",
       fullPage: true,
     });
     await page.setViewportSize({ width: 390, height: 844 });
@@ -226,7 +267,8 @@ test("Chromium: database side/modal/full-page editing, templates, context menus 
     await expect(row()).toBeFocused();
     await expect(
       page
-        .locator(".database-table")
+        .locator(".database-table tbody tr")
+        .filter({ hasText: record.title })
         .getByRole("spinbutton", { name: "Estimate", exact: true }),
     ).toHaveValue("8");
     await row().click({ button: "right" });

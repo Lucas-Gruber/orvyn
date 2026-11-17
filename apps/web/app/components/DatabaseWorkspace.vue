@@ -871,12 +871,27 @@ onBeforeUnmount(() => {
       </div>
       <div class="database-heading">
         <h1>{{ metadata.title }}</h1>
-        <small class="database-live"
-          ><span :class="{ connected: events.live.value }" />{{
+        <small
+          class="database-live"
+          role="status"
+          :aria-label="
             events.live.value
-              ? "Live updates connected"
-              : "Live updates reconnecting"
-          }}</small
+              ? 'Live updates connected'
+              : 'Live updates reconnecting'
+          "
+          :title="
+            events.live.value
+              ? 'Live updates connected'
+              : 'Live updates reconnecting'
+          "
+          ><span :class="{ connected: events.live.value }" /><span
+            class="sr-only"
+            >{{
+              events.live.value
+                ? "Live updates connected"
+                : "Live updates reconnecting"
+            }}</span
+          ></small
         >
       </div>
       <div class="database-controls">
@@ -904,6 +919,26 @@ onBeforeUnmount(() => {
           </button>
         </div>
         <div class="database-tools">
+          <form
+            class="database-search"
+            @submit.prevent="
+              offset = 0;
+              load();
+            "
+          >
+            <AppIcon name="search" :size="16" /><label
+              class="sr-only"
+              :for="'db-search-' + domId"
+              >Search records</label
+            ><input
+              ref="searchInput"
+              :id="'db-search-' + domId"
+              v-model="search"
+              type="search"
+              maxlength="200"
+              placeholder="Search…"
+            /><button class="sr-only">Search records</button>
+          </form>
           <button
             v-if="canEdit"
             class="ghost"
@@ -958,6 +993,7 @@ onBeforeUnmount(() => {
           ><button
             v-if="canEdit"
             class="primary"
+            :disabled="busy"
             :title="shortcutLabel('Mod+Alt+R')"
             @click="beginRecord()"
           >
@@ -965,26 +1001,6 @@ onBeforeUnmount(() => {
           </button>
         </div>
       </div>
-      <form
-        class="database-search"
-        @submit.prevent="
-          offset = 0;
-          load();
-        "
-      >
-        <AppIcon name="search" :size="15" /><label
-          class="sr-only"
-          :for="'db-search-' + domId"
-          >Search records</label
-        ><input
-          ref="searchInput"
-          :id="'db-search-' + domId"
-          v-model="search"
-          type="search"
-          maxlength="200"
-          placeholder="Search this database…"
-        /><button class="sr-only">Search records</button>
-      </form>
       <DatabaseTransfer
         ref="transfer"
         :database-id="databaseId"
@@ -1421,6 +1437,7 @@ onBeforeUnmount(() => {
         <button
           v-if="canEdit && !search && !currentView?.config.filters.length"
           class="ghost"
+          :disabled="busy"
           @click="beginRecord()"
         >
           <AppIcon name="plus" :size="15" />Create first record
@@ -2077,6 +2094,7 @@ small {
   max-width: 1600px;
   margin: auto;
   min-width: 0;
+  container-type: inline-size;
 }
 .database-page-symbol {
   color: var(--muted);
@@ -2086,14 +2104,14 @@ small {
   align-items: center;
 }
 .database-heading {
-  margin-bottom: 28px;
+  margin-bottom: 32px;
   align-items: flex-end;
 }
 .database-heading h1 {
   margin: 0;
-  font-size: 2.6rem;
-  letter-spacing: -0.045em;
-  font-weight: 650;
+  font-size: 40px;
+  letter-spacing: -0.025em;
+  font-weight: 700;
 }
 .database-live {
   display: flex;
@@ -2127,6 +2145,8 @@ small {
   overflow: auto;
   margin-bottom: -1px;
   align-items: center;
+  min-width: 0;
+  flex: 1;
 }
 .database-tabs button[role="tab"] {
   padding: 10px 9px;
@@ -2136,12 +2156,12 @@ small {
   border-radius: 0;
   white-space: nowrap;
   color: var(--muted);
-  font-size: 0.82rem;
+  font-size: 14px;
   gap: 6px;
 }
 .database-tabs button[role="tab"][aria-selected="true"] {
   color: var(--text);
-  border-bottom-color: var(--accent);
+  border-bottom-color: var(--text);
 }
 .database-tabs .add-view {
   color: var(--faint);
@@ -2153,16 +2173,16 @@ small {
   align-items: center;
   padding-bottom: 5px;
   flex: none;
-  font-size: 0.8rem;
+  font-size: 14px;
 }
 .database-tools > .ghost {
-  font-size: 0.78rem;
+  font-size: 13px;
   min-height: 29px;
   padding: 4px 6px;
   color: var(--muted);
 }
 .database-tools > .primary {
-  font-size: 0.8rem;
+  font-size: 13px;
   min-height: 30px;
   padding: 5px 10px;
   margin-left: 4px;
@@ -2180,26 +2200,35 @@ small {
   align-items: center;
   gap: 7px;
   color: var(--faint);
-  margin: 12px 0 15px;
-  max-width: 310px;
+  margin: 0;
+  width: 130px;
+  max-width: 180px;
+  min-width: 70px;
+  padding: 0 5px;
+  border-radius: 4px;
+}
+.database-search:focus-within {
+  background: var(--surface);
+  outline: 1px solid var(--line);
 }
 .database-search input {
+  min-width: 0;
   border: 0;
   background: transparent;
   padding: 5px 2px;
   min-height: 28px;
-  font-size: 0.8rem;
+  font-size: 13px;
   box-shadow: none;
 }
 .database-table {
-  border-top: 1px solid var(--line);
+  border-top: 0;
   min-height: 70px;
 }
 .database-table th {
-  font-size: 0.76rem;
+  font-size: 13px;
   font-weight: 500;
   color: var(--muted);
-  background: var(--panel);
+  background: transparent;
   padding: 9px 10px;
   border-right: 1px solid var(--line-soft);
 }
@@ -2208,7 +2237,7 @@ small {
   border-right: 1px solid var(--line-soft);
   min-width: 150px;
   height: 40px;
-  font-size: 0.86rem;
+  font-size: 14px;
 }
 .database-table th:last-child,
 .database-table td:last-child {
@@ -2229,6 +2258,7 @@ small {
   gap: 8px;
   text-align: left;
   font-weight: 500;
+  font-size: 14px;
 }
 .database-table .record-title > .app-icon {
   color: var(--faint);
@@ -2238,7 +2268,7 @@ small {
   border: 1px solid transparent;
   border-radius: 4px;
   background: transparent;
-  font-size: 0.83rem;
+  font-size: 14px;
   padding: 5px 4px;
   min-height: 29px;
   min-width: 90px;
@@ -2495,6 +2525,26 @@ small {
   padding: 5px 7px;
   min-height: 25px;
   margin-top: 9px;
+}
+@container (max-width: 700px) {
+  .database-controls {
+    flex-wrap: wrap;
+    gap: 0;
+  }
+  .database-tabs {
+    flex-basis: 100%;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .database-tools {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    padding-block: 6px;
+  }
+  .database-search {
+    flex: 1;
+    margin-right: auto;
+  }
 }
 @media (max-width: 1050px) {
   .database-workspace {

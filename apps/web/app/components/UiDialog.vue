@@ -37,7 +37,12 @@ function synchronize() {
         "input:not([type=hidden]), textarea, select",
       )
     )?.focus();
-  } else if (!props.open && dialog.value.open) dialog.value.close();
+  } else if (!props.open && dialog.value.open) {
+    // The parent already closed this dialog. Its queued native close event
+    // must not close a new opening that happens before that event is delivered.
+    ignoredClosures++;
+    dialog.value.close();
+  }
 }
 watch([() => props.open, () => props.modal], () => nextTick(synchronize));
 onMounted(synchronize);
