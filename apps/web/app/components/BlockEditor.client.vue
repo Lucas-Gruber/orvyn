@@ -435,6 +435,11 @@ const commands: SlashCommand[] = [
     run: (e: Editor) => e.chain().focus().toggleHeading({ level: 3 }).run(),
   },
   {
+    label: "Heading 4",
+    icon: "heading4",
+    run: (e: Editor) => e.chain().focus().toggleHeading({ level: 4 }).run(),
+  },
+  {
     label: "Bullet list",
     icon: "list",
     run: (e: Editor) => e.chain().focus().toggleBulletList().run(),
@@ -506,6 +511,7 @@ const basicCommands = [
   "Heading 1",
   "Heading 2",
   "Heading 3",
+  "Heading 4",
   "Bullet list",
   "Numbered list",
   "Checklist",
@@ -534,6 +540,7 @@ const commandDescriptions: Record<string, string> = {
   "Heading 1": "A large section heading",
   "Heading 2": "A medium section heading",
   "Heading 3": "A small section heading",
+  "Heading 4": "A compact subsection heading",
   "Bullet list": "Create a simple bulleted list",
   "Numbered list": "Keep steps in order",
   Checklist: "Track work with checkboxes",
@@ -575,7 +582,7 @@ function changeTextStyle(event: Event) {
   else
     e.chain()
       .focus()
-      .setHeading({ level: Number(value.slice(-1)) as 1 | 2 | 3 })
+      .setHeading({ level: Number(value.slice(-1)) as 1 | 2 | 3 | 4 })
       .run();
 }
 function applyCommand(index: number) {
@@ -1477,6 +1484,7 @@ onBeforeUnmount(() => {
           <option value="heading-1">Heading 1</option>
           <option value="heading-2">Heading 2</option>
           <option value="heading-3">Heading 3</option>
+          <option value="heading-4">Heading 4</option>
         </select>
         <button
           :title="'Link to document · ' + shortcutLabel('Mod+K')"
@@ -1818,6 +1826,11 @@ button:disabled {
   margin: 1.4em 0 0.4em;
   font-weight: 600;
 }
+.block-editor .tiptap h4 {
+  font-size: 1rem;
+  margin: 1.4em 0 0.4em;
+  font-weight: 650;
+}
 .block-editor .tiptap ul,
 .block-editor .tiptap ol {
   padding-left: 1.6em;
@@ -1931,7 +1944,8 @@ button:disabled {
 <style>
 .block-editor .tiptap h1,
 .block-editor .tiptap h2,
-.block-editor .tiptap h3 {
+.block-editor .tiptap h3,
+.block-editor .tiptap h4 {
   position: relative;
   scroll-margin-top: 80px;
   min-height: 1.4em;
@@ -1940,9 +1954,9 @@ button:disabled {
 .block-editor .tiptap [data-heading-marker]::before {
   content: attr(data-heading-marker);
   position: absolute;
-  left: -25px;
+  left: -32px;
   top: 0.35em;
-  width: 21px;
+  width: 28px;
   text-align: right;
   color: var(--faint);
   opacity: 0.6;
@@ -2017,8 +2031,8 @@ button:disabled {
 }
 @media (max-width: 760px) {
   .block-editor .tiptap [data-heading-marker]::before {
-    left: -20px;
-    width: 17px;
+    left: -24px;
+    width: 21px;
     font-size: 8.5px;
   }
 }
@@ -2047,6 +2061,7 @@ button:disabled {
 .tiptap h1:hover .heading-permalink,
 .tiptap h2:hover .heading-permalink,
 .tiptap h3:hover .heading-permalink,
+.tiptap h4:hover .heading-permalink,
 .heading-permalink:focus-visible {
   opacity: 1;
 }

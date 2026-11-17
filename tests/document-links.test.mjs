@@ -337,7 +337,7 @@ test("Chromium: slash commands, document links, permanent heading links, renames
         })),
         {
           type: "heading",
-          attrs: { level: 2, id: headingId },
+          attrs: { level: 4, id: headingId },
           content: [{ type: "text", text: "Deployment" }],
         },
         {

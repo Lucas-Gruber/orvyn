@@ -27,14 +27,14 @@ import { PersonMention } from "./person-mention.js";
 import { validPersonId, documentPeople } from "./mention-model.js";
 import { CommentHighlights } from "./comment-highlights.js";
 const lowlight = createLowlight(common);
-export const documentSchemaVersion = 9;
+export const documentSchemaVersion = 10;
 export function editorExtensions(collaborative = false): AnyExtension[] {
   return [
     StarterKit.configure({
       undoRedo: collaborative ? false : undefined,
       trailingNode: false,
       codeBlock: false,
-      heading: { levels: [1, 2, 3] },
+      heading: { levels: [1, 2, 3, 4] },
       link: { openOnClick: false, defaultProtocol: "https" },
     }),
     TaskList,
@@ -98,7 +98,7 @@ export function validateDocument(input: unknown) {
         n.attrs.label.length > 500)
     )
       throw Error("Invalid attachment block");
-    if (n.type.name === "heading" && ![1, 2, 3].includes(n.attrs.level))
+    if (n.type.name === "heading" && ![1, 2, 3, 4].includes(n.attrs.level))
       throw Error("Invalid heading level");
     if (
       n.type.name === "orvynVideo" &&

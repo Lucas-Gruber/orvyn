@@ -603,6 +603,10 @@ EXCEPTION WHEN numeric_value_out_of_range THEN RETURN NULL;
 END $$;`,
   },
   { version: 31, sql: templateMigration },
+  {
+    version: 32,
+    sql: `ALTER TABLE pages ALTER COLUMN document_schema_version SET DEFAULT 10;`,
+  },
 ] as const;
 
 export async function migrate(pool: Pool, target = migrations.at(-1)!.version) {

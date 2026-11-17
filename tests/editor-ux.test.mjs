@@ -5,6 +5,7 @@ import { mkdir } from "node:fs/promises";
 import { chromium, expect } from "./browser-tools.mjs";
 import { request, sessionCookie, base } from "./helpers.mjs";
 import { pageLink } from "../packages/editor/dist/links.js";
+import { documentSchemaVersion } from "../packages/editor/dist/index.js";
 
 test("Chromium: Markdown headings keep the caret, reveal their level, slash commands have icons and dialogs keep horizontal spacing", async () => {
   const browser = await chromium.launch({
@@ -53,7 +54,13 @@ test("Chromium: Markdown headings keep the caret, reveal their level, slash comm
     await expect(editor).toBeEditable();
     await editor.click();
     await mkdir(".local/ui-review", { recursive: true });
-    for (const level of [1, 2, 3]) {
+    const labels = [
+      "Release notes",
+      "The next milestone",
+      "A small detail",
+      "An in-depth note",
+    ];
+    for (const level of [1, 2, 3, 4]) {
       await page.keyboard.type("#".repeat(level) + " ");
       const heading = editor.locator("h" + level).last();
       await expect(heading).toHaveAttribute("data-heading-empty", "true");
@@ -85,12 +92,24 @@ test("Chromium: Markdown headings keep the caret, reveal their level, slash comm
           fullPage: true,
           caret: "initial",
         });
-      await page.keyboard.type(
-        ["Release notes", "The next milestone", "A small detail"][level - 1],
-      );
-      await expect(heading).toContainText(
-        ["Release notes", "The next milestone", "A small detail"][level - 1],
-      );
+      await page.keyboard.type(labels[level - 1]);
+      await expect(heading).toContainText(labels[level - 1]);
+      if (level === 4) {
+        const id = await heading.getAttribute("id"),
+          style = page.getByRole("combobox", {
+            name: "Text style",
+            exact: true,
+          });
+        await style.selectOption("heading-3");
+        await expect(editor.locator("h3").last()).toHaveAttribute("id", id);
+        await style.selectOption("heading-4");
+        await expect(heading).toHaveAttribute("id", id);
+        await page.keyboard.press("Control+Alt+3");
+        await expect(editor.locator("h3").last()).toHaveAttribute("id", id);
+        await page.keyboard.press("Control+Alt+4");
+        await expect(heading).toHaveAttribute("id", id);
+        await expect(style).toHaveValue("heading-4");
+      }
       await page.keyboard.press("End");
       await page.keyboard.press("Enter");
       await page.keyboard.press("Control+Alt+0");
@@ -113,8 +132,18 @@ test("Chromium: Markdown headings keep the caret, reveal their level, slash comm
       path: ".local/ui-review/editor-heading-slash-ux.png",
       fullPage: true,
     });
-    await page.keyboard.press("Escape");
-    await page.keyboard.press("Backspace");
+    await page.keyboard.type("heading 4");
+    await menu.getByRole("option", { name: "Heading 4", exact: true }).click();
+    await expect(editor.locator("h4").last()).toHaveAttribute(
+      "data-heading-empty",
+      "true",
+    );
+    await page.keyboard.type("A linked H4 section");
+    await page.keyboard.press("Enter");
+    await page.keyboard.press("Control+Alt+0");
+    await expect(
+      page.getByText("All changes saved", { exact: true }),
+    ).toBeVisible();
     await page.getByTitle("Link a database", { exact: true }).click();
     const native = page.locator("dialog.link-database-dialog[open]");
     await expect(native).toBeVisible();
@@ -144,6 +173,32 @@ test("Chromium: Markdown headings keep the caret, reveal their level, slash comm
         () => document.documentElement.scrollWidth <= innerWidth,
       ),
     );
+    await page
+      .getByRole("dialog", { name: "Link to document", exact: true })
+      .getByRole("button", { name: "Close dialog", exact: true })
+      .click();
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.reload();
+    await expect(editor.locator("h4")).toHaveCount(2);
+    await expect(editor.locator("h4").last()).toContainText(
+      "A linked H4 section",
+    );
+    await expect(editor.locator("h4").last()).toHaveAttribute(
+      "data-heading-marker",
+      "####",
+    );
+    const saved = (await request("pages/" + source.id, { cookie })).data;
+    assert.equal(saved.document_schema_version, documentSchemaVersion);
+    const headings = (await request(`pages/${source.id}/headings`, { cookie }))
+      .data;
+    assert.deepEqual(
+      headings.filter((h) => h.level === 4).map((h) => h.text),
+      [labels[3], "A linked H4 section"],
+    );
+    await page.screenshot({
+      path: ".local/ui-review/editor-h1-h4.png",
+      fullPage: true,
+    });
     assert.deepEqual(errors, []);
   } finally {
     await browser.close();

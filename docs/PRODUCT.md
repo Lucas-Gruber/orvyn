@@ -406,7 +406,7 @@ Nutze vorzugsweise Tiptap/ProseMirror mit einer Erweiterungsarchitektur.
 Mindestens:
 
 - Paragraph
-- Heading 1/2/3
+- Heading 1/2/3/4
 - Bulleted List
 - Numbered List
 - Checklist

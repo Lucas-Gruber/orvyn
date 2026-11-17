@@ -13,6 +13,7 @@ Work through these areas in order, preserving working features and committing/pu
    - [x] Page/space emoji icons and preset covers; private image covers for pages.
    - [x] Folders, hierarchy dragging and keyboard reorder/nest/outdent.
    - [x] Empty-heading caret/level hints, icon/description slash menu, consistent modal spacing and discoverable keyboard shortcuts.
+   - [x] Headings H1–H4 across Markdown, slash commands, formatting, shortcuts, outlines and permanent links.
 2. Collaboration
    - [x] Page discussion threads, replies, author editing, moderation and resolve/reopen.
    - [x] Text-anchored comments with relative positions and changed/deleted text handling.
@@ -26,6 +27,7 @@ Work through these areas in order, preserving working features and committing/pu
    - [x] Database/record snapshot templates with authorized independent attachment copies.
    - [x] Side/center/full-page record opening, saved view preference and keyboard/context-menu actions.
    - [ ] Extend failed-draft recovery to every table cell (record-page properties retain drafts; navigation awaits pending writes).
+   - [ ] Edit/delete/restore properties and selection options; extend current relation/rollup capabilities.
 4. Search
    - [ ] Indexed document full-text search, tags/metadata and space/type filters.
 5. Whiteboards

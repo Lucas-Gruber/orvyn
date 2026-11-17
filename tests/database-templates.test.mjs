@@ -254,7 +254,7 @@ test("record templates freeze document/defaults, copy attachments, regenerate se
       content: [
         {
           type: "heading",
-          attrs: { level: 2, id: heading },
+          attrs: { level: 4, id: heading },
           content: [{ type: "text", text: "Before launch" }],
         },
         {
@@ -336,6 +336,7 @@ test("record templates freeze document/defaults, copy attachments, regenerate se
     assert.deepEqual(copied.values[f.person.id], []);
     assert.ok(result.omittedDefaults >= 1);
     const copiedHeading = copy.document.content[0].attrs.id;
+    assert.equal(copy.document.content[0].attrs.level, 4);
     assert.notEqual(copiedHeading, heading);
     assert.equal(
       copy.document.content[1].content[0].marks[0].attrs.href,

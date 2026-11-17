@@ -94,6 +94,39 @@ test("shared editor schema upgrades paragraphs, round-trips Yjs and rejects unsa
   );
 });
 
+test("H4 headings round-trip through Yjs with stable anchors while levels above H4 remain invalid", () => {
+  const id = "f618bfad-5f6a-4a2d-b030-7c791a640c62",
+    document = {
+      type: "doc",
+      content: [
+        {
+          type: "heading",
+          attrs: { level: 4, id },
+          content: [{ type: "text", text: "Detailed notes" }],
+        },
+      ],
+    },
+    normalized = normalizeDocument(document),
+    ydoc = documentToYDoc(normalized);
+  try {
+    assert.deepEqual(yDocToDocument(ydoc), normalized);
+    assert.deepEqual(documentHeadings(yDocToDocument(ydoc)), [
+      { id, level: 4, text: "Detailed notes" },
+    ]);
+  } finally {
+    ydoc.destroy();
+  }
+  for (const level of [0, 5, 6, 999, "4"])
+    assert.throws(
+      () =>
+        validateDocument({
+          ...document,
+          content: [{ ...document.content[0], attrs: { level, id } }],
+        }),
+      /heading/,
+    );
+});
+
 test("heading identities survive Yjs and renames, legacy anchors are deterministic and malformed anchors are rejected", () => {
   const id = "c6df12f0-44c7-4c71-9c47-5b1a4dc5bd1e";
   const doc = normalizeDocument({

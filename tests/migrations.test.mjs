@@ -4,6 +4,7 @@ import { randomBytes } from "node:crypto";
 import { createRequire } from "node:module";
 import { Pool } from "./helpers.mjs";
 import { migrate, migrations } from "../apps/api/dist/migrations.js";
+import { documentSchemaVersion } from "../packages/editor/dist/index.js";
 test("migrations install, upgrade existing records, serialize and roll back failed schema changes", async () => {
   const root = new Pool({ connectionString: process.env.DATABASE_URL });
   const name = "orvyn_test_" + randomBytes(8).toString("hex");
@@ -112,6 +113,13 @@ test("migrations install, upgrade existing records, serialize and roll back fail
     assert.equal(migrated.version, 7);
     assert.equal(migrated.created_by, account.rows[0].id);
     assert.equal(migrated.document_schema_version, 1);
+    const created = (
+      await db.query(
+        "INSERT INTO pages(space_id,title,created_by,last_edited_by) VALUES($1,'New page',$2,$2) RETURNING document_schema_version",
+        [oldSpace, account.rows[0].id],
+      )
+    ).rows[0];
+    assert.equal(created.document_schema_version, documentSchemaVersion);
     assert.deepEqual(
       (
         await db.query(

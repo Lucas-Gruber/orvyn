@@ -24,7 +24,7 @@ The interface is currently English. Full localization, synchronized preferences,
 
 ## Editor and database interaction
 
-Markdown heading input keeps an empty editable text position, with a faint `#`, `##` or `###` gutter marker, an empty-heading hint and a text-style selector in the toolbar. The heading permalink button is inserted only once a heading has content. The slash menu puts basic text blocks first and gives every command an icon and description.
+Markdown heading input supports H1–H4 and keeps an empty editable text position, with a faint `#`, `##`, `###` or `####` gutter marker, an empty-heading hint and a text-style selector in the toolbar. Levels are available through Markdown, slash commands, the selector and `Ctrl/Cmd Alt 1` through `4`; changing the level preserves the heading anchor. The heading permalink button is inserted only once a heading has content. The slash menu puts basic text blocks first and gives every command an icon and description.
 
 Records open in a side peek by default. The row menu, right-click menu and keyboard actions also offer a center modal or full page. Each saved view can choose its default opening mode. Peek URLs survive reload, and switching between side and center keeps the same editor instance. Both peeks expose the real document, editable properties, comments, appearance, attachments and template actions. Closing, opening another record or expanding to a full page waits for pending property, title and document writes; failed property drafts remain available for explicit retry/discard. Unsaved page titles, property drafts and unacknowledged document changes participate in the browser's unload warning.
 

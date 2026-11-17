@@ -144,7 +144,7 @@ test("Chromium: callout, toggle, table of contents and code highlighting persist
     await page.keyboard.press("Enter");
     await page.keyboard.press("Enter");
     await page.keyboard.press("Enter");
-    await slash("Heading 2");
+    await slash("Heading 4");
     await page.keyboard.type("Release checklist");
     await page.keyboard.press("Enter");
     await slash("Table of contents");

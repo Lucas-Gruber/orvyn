@@ -20,6 +20,8 @@ Older documents without stored heading identities have deterministic initial anc
 
 Schema version 3 adds the optional validated heading attribute. Database migration 14 updates the default for new documents; it does not replace existing CRDT histories. Existing documents remain readable. Servers predating this schema must not serve pages written with the new format.
 
+Schema version 10 extends headings through H4, including Markdown `#### `, slash insertion, toolbar selection, `Ctrl/Cmd Alt 4`, table-of-contents entries, previews and permanent links. Levels above H4 remain invalid. Migration 32 updates the default for new pages; existing content, revisions and anchors are preserved, and an ordinary acknowledged edit upgrades the document version.
+
 Upgrade the web app, API and all collaboration replicas together and reload already-open editor tabs. Mixed-schema rolling upgrades are not supported.
 
 If a heading is deleted or converted into another block type, opening its old link shows the document with an explanation that the heading is missing. No unrelated heading is chosen as a fallback.
