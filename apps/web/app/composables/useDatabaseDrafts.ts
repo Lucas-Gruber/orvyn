@@ -259,6 +259,9 @@ export function useDatabaseDrafts(options: {
     discard,
     reconcile,
     flush,
+    settled: async () => {
+      while (job) await job;
+    },
     clear: () => {
       for (const id of Object.keys(drafts)) delete drafts[id];
     },

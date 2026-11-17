@@ -358,6 +358,13 @@ export function querySql(
     if (property.type === "LastEditedTime") return "p.updated_at";
     if (property.type === "CreatedBy") return "p.created_by::text";
     if (property.type === "LastEditedBy") return "p.last_edited_by::text";
+    if (["Select", "Status", "MultiSelect"].includes(property.type)) {
+      const key = bind(property.id),
+        ids = bind((property.config.options || []).map((item) => item.id));
+      if (property.type === "MultiSelect")
+        return `(SELECT coalesce(jsonb_agg(option_id ORDER BY option_id),'[]'::jsonb) FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(r.values->${key})='array' THEN r.values->${key} ELSE '[]'::jsonb END) selected(option_id) WHERE option_id=ANY(${ids}::text[]))`;
+      return `(CASE WHEN r.values->>${key}=ANY(${ids}::text[]) THEN r.values->>${key} ELSE NULL END)`;
+    }
     if (["MultiSelect", "Person", "Files", "Relation"].includes(property.type))
       return `(r.values->${bind(property.id)})`;
     const raw = `(r.values->>${bind(property.id)})`;
@@ -532,6 +539,23 @@ export function recordDTO(row: any, properties: Property[]) {
       case "Files":
         values[property.id] = row.file_values?.[property.id] || [];
         break;
+      case "Select":
+      case "Status":
+        values[property.id] = property.config.options?.some(
+          (item) => item.id === row.values[property.id],
+        )
+          ? row.values[property.id]
+          : null;
+        break;
+      case "MultiSelect": {
+        const selected = row.values[property.id];
+        values[property.id] = Array.isArray(selected)
+          ? selected.filter((id) =>
+              property.config.options?.some((item) => item.id === id),
+            )
+          : [];
+        break;
+      }
       case "Title":
         values[property.id] = row.title;
         break;

@@ -29,6 +29,17 @@ const emit = defineEmits<{
       <span v-if="entry.saving" role="status">Saving…</span>
     </header>
     <p v-if="entry.error" role="alert">{{ entry.error }}</p>
+    <p
+      v-if="
+        Object.keys(entry.values).some(
+          (id) => !properties.some((property) => property.id === id),
+        )
+      "
+      class="missing-draft-property"
+    >
+      A property in this draft was deleted. Restore it in Properties to save its
+      changes.
+    </p>
     <div
       v-for="property in properties.filter((p) =>
         Object.hasOwn(entry.values, p.id),

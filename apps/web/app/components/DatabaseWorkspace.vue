@@ -34,6 +34,7 @@ const templateLibrary = ref<{ open: () => void }>(),
   chosenTemplate = ref<any>(),
   selectedTemplateId = ref(""),
   templateLoading = ref(false);
+const propertyManager = ref<{ open: (id?: string) => Promise<void> }>();
 let templateDefaults: Record<string, unknown> = {},
   templateTitle = "",
   createRequest = "",
@@ -498,6 +499,11 @@ async function runMutation(fn: () => Promise<void>) {
 async function flush() {
   while (mutationJob) await mutationJob;
   await cellWrites.flush();
+}
+async function preparePropertyChange(allowDrafts = false) {
+  while (mutationJob) await mutationJob;
+  if (allowDrafts) await cellWrites.settled();
+  else await cellWrites.flush();
 }
 usePendingWrites(flush);
 defineExpose({
@@ -1016,6 +1022,12 @@ onBeforeUnmount(() => {
             ><button
               v-if="canEdit"
               role="menuitem"
+              @click="propertyManager?.open()"
+            >
+              <AppIcon name="settings" :size="16" />Properties</button
+            ><button
+              v-if="canEdit"
+              role="menuitem"
               @click="
                 rename = metadata.title;
                 showRename = true;
@@ -1050,6 +1062,17 @@ onBeforeUnmount(() => {
           </button>
         </div>
       </div>
+      <DatabasePropertyManager
+        v-if="canEdit"
+        ref="propertyManager"
+        :database-id="databaseId"
+        :before-change="preparePropertyChange"
+        @changed="load"
+        @create="showPropertyCreate = true"
+        @formula="editFormula"
+        @rollup="editRollup"
+        @error="error = $event"
+      />
       <DatabaseTransfer
         ref="transfer"
         :database-id="databaseId"
@@ -1214,6 +1237,16 @@ onBeforeUnmount(() => {
                   @click="editRollup(property)"
                 >
                   <span aria-hidden="true">∑</span>{{ property.name }}
+                </button>
+                <button
+                  v-else-if="canEdit"
+                  class="property-header-button"
+                  :aria-label="'Edit ' + property.name + ' property'"
+                  @click="propertyManager?.open(property.id)"
+                >
+                  <AppIcon :name="propertyIcon(property)" :size="14" />{{
+                    property.name
+                  }}
                 </button>
                 <span v-else class="database-column-label"
                   ><AppIcon :name="propertyIcon(property)" :size="14" />{{
@@ -1971,6 +2004,20 @@ onBeforeUnmount(() => {
   border: 1px solid var(--line);
   border-radius: 7px;
   background: var(--bg);
+}
+.property-header-button {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  min-height: 20px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--muted);
+  justify-content: flex-start;
+}
+.property-header-button:hover {
+  background: var(--surface-hover);
+  color: var(--text);
 }
 .database-drafts > summary {
   display: flex;

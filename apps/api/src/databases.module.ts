@@ -7,6 +7,12 @@ import {
 } from "@orvyn/shared";
 import { formulaConfig } from "./databases/formula.js";
 import { rollupConfig } from "./databases/rollup.js";
+import {
+  optionChanges,
+  updateOptions,
+  validatePropertySet,
+  cleanViews,
+} from "./databases/properties.js";
 import { checkRelationTarget, checkRelations } from "./databases/relations.js";
 import {
   Module,
@@ -14,6 +20,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Req,
   Body,
   Param,
@@ -229,6 +236,8 @@ class DatabasesController {
           schemaVersion: z.number().int().positive(),
           formula: z.string().trim().min(1).max(2000).optional(),
           rollup: rollupInput.optional(),
+          options: optionChanges.optional(),
+          confirmOptionRemoval: z.boolean().optional(),
         })
         .strict(),
       input = parse<z.infer<typeof schema>>(schema, body);
@@ -244,17 +253,26 @@ class DatabasesController {
       if (input.rollup !== undefined && existing.type !== "Rollup")
         fail(400, "Only Rollup properties accept a calculation.");
       const config: Property["config"] =
-          input.rollup !== undefined
-            ? await rollupConfig(
+          input.options !== undefined
+            ? await updateOptions(
                 c,
-                uid,
-                context.page.space_id,
-                context.properties,
-                input.rollup,
+                context.page.id,
+                existing,
+                input.options,
+                input.confirmOptionRemoval === true,
+                context.views,
               )
-            : input.formula === undefined
-              ? existing.config
-              : formulaConfig(input.formula, context.properties),
+            : input.rollup !== undefined
+              ? await rollupConfig(
+                  c,
+                  uid,
+                  context.page.space_id,
+                  context.properties,
+                  input.rollup,
+                )
+              : input.formula === undefined
+                ? existing.config
+                : formulaConfig(input.formula, context.properties),
         next = context.properties.map((p) =>
           p.id === property ? { ...p, name: input.name, config } : p,
         );
@@ -279,7 +297,9 @@ class DatabasesController {
       await audit(
         c,
         uid,
-        input.formula === undefined && input.rollup === undefined
+        input.formula === undefined &&
+          input.rollup === undefined &&
+          input.options === undefined
           ? "database.property_renamed"
           : "database.property_updated",
         {
@@ -287,6 +307,130 @@ class DatabasesController {
         },
       );
       return r.rows[0];
+    });
+  }
+  @Get("databases/:id/deleted-properties") async deletedProperties(
+    @Req() req: any,
+    @Param("id") id: string,
+  ) {
+    const uid = await user(req),
+      context = await database(db, uid, id, 30);
+    return (
+      await db.query(
+        "SELECT id,name,type,position,deleted_at FROM database_properties WHERE database_id=$1 AND deleted_at IS NOT NULL AND orvyn_page_role(database_id,$2)>=30 ORDER BY deleted_at DESC,id",
+        [context.page.id, uid],
+      )
+    ).rows;
+  }
+  @Get("databases/:id/properties/:property/deleted-options")
+  async deletedOptions(
+    @Req() req: any,
+    @Param("id") id: string,
+    @Param("property") property: string,
+  ) {
+    const uid = await user(req),
+      context = await database(db, uid, id, 30);
+    if (!context.properties.some((item) => item.id === property))
+      fail(404, "Property not found");
+    return (
+      await db.query(
+        "SELECT option_id AS id,label,color,o.position FROM database_deleted_options o JOIN database_properties p ON p.id=o.property_id WHERE property_id=$1 AND p.deleted_at IS NULL AND orvyn_page_role(p.database_id,$2)>=30 ORDER BY o.position,option_id",
+        [property, uid],
+      )
+    ).rows;
+  }
+  @Delete("databases/:id/properties/:property")
+  @HttpCode(200)
+  async deleteProperty(
+    @Req() req: any,
+    @Param("id") id: string,
+    @Param("property") property: string,
+    @Body() body: any,
+  ) {
+    mutation(req);
+    const uid = await user(req),
+      input = parse<{ schemaVersion: number }>(
+        z.object({ schemaVersion: z.number().int().positive() }).strict(),
+        body,
+      );
+    return transaction(async (c) => {
+      const context = await database(c, uid, id, 30, true);
+      if (context.schemaVersion !== input.schemaVersion)
+        fail(409, "Database schema changed; reload first");
+      const existing =
+        context.properties.find((item) => item.id === property) ||
+        fail(404, "Property not found");
+      if (existing.type === "Title")
+        fail(400, "The title property cannot be deleted.");
+      const next = context.properties.filter((item) => item.id !== property);
+      validatePropertySet(next);
+      if (
+        next.some(
+          (item) =>
+            item.type === "Rollup" &&
+            item.config.rollup?.targetPropertyId === property &&
+            context.properties.find(
+              (relation) => relation.id === item.config.rollup?.relationId,
+            )?.config.databaseId === context.page.id,
+        )
+      )
+        fail(409, "Update the rollups that depend on this property first.");
+      await cleanViews(c, context.page.id, context.views, property);
+      await c.query(
+        "UPDATE database_properties SET deleted_at=now() WHERE database_id=$1 AND id=$2",
+        [context.page.id, property],
+      );
+      if (existing.type === "Relation")
+        await c.query("DELETE FROM record_relations WHERE property_id=$1", [
+          property,
+        ]);
+      await audit(c, uid, "database.property_deleted", {
+        pageId: context.page.id,
+      });
+      return { deleted: true };
+    });
+  }
+  @Post("databases/:id/properties/:property/restore")
+  @HttpCode(200)
+  async restoreProperty(
+    @Req() req: any,
+    @Param("id") id: string,
+    @Param("property") property: string,
+    @Body() body: any,
+  ) {
+    mutation(req);
+    const uid = await user(req),
+      input = parse<{ schemaVersion: number }>(
+        z.object({ schemaVersion: z.number().int().positive() }).strict(),
+        body,
+      );
+    return transaction(async (c) => {
+      const context = await database(c, uid, id, 30, true);
+      if (context.schemaVersion !== input.schemaVersion)
+        fail(409, "Database schema changed; reload first");
+      if (context.properties.length >= 50)
+        fail(400, "A database supports up to 50 active properties");
+      const propertyRow = (
+        await c.query(
+          "SELECT id,name,type,config,position FROM database_properties WHERE database_id=$1 AND id::text=$2 AND deleted_at IS NOT NULL",
+          [context.page.id, property],
+        )
+      ).rows[0] as Property | undefined;
+      if (!propertyRow) fail(404, "Deleted property not found");
+      validatePropertySet([...context.properties, propertyRow!]);
+      await c.query(
+        "UPDATE database_properties SET deleted_at=NULL WHERE database_id=$1 AND id::text=$2",
+        [context.page.id, property],
+      );
+      if (propertyRow!.type === "Relation")
+        await c.query(
+          "SELECT orvyn_replace_record_relations(page_id) FROM database_records WHERE database_id=$1",
+          [context.page.id],
+        );
+      await audit(c, uid, "database.property_restored", {
+        pageId: context.page.id,
+      });
+      return propertyRow;
     });
   }
   @Post("databases/:id/views") async addView(

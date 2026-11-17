@@ -607,6 +607,14 @@ END $$;`,
     version: 32,
     sql: `ALTER TABLE pages ALTER COLUMN document_schema_version SET DEFAULT 10;`,
   },
+  {
+    version: 33,
+    sql: `CREATE TABLE database_deleted_options (
+ property_id uuid NOT NULL REFERENCES database_properties(id) ON DELETE CASCADE,
+ option_id uuid NOT NULL,label text NOT NULL,color text NOT NULL,position integer NOT NULL,
+ deleted_at timestamptz NOT NULL DEFAULT now(),PRIMARY KEY(property_id,option_id)
+);`,
+  },
 ] as const;
 
 export async function migrate(pool: Pool, target = migrations.at(-1)!.version) {

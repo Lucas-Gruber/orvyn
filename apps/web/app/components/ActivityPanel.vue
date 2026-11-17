@@ -33,6 +33,8 @@ const labels: Record<string, string> = {
   "database.property_created": "Added a database property",
   "database.property_renamed": "Renamed a database property",
   "database.property_updated": "Updated a database property",
+  "database.property_deleted": "Deleted a database property",
+  "database.property_restored": "Restored a database property",
   "database.view_created": "Created a database view",
   "database.view_updated": "Updated a database view",
   "database.record_created": "Created a database record",
