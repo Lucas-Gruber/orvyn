@@ -209,7 +209,13 @@ test("Chromium: read-only legacy heading links, sign-in continuation and denied 
       reader.getByRole("textbox", { name: "Document", exact: true }),
     ).toHaveAttribute("contenteditable", "false");
     await expect(
-      reader.getByRole("button", { name: "Link to document", exact: true }),
+      reader.getByRole("button", { name: "Text formatting", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      reader.getByRole("toolbar", { name: "Text formatting", exact: true }),
+    ).not.toBeVisible();
+    await expect(
+      reader.locator('.editor-toolbar button[aria-label="Link to document"]'),
     ).toBeDisabled();
     assert.equal(
       (await request("pages/" + target.id, { cookie: owner.cookie })).data

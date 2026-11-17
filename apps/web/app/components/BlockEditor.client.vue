@@ -313,6 +313,8 @@ const slash = ref(""),
   slashOpen = ref(false),
   slashIndex = ref(0),
   slashStyle = ref<Record<string, string>>({});
+const formattingOpen = ref(false),
+  formattingId = useId();
 let pickerSelectionActive = false;
 let slashRange = { from: 0, to: 0 };
 const config = useRuntimeConfig(),
@@ -1263,7 +1265,12 @@ async function flush() {
     });
   });
 }
-defineExpose({ flush, refreshComments, focusComment });
+defineExpose({
+  flush,
+  refreshComments,
+  focusComment,
+  focusStart: () => editor.value?.commands.focus("start"),
+});
 function beforeUnload(event: BeforeUnloadEvent) {
   if (!unsynced.value) return;
   event.preventDefault();
@@ -1362,20 +1369,59 @@ onBeforeUnmount(() => {
       @close="closeVideo"
       @select="insertVideo"
     />
-    <div class="editor-status">
-      <span role="status">{{ saveStatus }}</span>
+    <div class="editor-chrome">
+      <h2 class="editor-section-label">Content</h2>
       <div
-        v-if="peers.length > 1"
-        class="presence"
-        aria-label="People on this page"
+        class="editor-status"
+        :data-state="
+          status !== 'connected'
+            ? 'disconnected'
+            : unsynced
+              ? 'saving'
+              : 'saved'
+        "
       >
-        <span
-          v-for="peer in peers.slice(0, 5)"
-          :key="peer.id"
-          class="presence-avatar"
-          :title="peer.name"
-          >{{ peer.name.slice(0, 2).toUpperCase() }}</span
+        <span role="status" class="editor-save-state"
+          ><span class="editor-save-dot" aria-hidden="true" />{{
+            saveStatus
+          }}</span
         >
+        <div
+          v-if="peers.length > 1"
+          class="presence"
+          aria-label="People on this page"
+        >
+          <span
+            v-for="peer in peers.slice(0, 5)"
+            :key="peer.id"
+            class="presence-avatar"
+            :title="peer.name"
+            >{{ peer.name.slice(0, 2).toUpperCase() }}</span
+          >
+        </div>
+        <button
+          v-if="editor && !readOnly"
+          type="button"
+          class="editor-format-toggle"
+          aria-label="Text formatting"
+          :aria-expanded="formattingOpen"
+          :aria-controls="formattingId"
+          @mousedown.prevent
+          @click="formattingOpen = !formattingOpen"
+        >
+          <AppIcon
+            :name="
+              textStyle === 'paragraph'
+                ? 'text'
+                : 'heading' + textStyle.slice(-1)
+            "
+            :size="15"
+          />{{ textStyle === "paragraph" ? "Format" : "H" + textStyle.slice(-1)
+          }}<AppIcon
+            :name="formattingOpen ? 'chevronUp' : 'chevronDown'"
+            :size="12"
+          />
+        </button>
       </div>
     </div>
     <dialog
@@ -1472,92 +1518,108 @@ onBeforeUnmount(() => {
         @link="openDocumentLink()"
         @comment="prepareComment"
       />
-      <div class="editor-toolbar" aria-label="Text formatting">
-        <select
-          class="editor-text-style"
-          aria-label="Text style"
-          :value="textStyle"
-          :disabled="!editor.isEditable"
-          @change="changeTextStyle"
-        >
-          <option value="paragraph">Text</option>
-          <option value="heading-1">Heading 1</option>
-          <option value="heading-2">Heading 2</option>
-          <option value="heading-3">Heading 3</option>
-          <option value="heading-4">Heading 4</option>
-        </select>
-        <button
-          :title="'Link to document · ' + shortcutLabel('Mod+K')"
-          aria-label="Link to document"
-          :disabled="!editor.isEditable"
-          @click="openDocumentLink()"
-        >
-          <AppIcon name="link" :size="16" />
-        </button>
-        <button
-          title="Link a database"
-          :disabled="!editor.isEditable"
-          @click="openLinkPicker"
-        >
-          <AppIcon name="database" :size="16" /><span>Link database</span>
-        </button>
-        <button
-          :title="'Bold · ' + shortcutLabel('Mod+B')"
-          :disabled="!editor.isEditable"
-          :aria-pressed="editor.isActive('bold')"
-          @click="editor.chain().focus().toggleBold().run()"
-        >
-          <AppIcon name="bold" :size="16" /><span class="sr-only"
-            >Bold</span
-          ></button
-        ><button
-          :title="'Italic · ' + shortcutLabel('Mod+I')"
-          :disabled="!editor.isEditable"
-          :aria-pressed="editor.isActive('italic')"
-          @click="editor.chain().focus().toggleItalic().run()"
-        >
-          <AppIcon name="italic" :size="16" /><span class="sr-only"
-            >Italic</span
-          ></button
-        ><button
-          title="Bullet list"
-          :disabled="!editor.isEditable"
-          @click="editor.chain().focus().toggleBulletList().run()"
-        >
-          <AppIcon name="list" :size="16" /><span class="sr-only"
-            >List</span
-          ></button
-        ><button
-          title="Checklist"
-          :disabled="!editor.isEditable"
-          @click="editor.chain().focus().toggleTaskList().run()"
-        >
-          <AppIcon name="checklist" :size="16" /><span class="sr-only"
-            >Checklist</span
-          ></button
-        ><button
-          title="Code block"
-          :disabled="!editor.isEditable"
-          @click="editor.chain().focus().toggleCodeBlock().run()"
-        >
-          <AppIcon name="code" :size="16" /><span class="sr-only"
-            >Code</span
-          ></button
-        ><button
-          :title="'Undo · ' + shortcutLabel('Mod+Z')"
-          :disabled="!editor.isEditable"
-          @click="editor.chain().focus().undo().run()"
-        >
-          <AppIcon name="undo" :size="16" /><span class="sr-only"
-            >Undo</span
-          ></button
-        ><button
-          :title="'Redo · ' + shortcutLabel('Mod+Shift+Z')"
-          :disabled="!editor.isEditable"
-          @click="editor.chain().focus().redo().run()"
-        >
-          <AppIcon name="redo" :size="16" /><span class="sr-only">Redo</span>
-        </button>
+      <div
+        v-show="formattingOpen && !readOnly"
+        :id="formattingId"
+        class="editor-toolbar"
+        role="toolbar"
+        aria-label="Text formatting"
+      >
+        <div class="editor-tool-group">
+          <select
+            class="editor-text-style"
+            aria-label="Text style"
+            :value="textStyle"
+            :disabled="!editor.isEditable"
+            @change="changeTextStyle"
+          >
+            <option value="paragraph">Text</option>
+            <option value="heading-1">Heading 1</option>
+            <option value="heading-2">Heading 2</option>
+            <option value="heading-3">Heading 3</option>
+            <option value="heading-4">Heading 4</option>
+          </select>
+        </div>
+        <div class="editor-tool-group">
+          <button
+            :title="'Link to document · ' + shortcutLabel('Mod+K')"
+            aria-label="Link to document"
+            :disabled="!editor.isEditable"
+            @click="openDocumentLink()"
+          >
+            <AppIcon name="link" :size="16" />
+          </button>
+          <button
+            title="Link a database"
+            :disabled="!editor.isEditable"
+            @click="openLinkPicker"
+          >
+            <AppIcon name="database" :size="16" /><span>Link database</span>
+          </button>
+        </div>
+        <div class="editor-tool-group">
+          <button
+            :title="'Bold · ' + shortcutLabel('Mod+B')"
+            :disabled="!editor.isEditable"
+            :aria-pressed="editor.isActive('bold')"
+            @click="editor.chain().focus().toggleBold().run()"
+          >
+            <AppIcon name="bold" :size="16" /><span class="sr-only"
+              >Bold</span
+            ></button
+          ><button
+            :title="'Italic · ' + shortcutLabel('Mod+I')"
+            :disabled="!editor.isEditable"
+            :aria-pressed="editor.isActive('italic')"
+            @click="editor.chain().focus().toggleItalic().run()"
+          >
+            <AppIcon name="italic" :size="16" /><span class="sr-only"
+              >Italic</span
+            >
+          </button>
+        </div>
+        <div class="editor-tool-group">
+          <button
+            title="Bullet list"
+            :disabled="!editor.isEditable"
+            @click="editor.chain().focus().toggleBulletList().run()"
+          >
+            <AppIcon name="list" :size="16" /><span class="sr-only"
+              >List</span
+            ></button
+          ><button
+            title="Checklist"
+            :disabled="!editor.isEditable"
+            @click="editor.chain().focus().toggleTaskList().run()"
+          >
+            <AppIcon name="checklist" :size="16" /><span class="sr-only"
+              >Checklist</span
+            ></button
+          ><button
+            title="Code block"
+            :disabled="!editor.isEditable"
+            @click="editor.chain().focus().toggleCodeBlock().run()"
+          >
+            <AppIcon name="code" :size="16" /><span class="sr-only">Code</span>
+          </button>
+        </div>
+        <div class="editor-tool-group">
+          <button
+            :title="'Undo · ' + shortcutLabel('Mod+Z')"
+            :disabled="!editor.isEditable"
+            @click="editor.chain().focus().undo().run()"
+          >
+            <AppIcon name="undo" :size="16" /><span class="sr-only"
+              >Undo</span
+            ></button
+          ><button
+            :title="'Redo · ' + shortcutLabel('Mod+Shift+Z')"
+            :disabled="!editor.isEditable"
+            @click="editor.chain().focus().redo().run()"
+          >
+            <AppIcon name="redo" :size="16" /><span class="sr-only">Redo</span>
+          </button>
+        </div>
       </div>
       <div
         v-if="slashOpen"
@@ -1585,11 +1647,7 @@ onBeforeUnmount(() => {
         <p v-if="!filtered.length">No matching block</p>
       </div>
       <EditorContent :editor="editor" />
-      <p class="hint">
-        Type / for blocks · Markdown shortcuts supported · Changes save
-        automatically
-      </p></template
-    >
+    </template>
     <p v-else>
       {{
         denied ? "This document is unavailable." : "Connecting to the document…"
@@ -1751,19 +1809,71 @@ button:disabled {
   color: var(--faint);
   align-items: center;
   justify-content: flex-end;
-  gap: 14px;
-  margin-bottom: 6px;
-  min-height: 19px;
+  gap: 10px;
+  margin: 0;
+  min-height: 30px;
+}
+.editor-chrome {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--divider);
+}
+.editor-section-label {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.editor-save-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.editor-save-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.editor-status[data-state="saving"] .editor-save-dot {
+  background: var(--accent);
+}
+.editor-status[data-state="disconnected"] .editor-save-state {
+  color: var(--warning);
+}
+.editor-status .editor-format-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  border: 1px solid transparent;
+  padding: 4px 7px;
+  min-height: 28px;
+  color: var(--muted);
+  font-size: 12px;
+  border-radius: 5px;
+}
+.editor-status .editor-format-toggle:hover,
+.editor-status .editor-format-toggle[aria-expanded="true"] {
+  background: var(--surface-hover);
+  color: var(--text);
+  border-color: var(--line);
 }
 .editor-toolbar {
-  gap: 2px;
+  gap: 4px;
   align-items: center;
   padding: 5px 6px;
   margin: 0 0 22px;
-  border: 1px solid var(--line-soft);
+  border: 1px solid var(--divider);
   border-radius: 7px;
   background: var(--surface);
-  width: fit-content;
+  width: 100%;
   max-width: 100%;
 }
 .editor-toolbar button {
@@ -1780,12 +1890,14 @@ button:disabled {
   background: var(--surface-hover);
   color: var(--text);
 }
-.editor-toolbar button:first-child {
-  border-right: 1px solid var(--line);
-  border-radius: 0;
-  padding-right: 12px;
-  margin-right: 4px;
-  font-size: 0.75rem;
+.editor-tool-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.editor-tool-group + .editor-tool-group {
+  border-left: 1px solid var(--divider);
+  padding-left: 5px;
 }
 .block-editor .tiptap {
   padding: 0;
@@ -1930,9 +2042,6 @@ button:disabled {
   .editor-toolbar button {
     padding: 4px 6px;
   }
-  .editor-toolbar button:first-child span {
-    display: none;
-  }
   .block-editor .tiptap {
     min-height: calc(100dvh - 370px);
   }
@@ -2011,7 +2120,6 @@ button:disabled {
   min-height: 29px;
   padding: 4px 7px;
   border: 0;
-  border-right: 1px solid var(--line);
   border-radius: 0;
   background: transparent;
   font-size: 0.75rem;

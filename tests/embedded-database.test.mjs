@@ -93,6 +93,9 @@ test("linked database blocks persist independent views and never grant access to
     await chooseSpace(page, "Linked spaces");
     await openPageFromSidebar(page, "Document with linked data");
     await page
+      .getByRole("button", { name: "Text formatting", exact: true })
+      .click();
+    await page
       .getByRole("button", { name: "Link database", exact: true })
       .click();
     const dialog = page.getByRole("dialog", {

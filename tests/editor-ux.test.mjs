@@ -52,6 +52,9 @@ test("Chromium: Markdown headings keep the caret, reveal their level, slash comm
     await page.goto(base + pageLink(source.id));
     const editor = page.getByRole("textbox", { name: "Document", exact: true });
     await expect(editor).toBeEditable();
+    await page
+      .getByRole("button", { name: "Text formatting", exact: true })
+      .click();
     await editor.click();
     await mkdir(".local/ui-review", { recursive: true });
     const labels = [

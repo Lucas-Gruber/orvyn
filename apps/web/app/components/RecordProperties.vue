@@ -16,6 +16,7 @@ const props = defineProps<{
     changed: [];
     manage: [];
     templateAccess: [canEdit: boolean];
+    database: [value: { id: string; title: string }];
   }>(),
   record = ref<DatabaseRecord>(),
   properties = ref<Property[]>([]),
@@ -51,6 +52,7 @@ async function load() {
     properties.value = data.properties;
     denied.value = false;
     emit("snapshot", data.record);
+    emit("database", data.database);
     emit(
       "templateAccess",
       data.database.accessRank >= 30 && data.record.accessRank >= 30,
@@ -202,6 +204,10 @@ defineExpose({ flush, reload: load });
     aria-label="Record properties"
     :aria-busy="loading || saving"
   >
+    <header class="record-properties-heading">
+      <h2>Properties</h2>
+      <small v-if="saving" role="status">Saving properties…</small>
+    </header>
     <div v-if="error" class="property-save-error" role="alert">
       <p>{{ error }}</p>
       <div v-if="!denied && Object.keys(dirty).length" class="actions">
@@ -249,6 +255,7 @@ defineExpose({ flush, reload: load });
             (writablePropertyTypes as readonly string[]).includes(property.type)
           "
           :database-id="databaseId"
+          empty-label="Empty"
           :property="property"
           :model-value="displayed.values[property.id]"
           :people="people"
@@ -259,22 +266,42 @@ defineExpose({ flush, reload: load });
         }}</span>
       </div>
     </div>
-    <small v-if="saving" class="hint" role="status">Saving properties…</small>
   </section>
 </template>
 <style scoped>
 .record-properties {
-  padding-block: 8px 24px;
-  margin-bottom: 26px;
-  border-bottom: 1px solid var(--line-soft);
+  padding-block: 16px;
+  margin-bottom: 24px;
+  border-block: 1px solid var(--divider);
+}
+.record-properties-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 24px;
+  margin-bottom: 7px;
+}
+.record-properties-heading h2 {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.record-properties-heading small {
+  color: var(--muted);
+  font-size: 11px;
 }
 .record-property-row {
   display: grid;
   grid-template-columns: minmax(110px, 160px) minmax(0, 1fr);
   align-items: start;
   gap: 16px;
-  min-height: 39px;
-  padding: 3px 0;
+  min-height: 42px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+.record-property-row:last-of-type {
+  border-bottom: 0;
 }
 .record-property-label {
   display: flex;

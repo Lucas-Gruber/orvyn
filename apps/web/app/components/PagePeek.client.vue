@@ -16,6 +16,8 @@ const props = defineProps<{
     changed: [];
   }>(),
   page = ref<any>(),
+  databaseTitle = ref(""),
+  titleInput = ref<HTMLTextAreaElement>(),
   loading = ref(true),
   error = ref(""),
   closing = ref(false),
@@ -185,7 +187,19 @@ function jumpThread(thread: any) {
 }
 function resize() {
   mobile.value = !!media?.matches;
+  void nextTick(resizeTitle);
 }
+function resizeTitle() {
+  const input = titleInput.value;
+  if (input) {
+    input.style.height = "auto";
+    input.style.height = input.scrollHeight + "px";
+  }
+}
+watch(
+  [() => page.value?.title, () => props.mode],
+  () => void nextTick(resizeTitle),
+);
 function beforeUnload(event: BeforeUnloadEvent) {
   if (titleJob || (page.value && page.value.title !== savedTitle.value)) {
     event.preventDefault();
@@ -197,6 +211,7 @@ onMounted(() => {
   resize();
   media.addEventListener("change", resize);
   window.addEventListener("beforeunload", beforeUnload);
+  window.addEventListener("resize", resizeTitle);
 });
 onBeforeUnmount(() => {
   disposed = true;
@@ -204,6 +219,7 @@ onBeforeUnmount(() => {
   clearTimeout(titleTimer);
   media?.removeEventListener("change", resize);
   window.removeEventListener("beforeunload", beforeUnload);
+  window.removeEventListener("resize", resizeTitle);
 });
 watch(
   () => props.pageId,
@@ -223,25 +239,77 @@ defineExpose({ flush, requestClose: () => close() });
     :aria-busy="loading || closing"
     @close="close()"
   >
-    <template #actions
-      ><button
+    <template #title="{ id }">
+      <div class="peek-header-location">
+        <button
+          v-if="page?.kind === 'record'"
+          class="icon-button"
+          aria-label="Back to database"
+          title="Back to database"
+          @click="close()"
+        >
+          <AppIcon name="back" :size="17" />
+        </button>
+        <div class="peek-header-context">
+          <AppIcon
+            :name="page?.kind === 'record' ? 'database' : 'file'"
+            :size="15"
+          /><span aria-hidden="true">{{
+            page?.kind === "record" ? databaseTitle || "Database" : "Page"
+          }}</span>
+        </div>
+        <h2 :id="id" class="sr-only">{{ page?.title || "Page preview" }}</h2>
+      </div>
+    </template>
+    <template #actions>
+      <button
+        v-if="page"
+        class="icon-button"
+        aria-label="Comments"
+        title="Comments"
+        :aria-pressed="comments"
+        @click="comments = !comments"
+      >
+        <AppIcon name="comments" :size="16" />
+      </button>
+      <UiMenu v-if="page" label="Record actions">
+        <button
+          v-if="canTemplate"
+          role="menuitem"
+          @click="saveTemplate?.open()"
+        >
+          <AppIcon name="copy" :size="16" />Save as template
+        </button>
+        <button
+          v-if="page.access_rank >= 30"
+          role="menuitem"
+          @click="appearance = true"
+        >
+          <AppIcon name="palette" :size="16" />Icon and cover
+        </button>
+        <button role="menuitem" @click="attachments = !attachments">
+          <AppIcon name="paperclip" :size="16" />Attachments
+        </button>
+      </UiMenu>
+      <span class="peek-header-divider" aria-hidden="true" />
+      <button
         class="icon-button"
         :aria-label="mode === 'side' ? 'Open as modal' : 'Open to side'"
         :title="mode === 'side' ? 'Center peek' : 'Side peek'"
         @click="emit('mode', mode === 'side' ? 'modal' : 'side')"
       >
-        <AppIcon
-          :name="mode === 'side' ? 'gallery' : 'sidePeek'"
-          :size="16"
-        /></button
-      ><button
+        <AppIcon :name="mode === 'side' ? 'gallery' : 'sidePeek'" :size="16" />
+      </button>
+      <button
         class="icon-button"
         aria-label="Open as full page"
         title="Open as full page"
         @click="fullpage()"
       >
-        <AppIcon name="expand" :size="16" /></button
-    ></template>
+        <AppIcon name="expand" :size="16" />
+      </button>
+      <span class="peek-header-divider" aria-hidden="true" />
+    </template>
     <div class="page-peek-body">
       <div v-if="error" class="peek-error" role="alert">
         <p>{{ error }}</p>
@@ -251,50 +319,44 @@ defineExpose({ flush, requestClose: () => close() });
       </div>
       <p v-if="loading" role="status" class="hint">Opening page…</p>
       <article v-else-if="page" class="peek-page">
-        <div class="peek-page-tools">
-          <button v-if="page.kind === 'record'" class="ghost" @click="close()">
-            <AppIcon name="back" :size="14" />Back to database</button
-          ><span class="peek-spacer" /><button
-            class="icon-button"
-            aria-label="Comments"
-            @click="comments = !comments"
-          >
-            <AppIcon name="comments" :size="16" /></button
-          ><UiMenu label="Record actions"
-            ><button
-              v-if="canTemplate"
-              role="menuitem"
-              @click="saveTemplate?.open()"
-            >
-              <AppIcon name="copy" :size="16" />Save as template</button
-            ><button
-              v-if="page.access_rank >= 30"
-              role="menuitem"
-              @click="appearance = true"
-            >
-              <AppIcon name="palette" :size="16" />Icon and cover</button
-            ><button role="menuitem" @click="attachments = !attachments">
-              <AppIcon name="paperclip" :size="16" />Attachments</button
-            ><button role="menuitem" @click="fullpage()">
-              <AppIcon name="expand" :size="16" />Open as full page
-            </button></UiMenu
-          >
-        </div>
         <CoverBanner
           :preset="page.cover_preset"
           :file-id="page.cover_file_id"
         />
-        <div class="peek-page-symbol">
+        <div v-if="page.icon" class="peek-page-symbol">
           <PageSymbol :icon="page.icon" :kind="page.kind" :size="38" />
         </div>
-        <input
+        <div
+          v-if="
+            page.access_rank >= 30 &&
+            (!page.icon || (!page.cover_preset && !page.cover_file_id))
+          "
+          class="peek-appearance-actions"
+        >
+          <button v-if="!page.icon" class="ghost" @click="appearance = true">
+            <AppIcon name="plus" :size="12" />Add icon</button
+          ><button
+            v-if="!page.cover_preset && !page.cover_file_id"
+            class="ghost"
+            @click="appearance = true"
+          >
+            <AppIcon name="image" :size="12" />Add cover
+          </button>
+        </div>
+        <textarea
+          ref="titleInput"
           v-model="page.title"
+          rows="1"
           class="peek-page-title"
           aria-label="Page title"
           maxlength="300"
           placeholder="Untitled"
           :readonly="page.access_rank < 30 || closing || paused"
-          @input="scheduleTitle"
+          @input="
+            scheduleTitle();
+            resizeTitle();
+          "
+          @keydown.enter.prevent="editor?.focusStart?.()"
           @blur="saveTitle().catch(() => {})"
         />
         <small v-if="titleState" role="status" class="hint">{{
@@ -315,6 +377,7 @@ defineExpose({ flush, requestClose: () => close() });
           :record-id="page.id"
           :editable="page.access_rank >= 30 && !closing && !paused"
           @snapshot="snapshot"
+          @database="databaseTitle = $event.title"
           @denied="access({ rank: 0 })"
           @changed="emit('changed')"
           @manage="attachments = true"
@@ -336,24 +399,27 @@ defineExpose({ flush, requestClose: () => close() });
           @thread="openThread"
           @anchor-status="anchorStatus = $event.status"
         />
-        <PageBacklinks :key="'backlinks-' + page.id" :page-id="page.id" />
-        <details
-          class="page-attachments-disclosure"
-          :open="attachments"
-          @toggle="attachments = ($event.target as HTMLDetailsElement).open"
-        >
-          <summary>
-            <AppIcon name="paperclip" :size="15" />Attachments<AppIcon
-              :name="attachments ? 'chevronDown' : 'chevronRight'"
-              :size="13"
+        <section class="peek-page-details" aria-label="Page details">
+          <h2>Page details</h2>
+          <PageBacklinks :key="'backlinks-' + page.id" :page-id="page.id" />
+          <details
+            class="page-attachments-disclosure"
+            :open="attachments"
+            @toggle="attachments = ($event.target as HTMLDetailsElement).open"
+          >
+            <summary>
+              <AppIcon name="paperclip" :size="15" />Attachments<AppIcon
+                :name="attachments ? 'chevronDown' : 'chevronRight'"
+                :size="13"
+              />
+            </summary>
+            <PageAttachments
+              v-if="attachments"
+              :key="'files-' + page.id"
+              :page="page"
             />
-          </summary>
-          <PageAttachments
-            v-if="attachments"
-            :key="'files-' + page.id"
-            :page="page"
-          />
-        </details>
+          </details>
+        </section>
         <SaveDatabaseTemplate
           v-if="page.kind === 'record' && page.parent_id"
           ref="saveTemplate"
@@ -405,8 +471,9 @@ defineExpose({ flush, requestClose: () => close() });
 </template>
 <style>
 .ui-dialog.page-peek {
-  width: min(1000px, calc(100vw - 64px));
-  max-height: calc(100dvh - 56px);
+  width: min(960px, calc(100vw - 48px));
+  max-height: calc(100dvh - 48px);
+  background: var(--bg);
 }
 .ui-dialog.page-peek.drawer {
   width: min(740px, calc(100vw - 32px));
@@ -415,60 +482,107 @@ defineExpose({ flush, requestClose: () => close() });
 .page-peek > .dialog-header {
   position: sticky;
   top: 0;
-  background: var(--elevated);
   z-index: 5;
-  min-height: 58px;
+  min-height: 52px;
+  padding: 9px 16px;
+  gap: 12px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--divider);
 }
-.page-peek > .dialog-header h2 {
+.ui-dialog.page-peek > .dialog-content,
+.ui-dialog.page-peek.drawer > .dialog-content {
+  padding: 0;
+}
+.peek-header-location {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  flex: 1;
+}
+.peek-header-context {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.peek-header-context > span {
   white-space: nowrap;
   text-overflow: ellipsis;
   overflow: hidden;
-  color: var(--muted);
-  font-weight: 500;
-  font-size: 0.83rem;
+}
+.peek-header-context .app-icon {
+  flex-shrink: 0;
+}
+.page-peek .dialog-header-actions {
+  gap: 3px;
+}
+.peek-header-divider {
+  width: 1px;
+  height: 18px;
+  background: var(--divider);
+  margin-inline: 4px;
 }
 .page-peek-body {
-  max-width: 820px;
-  margin-inline: auto;
-  padding: 0 12px 32px;
+  padding: 32px 40px 40px;
 }
-.peek-page-tools {
+.ui-dialog.page-peek:not(.drawer) .page-peek-body {
+  padding: 40px 64px;
+}
+.peek-appearance-actions {
   display: flex;
-  align-items: center;
   gap: 5px;
-  margin-bottom: 25px;
+  min-height: 25px;
+  margin-bottom: 9px;
 }
-.peek-page-tools > .ghost {
-  font-size: 0.75rem;
+.peek-appearance-actions > button {
+  color: var(--faint);
+  font-size: 11px;
+  padding: 3px 5px;
+  min-height: 25px;
+  background: transparent;
 }
-.peek-spacer {
-  flex: 1;
+.peek-appearance-actions > button:hover {
+  color: var(--text);
+  background: var(--surface-hover);
 }
 .peek-page-symbol {
-  margin-block: 8px 18px;
+  margin-block: 8px 16px;
   color: var(--faint);
 }
 .peek-page-title {
+  display: block;
+  width: 100%;
+  min-height: 42px;
   padding: 0;
-  min-height: 54px;
-  margin-bottom: 20px;
+  margin: 0 0 24px;
+  resize: none;
+  overflow: hidden;
   border: 0;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
-  font-size: clamp(1.65rem, 2.7vw, 2.2rem);
-  letter-spacing: -0.035em;
-  font-weight: 680;
+  font-family: inherit;
+  font-size: clamp(1.65rem, 2.6vw, 2rem);
+  letter-spacing: -0.025em;
+  font-weight: 700;
   line-height: 1.3;
 }
 .peek-page-title:focus {
   box-shadow: none;
   outline: 0;
 }
+.peek-page > .hint {
+  display: block;
+  margin-top: -16px;
+  margin-bottom: 20px;
+}
 .peek-error {
   padding: 12px;
   background: var(--surface);
-  border: 1px solid var(--line);
+  border: 1px solid var(--divider);
   border-radius: 7px;
   font-size: 0.8rem;
   margin-bottom: 16px;
@@ -478,7 +592,37 @@ defineExpose({ flush, requestClose: () => close() });
   margin-right: 6px;
 }
 .page-peek .block-editor .tiptap {
-  min-height: 200px;
+  min-height: 140px;
+}
+.page-peek .record-property-row {
+  grid-template-columns: 145px minmax(0, 1fr);
+}
+.peek-page-details {
+  border-top: 1px solid var(--divider);
+  margin-top: 28px;
+  padding-top: 16px;
+}
+.peek-page-details > h2 {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.peek-page-details > .page-backlinks,
+.peek-page-details > .page-attachments-disclosure {
+  margin: 0;
+  padding: 12px 0;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+.peek-page-details > .page-backlinks > summary,
+.peek-page-details > .page-attachments-disclosure > summary {
+  width: 100%;
+  min-height: 20px;
+  font-size: 12px;
+}
+.peek-page-details summary > .app-icon:last-child {
+  margin-left: auto;
 }
 @media (max-width: 900px) {
   .ui-dialog.page-peek,
@@ -486,8 +630,39 @@ defineExpose({ flush, requestClose: () => close() });
     width: calc(100vw - 20px);
     max-height: calc(100dvh - 20px);
   }
-  .page-peek-body {
-    padding-inline: 0;
+}
+@media (max-width: 600px) {
+  .ui-dialog.page-peek,
+  .ui-dialog.page-peek.drawer {
+    width: 100vw;
+    max-width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    margin: 0;
+    inset: 0;
+    border-radius: 0;
+    border: 0;
+  }
+  .page-peek-body,
+  .ui-dialog.page-peek:not(.drawer) .page-peek-body {
+    padding: 24px;
+  }
+  .page-peek > .dialog-header {
+    padding-inline: 10px;
+    gap: 6px;
+  }
+  .page-peek .dialog-header-actions {
+    gap: 1px;
+  }
+  .peek-header-divider {
+    margin-inline: 2px;
+  }
+  .peek-header-context {
+    max-width: 100px;
+  }
+  .page-peek .record-property-row {
+    grid-template-columns: 112px minmax(0, 1fr);
+    gap: 8px;
   }
 }
 </style>

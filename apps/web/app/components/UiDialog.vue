@@ -17,7 +17,13 @@ let openedModal = true,
   ignoredClosures = 0;
 function synchronize() {
   if (!dialog.value) return;
+  let previous: HTMLElement | undefined;
   if (props.open && dialog.value.open && props.modal !== openedModal) {
+    if (
+      document.activeElement instanceof HTMLElement &&
+      dialog.value.contains(document.activeElement)
+    )
+      previous = document.activeElement;
     ignoredClosures++;
     dialog.value.close();
   }
@@ -25,9 +31,12 @@ function synchronize() {
     openedModal = props.modal;
     if (props.modal) dialog.value.showModal();
     else dialog.value.show();
-    dialog.value
-      .querySelector<HTMLElement>("input:not([type=hidden]), textarea, select")
-      ?.focus();
+    (
+      previous ||
+      dialog.value.querySelector<HTMLElement>(
+        "input:not([type=hidden]), textarea, select",
+      )
+    )?.focus();
   } else if (!props.open && dialog.value.open) dialog.value.close();
 }
 watch([() => props.open, () => props.modal], () => nextTick(synchronize));
@@ -86,7 +95,9 @@ function outside(event: MouseEvent) {
     @click="outside"
   >
     <header class="dialog-header">
-      <h2 :id="id + '-title'">{{ title }}</h2>
+      <slot name="title" :id="id + '-title'"
+        ><h2 :id="id + '-title'">{{ title }}</h2></slot
+      >
       <div class="dialog-header-actions">
         <slot name="actions" /><button
           class="icon-button"

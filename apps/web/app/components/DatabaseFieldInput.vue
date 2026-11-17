@@ -7,6 +7,7 @@ const props = defineProps<{
   disabled?: boolean;
   people?: { id: string; email: string }[];
   databaseId?: string;
+  emptyLabel?: string;
 }>();
 const options = computed(() =>
   props.property.type === "Person"
@@ -22,7 +23,14 @@ const options = computed(() =>
     : props.property.config.options || [],
 );
 const focused = ref(false),
-  editingValue = ref("");
+  editingValue = ref(""),
+  editingDate = ref(false),
+  dateInput = ref<HTMLInputElement>();
+async function editDate() {
+  editingDate.value = true;
+  await nextTick();
+  dateInput.value?.focus();
+}
 const emit = defineEmits<{ "update:modelValue": [value: unknown] }>();
 function changed(event: Event) {
   const input = event.target as HTMLInputElement;
@@ -71,7 +79,7 @@ const inputType = computed(
     :disabled="disabled"
     @change="changed"
   >
-    <option value="">Unassigned</option>
+    <option value="">{{ emptyLabel || "Unassigned" }}</option>
     <option v-for="option in options" :key="option.id" :value="option.id">
       {{ option.label }}
     </option></select
@@ -84,11 +92,25 @@ const inputType = computed(
     :model-value="Array.isArray(modelValue) ? modelValue : []"
     :disabled="disabled"
     @update:model-value="emit('update:modelValue', $event)"
-  /><input
+  /><button
+    v-else-if="
+      property.type === 'Date' && emptyLabel && !modelValue && !editingDate
+    "
+    type="button"
+    :id="id"
+    :aria-label="property.name + ' (empty)'"
+    class="empty-date-field"
+    :disabled="disabled"
+    @click="editDate"
+  >
+    {{ emptyLabel }}</button
+  ><input
     v-else
+    ref="dateInput"
     :id="id"
     :aria-label="property.name"
     :type="inputType"
+    :placeholder="emptyLabel"
     :value="focused ? editingValue : (modelValue ?? '')"
     :disabled="disabled"
     :step="inputType === 'number' ? 'any' : undefined"
@@ -98,7 +120,28 @@ const inputType = computed(
       editingValue = ($event.target as HTMLInputElement).value;
     "
     @input="editingValue = ($event.target as HTMLInputElement).value"
-    @blur="focused = false"
+    @blur="
+      focused = false;
+      editingDate = false;
+    "
     @change="changed"
   />
 </template>
+<style scoped>
+.empty-date-field {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 8px;
+  min-height: 32px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--faint);
+  font-size: 0.82rem;
+  font-weight: 400;
+}
+.empty-date-field:hover {
+  background: var(--surface-hover);
+}
+</style>

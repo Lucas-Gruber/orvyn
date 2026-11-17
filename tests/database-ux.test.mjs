@@ -80,6 +80,73 @@ test("Chromium: database side/modal/full-page editing, templates, context menus 
     await expect(
       peek.getByRole("textbox", { name: "Page title", exact: true }),
     ).toHaveValue(record.title);
+    await expect(peek.locator(".peek-header-context")).toHaveText(
+      "Product roadmap",
+    );
+    await expect(
+      peek.getByRole("button", { name: "Back to database", exact: true }),
+    ).toHaveCount(1);
+    await expect(
+      peek.getByRole("heading", { name: "Properties", exact: true }),
+    ).toBeVisible();
+    await expect(
+      peek.getByRole("heading", { name: "Content", exact: true }),
+    ).toBeVisible();
+    await expect(
+      peek.getByRole("heading", { name: "Page details", exact: true }),
+    ).toBeVisible();
+    await expect(
+      peek.getByRole("toolbar", { name: "Text formatting", exact: true }),
+    ).not.toBeVisible();
+    const formatting = peek.getByRole("button", {
+      name: "Text formatting",
+      exact: true,
+    });
+    await expect(formatting).toHaveAttribute("aria-expanded", "false");
+    await formatting.click();
+    await expect(
+      peek.getByRole("toolbar", { name: "Text formatting", exact: true }),
+    ).toBeVisible();
+    await formatting.click();
+    await expect(formatting).toHaveAttribute("aria-expanded", "false");
+    for (const selector of [
+      ".record-properties",
+      ".editor-chrome",
+      ".peek-page-details",
+    ]) {
+      assert.ok(
+        await peek.locator(selector).evaluate((node) => {
+          const style = getComputedStyle(node),
+            side = node.classList.contains("peek-page-details")
+              ? "Top"
+              : "Bottom";
+          return (
+            parseFloat(style["border" + side + "Width"]) >= 1 &&
+            style["border" + side + "Style"] === "solid" &&
+            style["border" + side + "Color"] !== "rgba(0, 0, 0, 0)"
+          );
+        }),
+        "Page sections have visible separators",
+      );
+    }
+    await peek
+      .getByRole("button", { name: "Date (empty)", exact: true })
+      .click();
+    await peek
+      .getByRole("textbox", { name: "Date", exact: true })
+      .fill("2026-11-18");
+    await peek.getByRole("textbox", { name: "Date", exact: true }).press("Tab");
+    await expect
+      .poll(async () => {
+        const snapshot = (
+            await request(`databases/${database.id}/records/${record.pageId}`, {
+              cookie,
+            })
+          ).data,
+          date = snapshot.properties.find((p) => p.type === "Date");
+        return snapshot.record.values[date.id];
+      })
+      .toBe("2026-11-18");
     const field = peek.getByRole("spinbutton");
     await expect(field).toHaveValue("4");
     let releaseSave, saving;
@@ -132,6 +199,26 @@ test("Chromium: database side/modal/full-page editing, templates, context menus 
       path: ".local/ui-review/database-side-peek.png",
       fullPage: true,
     });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect
+      .poll(() => peek.evaluate((node) => node.matches(":modal")))
+      .toBe(true);
+    assert.ok(
+      await peek.evaluate((node) => node.scrollWidth <= node.clientWidth + 1),
+    );
+    assert.ok(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    );
+    await page.screenshot({
+      path: ".local/ui-review/database-peek-mobile.png",
+      fullPage: true,
+    });
+    await page.setViewportSize({ width: 1600, height: 1050 });
+    await expect
+      .poll(() => peek.evaluate((node) => node.matches(":modal")))
+      .toBe(false);
     await peek
       .getByRole("button", { name: "Close dialog", exact: true })
       .click();
@@ -205,6 +292,26 @@ test("Chromium: database side/modal/full-page editing, templates, context menus 
       peek.getByRole("textbox", { name: "Document", exact: true }),
     ).toContainText("A calm space");
     await expect(peek.getByRole("spinbutton")).toHaveValue("8");
+    const title = peek.getByRole("textbox", {
+      name: "Page title",
+      exact: true,
+    });
+    await title.fill(
+      "A long record title that should wrap naturally across several lines instead of disappearing beyond the edge of a single-line field",
+    );
+    await expect
+      .poll(() => title.evaluate((node) => node.clientHeight))
+      .toBeGreaterThan(60);
+    assert.ok(
+      await title.evaluate(
+        (node) => node.scrollHeight <= node.clientHeight + 2,
+      ),
+    );
+    await title.fill("Ship a better editor");
+    await title.press("Enter");
+    await expect(
+      peek.getByRole("textbox", { name: "Document", exact: true }),
+    ).toBeFocused();
     await peek
       .getByRole("button", { name: "Open as full page", exact: true })
       .click();
