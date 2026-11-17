@@ -26,7 +26,7 @@ Work through these areas in order, preserving working features and committing/pu
    - [x] Direct-relation rollups with scalar counts/numeric aggregates and permission-safe queries/exports.
    - [x] Database/record snapshot templates with authorized independent attachment copies.
    - [x] Side/center/full-page record opening, saved view preference and keyboard/context-menu actions.
-   - [ ] Extend failed-draft recovery to every table cell (record-page properties retain drafts; navigation awaits pending writes).
+   - [x] Table/board cell drafts survive failed writes, refresh and filtering; explicit retry/discard, same-field conflict review, queued edits and navigation/unload protection.
    - [ ] Edit/delete/restore properties and selection options; extend current relation/rollup capabilities.
 4. Search
    - [ ] Indexed document full-text search, tags/metadata and space/type filters.

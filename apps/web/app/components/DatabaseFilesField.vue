@@ -5,8 +5,13 @@ const props = defineProps<{
     modelValue: unknown;
     canEdit: boolean;
     disabled?: boolean;
+    hideManage?: boolean;
   }>(),
-  emit = defineEmits<{ "update:modelValue": [value: string[]]; manage: [] }>();
+  emit = defineEmits<{
+    "update:modelValue": [value: string[]];
+    draft: [value: string[]];
+    manage: [];
+  }>();
 const selected = computed(() =>
     Array.isArray(props.modelValue) ? (props.modelValue as string[]) : [],
   ),
@@ -31,10 +36,12 @@ const selected = computed(() =>
       :options="files.map((file) => ({ id: file.id, label: file.filename }))"
       :model-value="selected"
       :disabled="disabled"
+      @draft="emit('draft', $event)"
       @update:model-value="emit('update:modelValue', $event)"
     />
     <span v-else-if="!linked.length" class="field-empty">Empty</span>
     <button
+      v-if="!hideManage"
       class="ghost attachment-action"
       type="button"
       :disabled="disabled"

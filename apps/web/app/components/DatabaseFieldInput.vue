@@ -36,7 +36,28 @@ async function editDate() {
   await nextTick();
   dateInput.value?.focus();
 }
-const emit = defineEmits<{ "update:modelValue": [value: unknown] }>();
+const emit = defineEmits<{
+  "update:modelValue": [value: unknown];
+  draft: [value: unknown];
+}>();
+function inputValue(value: string) {
+  return props.property.type === "Number"
+    ? value === ""
+      ? null
+      : Number(value)
+    : value || null;
+}
+function draftInput(event: Event) {
+  editingValue.value = (event.target as HTMLInputElement).value;
+  emit("draft", inputValue(editingValue.value));
+}
+usePendingWrites(async () => {
+  if (focused.value && !props.disabled) {
+    const value = inputValue(editingValue.value);
+    if (JSON.stringify(value) !== JSON.stringify(props.modelValue ?? null))
+      emit("update:modelValue", value);
+  }
+});
 function changed(event: Event) {
   const input = event.target as HTMLInputElement;
   if (props.property.type === "Checkbox")
@@ -111,6 +132,7 @@ const inputType = computed(
     :person="property.type === 'Person'"
     :model-value="Array.isArray(modelValue) ? modelValue : []"
     :disabled="disabled"
+    @draft="emit('draft', $event)"
     @update:model-value="emit('update:modelValue', $event)"
   /><button
     v-else-if="
@@ -139,7 +161,7 @@ const inputType = computed(
       focused = true;
       editingValue = ($event.target as HTMLInputElement).value;
     "
-    @input="editingValue = ($event.target as HTMLInputElement).value"
+    @input="draftInput"
     @blur="
       focused = false;
       editingDate = false;

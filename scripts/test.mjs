@@ -151,6 +151,7 @@ try {
           "tests/database-rollups.test.mjs",
           "tests/database-templates.test.mjs",
           "tests/database-ux.test.mjs",
+          "tests/database-drafts.test.mjs",
           "tests/worker.test.mjs",
           "tests/preview.test.mjs",
           "tests/local-preview.test.mjs",

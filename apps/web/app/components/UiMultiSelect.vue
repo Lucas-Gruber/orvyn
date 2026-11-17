@@ -7,7 +7,10 @@ const props = defineProps<{
     disabled?: boolean;
     person?: boolean;
   }>(),
-  emit = defineEmits<{ "update:modelValue": [value: string[]] }>(),
+  emit = defineEmits<{
+    "update:modelValue": [value: string[]];
+    draft: [value: string[]];
+  }>(),
   uid = useId(),
   trigger = ref<HTMLButtonElement>(),
   panel = ref<HTMLElement>(),
@@ -15,6 +18,7 @@ const props = defineProps<{
   open = ref(false),
   query = ref(""),
   draft = ref<string[]>([]),
+  baseline = ref<string[]>([]),
   limit = ref(false);
 let disposed = false;
 const filtered = computed(() =>
@@ -52,6 +56,7 @@ async function toggle() {
   }
   query.value = "";
   draft.value = [...props.modelValue];
+  baseline.value = [...props.modelValue];
   limit.value = false;
   open.value = true;
   position();
@@ -65,6 +70,7 @@ function pick(id: string) {
     draft.value = draft.value.filter((value) => value !== id);
   else if (draft.value.length < 50) draft.value = [...draft.value, id];
   else limit.value = true;
+  emit("draft", [...draft.value]);
 }
 function keys(event: KeyboardEvent) {
   if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
@@ -96,7 +102,7 @@ function beforeToggle(event: Event) {
     !disposed &&
     !props.disabled &&
     JSON.stringify([...draft.value].sort()) !==
-      JSON.stringify([...props.modelValue].sort())
+      JSON.stringify([...baseline.value].sort())
   )
     emit("update:modelValue", [...draft.value]);
 }
@@ -112,7 +118,14 @@ usePendingWrites(async () => {
 watch(
   () => JSON.stringify(props.modelValue),
   () => {
-    if (open.value) draft.value = [...props.modelValue];
+    if (
+      open.value &&
+      JSON.stringify([...draft.value].sort()) ===
+        JSON.stringify([...baseline.value].sort())
+    ) {
+      draft.value = [...props.modelValue];
+      baseline.value = [...props.modelValue];
+    }
   },
 );
 onMounted(() => {
@@ -219,6 +232,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .multi-select-trigger {
   display: flex;
+  justify-content: flex-start;
   flex-wrap: wrap;
   align-items: center;
   gap: 4px;

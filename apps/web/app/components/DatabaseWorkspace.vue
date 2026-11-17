@@ -84,7 +84,13 @@ async function chooseTemplate(event: Event) {
   }
 }
 function openRecord(id: string, mode?: RecordOpenMode) {
-  emit("open", id, mode || currentView.value?.config.openMode || "side");
+  void flush()
+    .then(() =>
+      emit("open", id, mode || currentView.value?.config.openMode || "side"),
+    )
+    .catch((e) => {
+      error.value = e.message;
+    });
 }
 function recordContext(
   event: MouseEvent | KeyboardEvent,
@@ -230,6 +236,34 @@ const metadata = ref<any>(),
   showPropertyCreate = ref(false),
   showSettings = ref(false),
   newView = ref(false);
+const cellWrites = useDatabaseDrafts({
+  fetch: async (id) => (await api("/records/" + id)).record,
+  patch: (id, version, values) =>
+    api("/records/" + id, "PATCH", { version, values }),
+  saved: (record) => {
+    const index = records.value.findIndex(
+      (value) => value.pageId === record.pageId,
+    );
+    if (index >= 0) records.value[index] = record;
+    schedule();
+  },
+  unavailable: (id) => {
+    records.value = records.value.filter((record) => record.pageId !== id);
+    error.value =
+      "A record is no longer available. Its local draft was cleared.";
+  },
+});
+const displayedRecords = computed(() => records.value.map(cellWrites.display));
+const draftPanel = ref<HTMLDetailsElement>();
+watch(
+  () => cellWrites.entries.value.some((entry) => !!entry.error),
+  (failed) => {
+    if (failed)
+      void nextTick(() => {
+        if (draftPanel.value) draftPanel.value.open = true;
+      });
+  },
+);
 const title = ref(""),
   draft = reactive<Record<string, unknown>>({}),
   propertyName = ref(""),
@@ -349,7 +383,7 @@ const boardGroups = computed(() =>
     ...(groupProperty.value?.config.options || []),
   ].map((option) => ({
     ...option,
-    records: records.value.filter(
+    records: displayedRecords.value.filter(
       (record) =>
         (record.values[groupProperty.value!.id] ?? null) === option.id,
     ),
@@ -358,7 +392,7 @@ const boardGroups = computed(() =>
 const recordGroups = computed(() =>
   groupProperty.value
     ? boardGroups.value
-    : [{ id: "all", label: "", records: records.value }],
+    : [{ id: "all", label: "", records: displayedRecords.value }],
 );
 async function api(path: string, method = "GET", body?: unknown) {
   return $fetch<any>("/api/v1/databases/" + props.databaseId + path, {
@@ -397,6 +431,8 @@ async function load() {
     records.value = result.records;
     columns.value = result.properties;
     nextOffset.value = result.nextOffset;
+    await cellWrites.reconcile();
+    if (disposed || request !== generation) return;
     events.watchRecords(
       records.value.map((r) => r.pageId),
       result.fingerprint
@@ -415,6 +451,7 @@ async function load() {
             ? "Sign in to view this database."
             : "Database could not be loaded. Try refreshing.";
       if (e.status === 404 || e.status === 401) {
+        cellWrites.clear();
         metadata.value = null;
         records.value = [];
       }
@@ -449,6 +486,7 @@ async function runMutation(fn: () => Promise<void>) {
   notice.value = "";
   generation++;
   try {
+    await cellWrites.flush();
     await fn();
   } catch (e: any) {
     error.value = e.data?.message || "Change could not be saved";
@@ -459,6 +497,7 @@ async function runMutation(fn: () => Promise<void>) {
 }
 async function flush() {
   while (mutationJob) await mutationJob;
+  await cellWrites.flush();
 }
 usePendingWrites(flush);
 defineExpose({
@@ -516,20 +555,7 @@ async function patchRecord(
   record: DatabaseRecord,
   values: Record<string, unknown>,
 ) {
-  const previous = { ...record.values };
-  await mutate(async () => {
-    Object.assign(record.values, values);
-    try {
-      const saved = await api("/records/" + record.pageId, "PATCH", {
-        version: record.version,
-        values,
-      });
-      Object.assign(record, saved);
-    } catch (e) {
-      record.values = previous;
-      throw e;
-    }
-  });
+  cellWrites.commit(record, values);
 }
 function drop(event: DragEvent, option: string | null) {
   const id = event.dataTransfer?.getData("text/plain"),
@@ -825,7 +851,8 @@ watch(notice, (value) => {
 onMounted(() => {
   void load();
   interval = setInterval(() => {
-    if (!events.live.value && !disposed) void load();
+    if ((!events.live.value || cellWrites.entries.value.length) && !disposed)
+      void load();
   }, 5000);
 });
 onBeforeUnmount(() => {
@@ -894,6 +921,28 @@ onBeforeUnmount(() => {
           ></small
         >
       </div>
+      <details
+        v-if="cellWrites.entries.value.length"
+        ref="draftPanel"
+        class="database-drafts"
+      >
+        <summary>
+          <AppIcon name="history" :size="15" />Unsaved changes<span>{{
+            cellWrites.entries.value.length
+          }}</span
+          ><AppIcon name="chevronDown" :size="14" />
+        </summary>
+        <DatabaseDraftRecovery
+          :entries="cellWrites.entries.value"
+          :properties="metadata.properties"
+          :people="directory"
+          :database-id="databaseId"
+          @stage="cellWrites.stage"
+          @commit="cellWrites.commit"
+          @retry="cellWrites.retry"
+          @discard="cellWrites.discard"
+        />
+      </details>
       <div class="database-controls">
         <div role="tablist" aria-label="Database views" class="database-tabs">
           <button
@@ -1187,6 +1236,20 @@ onBeforeUnmount(() => {
                 v-for="property in columns"
                 :key="property.id"
                 :class="'property-' + property.type.toLowerCase()"
+                :data-draft="
+                  Object.hasOwn(
+                    cellWrites.drafts[record.pageId]?.values || {},
+                    property.id,
+                  ) || undefined
+                "
+                :data-draft-error="
+                  (!!cellWrites.drafts[record.pageId]?.error &&
+                    Object.hasOwn(
+                      cellWrites.drafts[record.pageId]?.values || {},
+                      property.id,
+                    )) ||
+                  undefined
+                "
               >
                 <button
                   class="record-title"
@@ -1211,6 +1274,7 @@ onBeforeUnmount(() => {
                   :model-value="record.values[property.id]"
                   :can-edit="canEdit && record.accessRank >= 30"
                   :disabled="busy"
+                  @draft="cellWrites.stage(record, { [property.id]: $event })"
                   @update:model-value="
                     patchRecord(record, { [property.id]: $event })
                   "
@@ -1239,6 +1303,7 @@ onBeforeUnmount(() => {
                   :property="property"
                   :model-value="record.values[property.id]"
                   :disabled="busy"
+                  @draft="cellWrites.stage(record, { [property.id]: $event })"
                   @update:model-value="
                     patchRecord(record, { [property.id]: $event })
                   "
@@ -1344,7 +1409,7 @@ onBeforeUnmount(() => {
             >
               +</button
             ><button
-              v-for="record in records.filter(
+              v-for="record in displayedRecords.filter(
                 (r) => r.values[currentView.config.dateProperty] === day.iso,
               )"
               :key="record.pageId"
@@ -1901,6 +1966,37 @@ onBeforeUnmount(() => {
   />
 </template>
 <style scoped>
+.database-drafts {
+  margin: 0 0 20px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--bg);
+}
+.database-drafts > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  color: var(--muted);
+  font-size: 13px;
+  list-style: none;
+  cursor: pointer;
+}
+.database-drafts > summary::-webkit-details-marker {
+  display: none;
+}
+.database-drafts > summary > span {
+  color: var(--text);
+}
+.database-drafts > summary > .app-icon:last-child {
+  margin-left: auto;
+}
+.database-table td[data-draft] {
+  box-shadow: inset 0 -2px var(--accent);
+}
+.database-table td[data-draft-error] {
+  box-shadow: inset 0 -2px var(--warning);
+}
 .database-heading {
   display: flex;
   align-items: center;
