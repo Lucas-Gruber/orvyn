@@ -13,7 +13,7 @@ const searchInput = z
     kind: z
       .enum(["all", "page", "folder", "database", "record", "whiteboard"])
       .default("all"),
-    scope: z.enum(["all", "title"]).default("all"),
+    scope: z.enum(["all", "title", "content", "properties"]).default("all"),
     limit: z.coerce.number().int().min(1).max(100).default(40),
     after: z.string().max(1024).default(""),
   })
@@ -60,6 +60,15 @@ export function searchExcerpt(text: string, terms: string[]) {
   return { excerpt, highlights };
 }
 
+function propertyExcerpt(text: string, terms: string[]) {
+  const words = terms.map((term) => term.toLowerCase());
+  const matches = text.split("\n").filter((field) => {
+    const value = field.toLowerCase();
+    return words.some((word) => value.includes(word));
+  });
+  return searchExcerpt(matches.join(" · ") || text, terms);
+}
+
 export async function workspaceSearch(uid: string, raw: unknown) {
   const parsed = searchInput.safeParse(raw);
   if (!parsed.success) fail(400, "Invalid search query");
@@ -84,17 +93,31 @@ export async function workspaceSearch(uid: string, raw: unknown) {
     `
     WITH terms AS (SELECT orvyn_search_query($2) AS value,tsvector_to_array(to_tsvector('simple',$2)) AS lexemes), ranked AS (
       SELECT p.id,p.title,p.icon,p.parent_id,p.kind,p.space_id,s.name AS space_name,p.updated_at,
-       CASE WHEN $6='all' AND $2<>'' THEN x.body_text ELSE '' END AS body_text,terms.lexemes,
-       CASE WHEN $2='' OR lower(x.title_text)=lower($2) THEN 0
-        WHEN x.title_text ILIKE $3 ESCAPE '\\' OR x.title_vector@@terms.value THEN 1 ELSE 2 END AS bucket,
+       CASE WHEN $2='' OR $6='title' THEN ''
+        WHEN $6='properties' THEN x.property_text WHEN $6='content' THEN x.body_text
+        WHEN x.content_vector@@terms.value THEN x.body_text
+        WHEN x.property_vector@@terms.value THEN x.property_text
+        ELSE x.body_text||E'\\n'||x.property_text END AS preview_text,terms.lexemes,
+       CASE WHEN $2='' THEN 'recent'
+        WHEN $6='title' OR ($6='all' AND (x.title_text ILIKE $3 ESCAPE '\\' OR x.title_vector@@terms.value)) THEN 'title'
+        WHEN $6='content' OR ($6='all' AND x.content_vector@@terms.value) THEN 'content'
+        WHEN $6='properties' OR x.property_vector@@terms.value THEN 'properties'
+        ELSE 'mixed' END AS match_source,
+       CASE WHEN $2='' OR ($6 IN ('all','title') AND lower(x.title_text)=lower($2)) THEN 0
+        WHEN $6 IN ('all','title') AND (x.title_text ILIKE $3 ESCAPE '\\' OR x.title_vector@@terms.value) THEN 1 ELSE 2 END AS bucket,
        CASE WHEN $2='' THEN 0::double precision
         WHEN $6='title' THEN ts_rank_cd(x.title_vector,terms.value,32)::double precision
+        WHEN $6='content' THEN ts_rank_cd(x.content_vector,terms.value,32)::double precision
+        WHEN $6='properties' THEN ts_rank_cd(x.property_vector,terms.value,32)::double precision
         ELSE ts_rank_cd(x.search_vector,terms.value,32)::double precision END AS score
       FROM page_search x JOIN pages p ON p.id=x.page_id JOIN spaces s ON s.id=p.space_id CROSS JOIN terms
       WHERE (s.owner_id=$1 OR EXISTS(SELECT 1 FROM space_members m WHERE m.space_id=s.id AND m.user_id=$1))
        AND orvyn_page_role(p.id,$1)>=10
        AND ($4::uuid IS NULL OR p.space_id=$4::uuid) AND ($5::text IS NULL OR p.kind=$5)
-       AND ($2='' OR x.title_text ILIKE $3 ESCAPE '\\' OR ($6='all' AND x.search_vector@@terms.value) OR ($6='title' AND x.title_vector@@terms.value))
+       AND ($6<>'properties' OR p.kind='record')
+       AND ($2='' OR ($6 IN ('all','title') AND x.title_text ILIKE $3 ESCAPE '\\')
+        OR ($6='all' AND x.search_vector@@terms.value) OR ($6='title' AND x.title_vector@@terms.value)
+        OR ($6='content' AND x.content_vector@@terms.value) OR ($6='properties' AND x.property_vector@@terms.value))
     )
     SELECT *,to_char(updated_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_updated
     FROM ranked
@@ -136,7 +159,7 @@ export async function workspaceSearch(uid: string, raw: unknown) {
     cursor,
     results: result.rows.map(
       ({
-        body_text,
+        preview_text,
         lexemes,
         bucket,
         score: _score,
@@ -144,9 +167,10 @@ export async function workspaceSearch(uid: string, raw: unknown) {
         ...page
       }) => ({
         ...page,
-        match_source: !query ? "recent" : bucket === 2 ? "content" : "title",
-        ...(input.scope === "all" && query
-          ? searchExcerpt(body_text, lexemes)
+        ...(input.scope !== "title" && query
+          ? page.match_source === "properties"
+            ? propertyExcerpt(preview_text, lexemes)
+            : searchExcerpt(preview_text, lexemes)
           : { excerpt: "", highlights: [] }),
       }),
     ),

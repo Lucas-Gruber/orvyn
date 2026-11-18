@@ -163,6 +163,7 @@ try {
           "tests/ui-workflow.test.mjs",
           "tests/search.test.mjs",
           "tests/fulltext-search.test.mjs",
+          "tests/property-search.test.mjs",
           "tests/document-links.test.mjs",
           "tests/backlinks.test.mjs",
           "tests/editor-blocks.test.mjs",

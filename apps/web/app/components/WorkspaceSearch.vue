@@ -8,7 +8,7 @@ interface SearchResult {
   space_name: string;
   excerpt: string;
   highlights: { start: number; end: number }[];
-  match_source: "title" | "content" | "recent";
+  match_source: "title" | "content" | "properties" | "mixed" | "recent";
 }
 const props = withDefaults(
   defineProps<{
@@ -250,7 +250,7 @@ defineExpose({ open, close });
         :placeholder="
           mode === 'database'
             ? 'Find a database in any accessible space…'
-            : 'Search titles and document text…'
+            : 'Search titles, content and database properties…'
         "
         autocomplete="off"
         @keydown="keys"
@@ -288,8 +288,10 @@ defineExpose({ open, close });
           v-model="scope"
           aria-label="Search in"
         >
-          <option value="all">Title and content</option>
+          <option value="all">All content</option>
           <option value="title">Titles only</option>
+          <option value="content">Document text</option>
+          <option value="properties">Database properties</option>
         </select>
       </div>
     </div>
@@ -339,6 +341,14 @@ defineExpose({ open, close });
                 v-if="result.match_source === 'content'"
                 class="search-match-source"
                 >Text match</span
+              ><span
+                v-else-if="result.match_source === 'properties'"
+                class="search-match-source"
+                >Property match</span
+              ><span
+                v-else-if="result.match_source === 'mixed'"
+                class="search-match-source"
+                >Content & properties</span
               ></span
             ></span
           ><AppIcon
