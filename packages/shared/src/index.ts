@@ -65,6 +65,7 @@ export const propertyInput = z
       .uuid()
       .transform((id) => id.toLowerCase())
       .optional(),
+    reciprocalName: z.string().trim().min(1).max(80).optional(),
     formula: z.string().trim().min(1).max(2000).optional(),
     rollup: rollupInput.optional(),
   })
@@ -141,6 +142,7 @@ export interface Property {
   config: {
     options?: { id: string; label: string; color: string }[];
     databaseId?: string;
+    reciprocalPropertyId?: string;
     formula?: string;
     expression?: FormulaNode;
     resultType?: FormulaType;

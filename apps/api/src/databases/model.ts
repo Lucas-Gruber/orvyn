@@ -77,6 +77,8 @@ export function propertyConfig(
   input: ReturnType<typeof propertyInput.parse>,
   properties: Property[] = [],
 ) {
+  if (input.reciprocalName !== undefined && input.type !== "Relation")
+    fail(400, "Only relation properties have a matching property");
   if (input.type === "Rollup") {
     if (
       !input.rollup ||

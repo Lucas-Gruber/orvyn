@@ -1,4 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
+import {
+  prepareReciprocalLinks,
+  applyReciprocalLinks,
+  installClonedReciprocalPairs,
+} from "../reciprocal.js";
 import type { PoolClient } from "pg";
 import { cloneDatabaseSchema, formulaType, z } from "@orvyn/shared";
 import { documentSchemaVersion } from "@orvyn/editor";
@@ -228,6 +233,7 @@ async function cloneSchema(
       [p.id, pageId, p.name, p.type, p.config, p.position],
     );
   }
+  await installClonedReciprocalPairs(c, schema.properties);
   const context = await database(c, uid, pageId, 30);
   for (const p of context.properties) {
     if (p.type === "Formula")
@@ -382,6 +388,10 @@ export async function applyTemplate(
         await c.query(
           "INSERT INTO database_records(page_id,database_id,values) VALUES($1,$2,$3)",
           [pageId, t.database_id, values],
+        );
+        await applyReciprocalLinks(
+          c,
+          await prepareReciprocalLinks(c, pageId, context!.properties, values),
         );
         await c.query("SELECT orvyn_replace_record_relations($1)", [pageId]);
         await c.query("SELECT orvyn_replace_page_references($1,$2::jsonb)", [

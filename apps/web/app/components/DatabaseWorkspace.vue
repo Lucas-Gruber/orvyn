@@ -41,6 +41,11 @@ const viewLayout = ref<{ open: (id: string) => Promise<void> }>();
 const relationSearch = ref<{ open: () => Promise<void> }>();
 const relationSpaces = ref<{ id: string; name: string }[]>([]);
 const relationChoice = ref<{ id: string; title: string; space_name: string }>();
+const relationTwoWay = ref(false),
+  relationReverseName = ref(""),
+  relationTargetCanEdit = ref(false),
+  relationChecking = ref(false);
+let relationGeneration = 0;
 let templateDefaults: Record<string, unknown> = {},
   templateTitle = "",
   createRequest = "",
@@ -904,8 +909,12 @@ async function saveView() {
   });
 }
 watch(propertyType, () => {
+  relationGeneration++;
   relationDatabaseId.value = "";
   relationChoice.value = undefined;
+  relationTwoWay.value = false;
+  relationTargetCanEdit.value = false;
+  relationChecking.value = false;
 });
 async function chooseRelationDatabase() {
   try {
@@ -916,12 +925,52 @@ async function chooseRelationDatabase() {
     error.value = "Databases could not be loaded.";
   }
 }
-function selectRelationDatabase(
+async function selectRelationDatabase(
   id: string,
   result: { id: string; title: string; space_name: string },
 ) {
+  const token = ++relationGeneration;
   relationDatabaseId.value = id;
   relationChoice.value = result;
+  relationTwoWay.value = false;
+  relationTargetCanEdit.value = false;
+  relationChecking.value = true;
+  relationReverseName.value = String(metadata.value?.title || "Related records")
+    .slice(0, 80)
+    .replace(/[\uD800-\uDBFF]$/, "");
+  try {
+    const target = await $fetch<any>("/api/v1/databases/" + id);
+    if (token === relationGeneration) {
+      relationTargetCanEdit.value = target.accessRank >= 30;
+      const occupied = new Set([
+        ...target.properties.map((property: Property) =>
+          property.name.toLocaleLowerCase(),
+        ),
+        ...(id === props.databaseId
+          ? [propertyName.value.toLocaleLowerCase()]
+          : []),
+      ]);
+      const base = relationReverseName.value;
+      for (
+        let suffix = 2;
+        occupied.has(relationReverseName.value.toLocaleLowerCase());
+        suffix++
+      ) {
+        const ending = " " + suffix;
+        relationReverseName.value =
+          base.slice(0, 80 - ending.length).replace(/[\uD800-\uDBFF]$/, "") +
+          ending;
+      }
+    }
+  } catch (e: any) {
+    if (token === relationGeneration) {
+      relationDatabaseId.value = "";
+      relationChoice.value = undefined;
+      error.value = e.data?.message || "This database is no longer available.";
+    }
+  } finally {
+    if (token === relationGeneration) relationChecking.value = false;
+  }
 }
 async function addProperty() {
   await mutate(async () => {
@@ -929,7 +978,12 @@ async function addProperty() {
       name: propertyName.value,
       type: propertyType.value,
       ...(propertyType.value === "Relation"
-        ? { relationDatabaseId: relationDatabaseId.value }
+        ? {
+            relationDatabaseId: relationDatabaseId.value,
+            ...(relationTwoWay.value
+              ? { reciprocalName: relationReverseName.value }
+              : {}),
+          }
         : {}),
       ...(propertyType.value === "Formula"
         ? { formula: formulaSource.value }
@@ -945,6 +999,12 @@ async function addProperty() {
         : [],
     });
     propertyName.value = "";
+    relationGeneration++;
+    relationDatabaseId.value = "";
+    relationChoice.value = undefined;
+    relationTwoWay.value = false;
+    relationTargetCanEdit.value = false;
+    relationChecking.value = false;
     optionNames.value = "";
     formulaSource.value = "";
     rollupSource.value = { relationId: "", aggregation: "count" };
@@ -1824,7 +1884,42 @@ onBeforeUnmount(() => {
                 }}<small v-if="relationChoice">{{
                   relationChoice.space_name
                 }}</small></span
-              ><AppIcon name="chevronDown" :size="15" /></button></template
+              ><AppIcon name="chevronDown" :size="15" />
+            </button>
+            <fieldset v-if="relationChoice" class="relation-pair-settings">
+              <legend>Two-way relation</legend>
+              <label class="relation-pair-toggle"
+                ><input
+                  v-model="relationTwoWay"
+                  type="checkbox"
+                  aria-label="Create a two-way relation"
+                  :disabled="relationChecking || !relationTargetCanEdit"
+                /><span
+                  >Show a matching property in the related database</span
+                ></label
+              >
+              <p v-if="relationChecking" class="hint" role="status">
+                Checking editing access…
+              </p>
+              <p v-else-if="!relationTargetCanEdit" class="hint">
+                Editing access to the related database is required to create its
+                matching property.
+              </p>
+              <template v-if="relationTwoWay"
+                ><label :for="'reverse-relation-' + domId"
+                  >Property name in related database</label
+                ><input
+                  :id="'reverse-relation-' + domId"
+                  v-model="relationReverseName"
+                  required
+                  maxlength="80"
+                />
+                <p class="hint">
+                  Adding or removing a link in either database updates both
+                  properties.
+                </p></template
+              >
+            </fieldset></template
           ><DatabaseFormulaEditor
             v-if="propertyType === 'Formula'"
             v-model="formulaSource"
@@ -2242,6 +2337,44 @@ onBeforeUnmount(() => {
 .relation-target-choice > svg {
   flex: none;
   color: var(--muted);
+}
+.database-form .relation-pair-settings {
+  display: grid;
+  gap: 9px;
+  margin: 6px 0 0;
+  padding: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+}
+.relation-pair-settings legend {
+  color: var(--muted);
+  font-size: 12px;
+  padding: 0 4px;
+}
+.database-form .relation-pair-toggle {
+  display: flex;
+  align-items: flex-start;
+  flex-direction: row;
+  gap: 9px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.relation-pair-toggle input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  min-height: 0;
+  margin: 2px 0 0;
+  flex: none;
+  accent-color: var(--accent);
+}
+.relation-pair-settings .hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.database-form .relation-pair-settings > input {
+  width: 100%;
+  min-width: 0;
 }
 .property-header-button:hover {
   background: var(--surface-hover);

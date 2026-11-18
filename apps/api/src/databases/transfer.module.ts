@@ -1,5 +1,10 @@
 import { checkRelations } from "./relations.js";
 import {
+  prepareReciprocalLinks,
+  applyReciprocalLinks,
+  lockReciprocalImportTargets,
+} from "./reciprocal.js";
+import {
   Module,
   Controller,
   Post,
@@ -265,6 +270,7 @@ class TransferController {
           [config, propertyId, context.page.id],
         );
       const ids: string[] = [];
+      await lockReciprocalImportTargets(c, properties, converted.records);
       for (const row of converted.records) {
         const p = (
           await c.query(
@@ -276,6 +282,10 @@ class TransferController {
         await c.query(
           "INSERT INTO database_records(page_id,database_id,values) VALUES($1,$2,$3)",
           [p.id, context.page.id, row.values],
+        );
+        await applyReciprocalLinks(
+          c,
+          await prepareReciprocalLinks(c, p.id, properties, row.values),
         );
         await c.query("SELECT orvyn_replace_record_relations($1)", [p.id]);
         await c.query(

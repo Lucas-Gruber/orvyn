@@ -3,6 +3,7 @@ import { documentReferences } from "@orvyn/editor/links";
 import { templateMigration } from "./databases/templates/migration.js";
 import { searchMigration } from "./search-migration.js";
 import { crossSpaceRelationMigration } from "./databases/cross-space-migration.js";
+import { reciprocalRelationMigration } from "./databases/reciprocal-migration.js";
 export const migrations = [
   {
     version: 1,
@@ -623,6 +624,7 @@ END $$;`,
     sql: `ALTER TABLE pages ALTER COLUMN document_schema_version SET DEFAULT 11;`,
   },
   { version: 36, sql: crossSpaceRelationMigration },
+  { version: 37, sql: reciprocalRelationMigration },
 ] as const;
 
 export async function migrate(pool: Pool, target = migrations.at(-1)!.version) {

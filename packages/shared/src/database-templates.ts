@@ -52,6 +52,14 @@ export function cloneDatabaseSchema(
         }));
       if (p.type === "Relation" && config.databaseId === sourceDatabaseId)
         config.databaseId = targetDatabaseId;
+      if (config.reciprocalPropertyId) {
+        if (
+          p.config.databaseId === sourceDatabaseId &&
+          ids.has(config.reciprocalPropertyId)
+        )
+          config.reciprocalPropertyId = local(config.reciprocalPropertyId);
+        else delete config.reciprocalPropertyId;
+      }
       if (config.expression) config.expression = expression(config.expression);
       if (config.rollup) {
         const relation = sourceProperties.find(

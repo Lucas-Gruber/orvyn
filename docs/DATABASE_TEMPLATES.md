@@ -1,6 +1,6 @@
 # Database and record templates
 
-Save a database from **Database options → Save as template**. Open **Templates** in the sidebar to preview, use or manage saved database schemas. A new database receives independent property, option and view IDs, including rebound formulas, self-relations, rollups, filters and sorts. It starts without records. External relations, including targets in other accessible spaces, retain their target and require current target access.
+Save a database from **Database options → Save as template**. Open **Templates** in the sidebar to preview, use or manage saved database schemas. A new database receives independent property, option and view IDs, including rebound formulas, self-relations, rollups, filters and sorts. It starts without records. External relations, including targets in other accessible spaces, retain their target and require current target access. Self-paired relations receive independent matching IDs/registrations. An external paired relation becomes one-way in a schema clone, preserving the original target schema. Record-template defaults in the original database maintain the existing matching property when applied.
 
 Save a record from its page actions or row context menu. **New record → Start with a template** applies its saved document, attachments and property defaults. The preview and template library support choosing, renaming, refreshing from the original record and deleting templates. Title and property overrides are kept when changing templates if the user has already changed those fields.
 

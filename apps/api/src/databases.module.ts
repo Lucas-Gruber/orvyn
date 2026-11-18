@@ -28,6 +28,13 @@ import {
 } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 import {
+  reciprocalContexts,
+  createReciprocalProperty,
+  prepareReciprocalLinks,
+  applyReciprocalLinks,
+  disconnectReciprocalProperty,
+} from "./databases/reciprocal.js";
+import {
   z,
   propertyInput,
   viewInput,
@@ -192,8 +199,25 @@ class DatabasesController {
     const uid = await user(req),
       input = parse<z.infer<typeof propertyInput>>(propertyInput, body);
     return transaction(async (c) => {
-      const context = await database(c, uid, id, 30, true);
+      const paired =
+        input.type === "Relation" && input.reciprocalName !== undefined;
+      if (paired && !input.relationDatabaseId)
+        fail(400, "Choose a database for the relation property");
+      const contexts = paired
+        ? await reciprocalContexts(c, uid, id, input.relationDatabaseId!)
+        : null;
+      const context =
+        contexts?.source || (await database(c, uid, id, 30, true));
       const config = propertyConfig(input, context.properties);
+      if (contexts)
+        return createReciprocalProperty(
+          c,
+          uid,
+          contexts.source,
+          contexts.target,
+          input.name,
+          input.reciprocalName!,
+        );
       if (input.type === "Rollup")
         await rollupConfig(c, uid, context.properties, input.rollup!);
       if (input.type === "Relation")
@@ -274,7 +298,7 @@ class DatabasesController {
         throw e;
       }
       const r = await c.query(
-        "UPDATE database_properties SET name=$1,config=$4 WHERE database_id=$2 AND id::text=$3 AND deleted_at IS NULL RETURNING id,name,type,config,position",
+        "UPDATE database_properties SET name=$1,config=CASE WHEN type='Relation' THEN config ELSE $4 END WHERE database_id=$2 AND id::text=$3 AND deleted_at IS NULL RETURNING id,name,type,config,position",
         [input.name, context.page.id, property, config],
       );
       if (!r.rowCount) fail(404, "Property not found");
@@ -360,6 +384,7 @@ class DatabasesController {
       )
         fail(409, "Update the rollups that depend on this property first.");
       await cleanViews(c, context.page.id, context.views, property);
+      await disconnectReciprocalProperty(c, property);
       await c.query(
         "UPDATE database_properties SET deleted_at=now() WHERE database_id=$1 AND id=$2",
         [context.page.id, property],
@@ -646,6 +671,10 @@ class DatabasesController {
         "INSERT INTO database_records(page_id,database_id,values) VALUES($1,$2,$3)",
         [p.id, context.page.id, values],
       );
+      await applyReciprocalLinks(
+        c,
+        await prepareReciprocalLinks(c, p.id, context.properties, values),
+      );
       await c.query("SELECT orvyn_replace_record_relations($1)", [p.id]);
       await c.query(
         "INSERT INTO page_revisions(page_id,version,title,document,author_id) VALUES($1,$2,$3,$4,$5)",
@@ -684,11 +713,19 @@ class DatabasesController {
       );
       await checkFiles(c, page.id, context.properties, values);
       await checkRelations(c, uid, context.properties, values, previous.values);
+      const reciprocal = await prepareReciprocalLinks(
+        c,
+        page.id,
+        context.properties,
+        values,
+        input.version,
+      );
       const r = await c.query(
         "UPDATE database_records SET values=values||$1::jsonb,version=version+1 WHERE page_id=$2 AND database_id=$3 AND version=$4 RETURNING page_id",
         [values, page.id, context.page.id, input.version],
       );
       if (!r.rowCount) fail(409, "Record changed or unavailable; reload first");
+      await applyReciprocalLinks(c, reciprocal);
       await c.query("SELECT orvyn_replace_record_relations($1)", [page.id]);
       await c.query("UPDATE pages SET last_edited_by=$1 WHERE id=$2", [
         uid,

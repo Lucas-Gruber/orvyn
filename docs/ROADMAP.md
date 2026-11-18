@@ -32,7 +32,8 @@ Work through these areas in order, preserving working features and committing/pu
    - [x] Edit/delete/restore properties and selection options with stable IDs, retained record values, schema conflict checks and saved-view repair.
    - [x] Per-view property order/visibility with header drag, keyboard movement, export ordering and template ID remapping.
    - [x] Cross-space relations and direct rollups with independent target permissions, searchable database selection and live access refresh.
-   - [ ] Reciprocal relations and multi-hop rollups.
+   - [x] Two-way relation properties with atomic mirror writes, independent record permissions, self-links and template/import support.
+   - [ ] Multi-hop rollups.
 4. Search
    - [x] Indexed title/document full-text search with excerpts, space/type filters, ranked pagination and current access checks.
    - [ ] Search database property values, tags and additional metadata.

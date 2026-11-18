@@ -335,6 +335,10 @@ defineExpose({ open });
                 selected.type
               }}
             </p>
+            <p v-if="selected.config.reciprocalPropertyId" class="hint">
+              This is a two-way relation. Adding or removing links in either
+              database updates the matching property.
+            </p>
             <template v-if="isSelection">
               <div class="options-heading">
                 <h3>Options</h3>
@@ -512,6 +516,11 @@ defineExpose({ open });
         references to this property will be removed. Boards or calendars that
         require it become table views. Restoring the property will keep those
         view settings.
+      </p>
+      <p v-if="selected?.config.reciprocalPropertyId" class="hint">
+        Deleting this property disconnects the two-way relation. The matching
+        property keeps its values as an independent one-way relation. Restoring
+        this property does not reconnect the pair.
       </p>
       <div class="actions">
         <button
