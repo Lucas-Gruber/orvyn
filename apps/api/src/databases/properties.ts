@@ -146,6 +146,13 @@ export async function cleanViews(
       visibleProperties: removedOptions
         ? previous.visibleProperties
         : previous.visibleProperties.filter((id) => id !== propertyId),
+      ...(previous.propertyOrder
+        ? {
+            propertyOrder: removedOptions
+              ? previous.propertyOrder
+              : previous.propertyOrder.filter((id) => id !== propertyId),
+          }
+        : {}),
       groupBy:
         !removedOptions && previous.groupBy === propertyId
           ? null

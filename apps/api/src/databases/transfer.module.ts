@@ -19,7 +19,12 @@ import {
 import { FileInterceptor } from "@nestjs/platform-express";
 import { stringify as stringifyCsv } from "csv-stringify/sync";
 import { randomBytes } from "node:crypto";
-import { z, queryInput, type Property } from "@orvyn/shared";
+import {
+  z,
+  queryInput,
+  type Property,
+  orderedViewProperties,
+} from "@orvyn/shared";
 import { db, fail, user, hash } from "../runtime.js";
 import { transaction, audit, origin, rateLimit } from "../auth/security.js";
 import { newPageParent } from "../permissions/access.js";
@@ -338,19 +343,7 @@ class TransferController {
         groupBy: null,
         dateProperty: null,
       };
-      const visible = config.visibleProperties.length
-        ? new Set([
-            ...config.visibleProperties,
-            ...context.properties
-              .filter((p) => p.type === "Title")
-              .map((p) => p.id),
-            ...(config.groupBy ? [config.groupBy] : []),
-            ...(config.dateProperty ? [config.dateProperty] : []),
-          ])
-        : null;
-      const properties = visible
-        ? context.properties.filter((p) => visible.has(p.id))
-        : context.properties;
+      const properties = orderedViewProperties(context.properties, config);
       const records: any[] = [];
       let offset = 0,
         size = 0;

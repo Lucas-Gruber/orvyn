@@ -10,6 +10,8 @@ import {
   formulaPropertyType,
   type RollupConfig,
   type RecordOpenMode,
+  orderedViewProperties,
+  reorderPropertyIds,
 } from "@orvyn/shared";
 import { pageLink } from "@orvyn/editor/links";
 import { copyText } from "../utils/clipboard";
@@ -35,6 +37,7 @@ const templateLibrary = ref<{ open: () => void }>(),
   selectedTemplateId = ref(""),
   templateLoading = ref(false);
 const propertyManager = ref<{ open: (id?: string) => Promise<void> }>();
+const viewLayout = ref<{ open: (id: string) => Promise<void> }>();
 let templateDefaults: Record<string, unknown> = {},
   templateTitle = "",
   createRequest = "",
@@ -470,10 +473,10 @@ function schedule() {
 }
 const events = useDatabaseEvents(props.databaseId, schedule);
 let mutationJob: Promise<void> | undefined;
-async function mutate(fn: () => Promise<void>) {
+async function mutate(fn: () => Promise<void>, allowDrafts = false) {
   while (mutationJob) await mutationJob;
   if (disposed) return;
-  const job = runMutation(fn);
+  const job = runMutation(fn, allowDrafts);
   mutationJob = job;
   try {
     await job;
@@ -481,13 +484,14 @@ async function mutate(fn: () => Promise<void>) {
     if (mutationJob === job) mutationJob = undefined;
   }
 }
-async function runMutation(fn: () => Promise<void>) {
+async function runMutation(fn: () => Promise<void>, allowDrafts = false) {
   busy.value = true;
   error.value = "";
   notice.value = "";
   generation++;
   try {
-    await cellWrites.flush();
+    if (allowDrafts) await cellWrites.settled();
+    else await cellWrites.flush();
     await fn();
   } catch (e: any) {
     error.value = e.data?.message || "Change could not be saved";
@@ -505,6 +509,142 @@ async function preparePropertyChange(allowDrafts = false) {
   if (allowDrafts) await cellWrites.settled();
   else await cellWrites.flush();
 }
+const columnDrag = ref<{ property: string; view: any } | null>(null),
+  columnDrop = ref<{ property: string; after: boolean } | null>(null),
+  columnBusy = ref(false);
+const columnTransferType = "application/x-orvyn-column-order";
+function columnDragStart(event: DragEvent, property: Property) {
+  if (
+    !canEdit.value ||
+    columnBusy.value ||
+    property.type === "Title" ||
+    !event.dataTransfer ||
+    !currentView.value
+  ) {
+    event.preventDefault();
+    return;
+  }
+  columnDrag.value = {
+    property: property.id,
+    view: JSON.parse(JSON.stringify(currentView.value)),
+  };
+  event.dataTransfer.effectAllowed = "move";
+  event.dataTransfer.setData(columnTransferType, domId);
+}
+function columnDragOver(event: DragEvent, property: Property) {
+  if (
+    !columnDrag.value ||
+    property.type === "Title" ||
+    !canEdit.value ||
+    !event.dataTransfer?.types.includes(columnTransferType)
+  )
+    return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = "move";
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+  columnDrop.value = {
+    property: property.id,
+    after: event.clientX > rect.left + rect.width / 2,
+  };
+}
+function clearColumnDrag() {
+  columnDrag.value = null;
+  columnDrop.value = null;
+}
+async function persistColumnOrder(
+  view: any,
+  source: string,
+  target: string,
+  after: boolean,
+) {
+  if (!canEdit.value || columnBusy.value || source === target) return;
+  const order = orderedViewProperties(
+    metadata.value.properties,
+    view.config,
+    false,
+  ).map((property) => property.id);
+  const next = reorderPropertyIds(order, source, target, after);
+  if (JSON.stringify(order) === JSON.stringify(next)) return;
+  const focused =
+    document.activeElement instanceof HTMLElement &&
+    document.activeElement.classList.contains("column-order-grip")
+      ? document.activeElement
+      : null;
+  columnBusy.value = true;
+  error.value = "";
+  try {
+    await mutate(async () => {
+      if (
+        disposed ||
+        currentView.value?.id !== view.id ||
+        currentView.value?.version !== view.version
+      ) {
+        error.value =
+          "This view changed. Reload it before moving columns again.";
+        if (!disposed) await load();
+        return;
+      }
+      await api("/views/" + view.id, "PATCH", {
+        name: view.name,
+        type: view.type,
+        version: view.version,
+        config: { ...view.config, propertyOrder: next },
+      });
+      await load();
+      notice.value = "Column order saved";
+    }, true);
+  } finally {
+    columnBusy.value = false;
+    await nextTick();
+    if (
+      focused?.isConnected &&
+      (document.activeElement === document.body ||
+        document.activeElement === focused)
+    )
+      focused.focus({ preventScroll: true });
+  }
+}
+function columnDropAt(event: DragEvent, property: Property) {
+  if (
+    event.dataTransfer?.getData(columnTransferType) !== domId ||
+    !columnDrag.value ||
+    property.type === "Title"
+  )
+    return;
+  event.preventDefault();
+  const source = columnDrag.value,
+    rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+  clearColumnDrag();
+  void persistColumnOrder(
+    source.view,
+    source.property,
+    property.id,
+    event.clientX > rect.left + rect.width / 2,
+  );
+}
+function columnKey(event: KeyboardEvent, property: Property) {
+  if (
+    !event.altKey ||
+    !event.shiftKey ||
+    !["ArrowLeft", "ArrowRight"].includes(event.key)
+  )
+    return;
+  event.preventDefault();
+  event.stopPropagation();
+  const index = columns.value.findIndex((item) => item.id === property.id),
+    target = columns.value[index + (event.key === "ArrowLeft" ? -1 : 1)];
+  if (!target || target.type === "Title" || !currentView.value) return;
+  void persistColumnOrder(
+    JSON.parse(JSON.stringify(currentView.value)),
+    property.id,
+    target.id,
+    event.key === "ArrowRight",
+  );
+}
+watch(
+  [() => currentView.value?.id, () => currentView.value?.version, canEdit],
+  clearColumnDrag,
+);
 usePendingWrites(flush);
 defineExpose({
   flush,
@@ -1008,6 +1148,16 @@ onBeforeUnmount(() => {
               >{{ currentView.config.filters.length }}</span
             ></button
           ><button
+            v-if="canEdit"
+            class="ghost"
+            aria-label="View properties"
+            :disabled="columnBusy"
+            @click="viewLayout?.open(viewId)"
+          >
+            <AppIcon name="settings" :size="15" /><span
+              >Properties</span
+            ></button
+          ><button
             class="icon-button"
             aria-label="Refresh records"
             title="Refresh records"
@@ -1071,6 +1221,14 @@ onBeforeUnmount(() => {
         @create="showPropertyCreate = true"
         @formula="editFormula"
         @rollup="editRollup"
+        @error="error = $event"
+      />
+      <DatabaseViewLayout
+        v-if="canEdit"
+        ref="viewLayout"
+        :database-id="databaseId"
+        :before-change="preparePropertyChange"
+        @changed="load"
         @error="error = $event"
       />
       <DatabaseTransfer
@@ -1221,7 +1379,32 @@ onBeforeUnmount(() => {
         <table>
           <thead>
             <tr>
-              <th v-for="property in columns" :key="property.id">
+              <th
+                v-for="property in columns"
+                :key="property.id"
+                :class="{
+                  'column-drop-before':
+                    columnDrop?.property === property.id && !columnDrop.after,
+                  'column-drop-after':
+                    columnDrop?.property === property.id && columnDrop.after,
+                }"
+                @dragover="columnDragOver($event, property)"
+                @drop="columnDropAt($event, property)"
+                @dragend="clearColumnDrag"
+              >
+                <button
+                  v-if="canEdit && property.type !== 'Title'"
+                  type="button"
+                  class="column-order-grip"
+                  draggable="true"
+                  :disabled="columnBusy"
+                  :aria-label="'Move ' + property.name + ' column'"
+                  title="Drag to reorder · Alt Shift Left/Right"
+                  @dragstart="columnDragStart($event, property)"
+                  @keydown="columnKey($event, property)"
+                >
+                  <AppIcon name="grip" :size="14" />
+                </button>
                 <button
                   v-if="property.type === 'Formula' && canEdit"
                   class="formula-header"
@@ -2018,6 +2201,44 @@ onBeforeUnmount(() => {
 .property-header-button:hover {
   background: var(--surface-hover);
   color: var(--text);
+}
+.database-table thead th:has(.column-order-grip) {
+  position: relative;
+  padding-right: 32px;
+}
+.column-order-grip {
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 20px;
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 19px;
+  cursor: grab;
+  opacity: 0;
+}
+.database-table thead th:hover .column-order-grip,
+.column-order-grip:focus-visible {
+  opacity: 1;
+}
+.column-order-grip:active {
+  cursor: grabbing;
+}
+.column-order-grip:hover,
+.column-order-grip:focus-visible {
+  background: var(--surface-hover);
+}
+.database-table th.column-drop-before {
+  box-shadow: inset 2px 0 var(--accent);
+}
+.database-table th.column-drop-after {
+  box-shadow: inset -2px 0 var(--accent);
 }
 .database-drafts > summary {
   display: flex;

@@ -153,6 +153,7 @@ try {
           "tests/database-ux.test.mjs",
           "tests/database-drafts.test.mjs",
           "tests/database-properties.test.mjs",
+          "tests/database-view-layout.test.mjs",
           "tests/worker.test.mjs",
           "tests/preview.test.mjs",
           "tests/local-preview.test.mjs",

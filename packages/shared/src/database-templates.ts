@@ -78,6 +78,9 @@ export function cloneDatabaseSchema(
       config: {
         ...structuredClone(v.config),
         visibleProperties: v.config.visibleProperties.map(local),
+        ...(v.config.propertyOrder
+          ? { propertyOrder: v.config.propertyOrder.map(local) }
+          : {}),
         groupBy: v.config.groupBy ? local(v.config.groupBy) : null,
         dateProperty: v.config.dateProperty
           ? local(v.config.dateProperty)

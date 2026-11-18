@@ -35,6 +35,7 @@ import {
   type QueryInput,
   type Property,
   type ViewConfig,
+  orderedViewProperties,
 } from "@orvyn/shared";
 import { db, fail, text, mutation, user } from "./runtime.js";
 import { transaction, audit } from "./auth/security.js";
@@ -532,19 +533,7 @@ class DatabasesController {
         rows = (await c.query(query.sql, query.params)).rows;
       const more = rows.length > input.limit;
       if (more) rows.pop();
-      const visible = config.visibleProperties.length
-        ? new Set([
-            ...config.visibleProperties,
-            ...context.properties
-              .filter((p) => p.type === "Title")
-              .map((p) => p.id),
-            ...(config.groupBy ? [config.groupBy] : []),
-            ...(config.dateProperty ? [config.dateProperty] : []),
-          ])
-        : null;
-      const properties = visible
-        ? context.properties.filter((p) => visible.has(p.id))
-        : context.properties;
+      const properties = orderedViewProperties(context.properties, config);
       const records = rows.map((row) => recordDTO(row, properties)),
         relationProperties = relationWatchProperties(
           [

@@ -30,6 +30,7 @@ Work through these areas in order, preserving working features and committing/pu
    - [x] Side/center/full-page record opening, saved view preference and keyboard/context-menu actions.
    - [x] Table/board cell drafts survive failed writes, refresh and filtering; explicit retry/discard, same-field conflict review, queued edits and navigation/unload protection.
    - [x] Edit/delete/restore properties and selection options with stable IDs, retained record values, schema conflict checks and saved-view repair.
+   - [x] Per-view property order/visibility with header drag, keyboard movement, export ordering and template ID remapping.
    - [ ] Reciprocal/cross-space relations and multi-hop rollups.
 4. Search
    - [x] Indexed title/document full-text search with excerpts, space/type filters, ranked pagination and current access checks.

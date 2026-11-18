@@ -255,6 +255,12 @@ export function checkedView(
     fail(400, "Duplicate visible property");
   for (const id of config.visibleProperties) find(id);
   if (
+    new Set(config.propertyOrder || []).size !==
+    (config.propertyOrder || []).length
+  )
+    fail(400, "Duplicate ordered property");
+  for (const id of config.propertyOrder || []) find(id);
+  if (
     config.groupBy &&
     !["Status", "Select"].includes(find(config.groupBy).type)
   )

@@ -6,7 +6,7 @@ Implemented and integration-tested: local credentials, email verification, SMTP 
 
 Table and board edits additionally retain local cell drafts through failed writes, refresh and filtering, with per-record queues, conflict review, explicit retry/discard and navigation/unload protection. Drafts remain in memory and are cleared when access is revoked; forced reload/crash recovery is not implemented.
 
-Property management supports naming, stable option IDs/order/colors, soft deletion/restoration with retained values, schema conflict checks and saved-view repair. Property type conversion and property-column reordering remain unfinished. Existing references and ACL checks remain authoritative after restoration.
+Property management supports naming, stable option IDs/order/colors, soft deletion/restoration with retained values, schema conflict checks and saved-view repair. Saved views also support independent property ordering, visibility controls and table-header drag/keyboard reordering, with matching exports, template ID remapping and safe retention of failed cell drafts. Property type conversion and column resizing remain unfinished. Existing references and ACL checks remain authoritative after restoration.
 
 Editor columns now retain shared proportions with pointer/keyboard resizing, cancellation and independent undo. Block controls support nested selection and movement between columns, callouts, quotes, toggle bodies and the document, including native drag, searchable destinations, outdent and preservation of empty source containers. Lists and tables still move as intact blocks.
 

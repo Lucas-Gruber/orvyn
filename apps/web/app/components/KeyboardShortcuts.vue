@@ -48,6 +48,7 @@ const open = ref(false),
       name: "Blocks and hierarchy",
       entries: [
         ["Reorder selected blocks or pages", "Alt+Shift+↑ / ↓"],
+        ["Reorder a focused database column", "Alt+Shift+← / →"],
         ["Move a block outside its container", "Alt+Shift+←"],
         ["Select the current editor block", "Mod+Shift+Space"],
         ["Resize focused column divider", "← / → (Shift for larger steps)"],

@@ -96,6 +96,7 @@ export const viewConfigInput = z
     filters: z.array(filterInput).max(20).default([]),
     sorts: z.array(sortInput).max(3).default([]),
     visibleProperties: z.array(z.uuid()).max(50).default([]),
+    propertyOrder: z.array(z.uuid()).max(50).optional(),
     groupBy: z.uuid().nullable().default(null),
     dateProperty: z.uuid().nullable().default(null),
   })
@@ -197,3 +198,4 @@ export {
 export type { RollupConfig } from "./rollup.js";
 export { cloneDatabaseSchema } from "./database-templates.js";
 export type { TemplateView } from "./database-templates.js";
+export { orderedViewProperties, reorderPropertyIds } from "./view-layout.js";
