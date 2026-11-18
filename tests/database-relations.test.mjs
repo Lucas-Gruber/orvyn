@@ -308,9 +308,22 @@ test("relations enforce target scope/read access, filter current references and 
           body: { name: "Foreign database" },
         })
       ).data;
+    assert.equal(
+      (
+        await request(`databases/${f.source.id}/properties`, {
+          method: "POST",
+          cookie: f.owner.cookie,
+          body: {
+            name: "Across spaces",
+            type: "Relation",
+            relationDatabaseId: foreign.id,
+          },
+        })
+      ).response.status,
+      201,
+    );
     for (const body of [
       { name: "No target", type: "Relation" },
-      { name: "Wrong space", type: "Relation", relationDatabaseId: foreign.id },
       {
         name: "Not a database",
         type: "Relation",
@@ -677,9 +690,18 @@ test("Chromium: create a relation property, select/open related records, refresh
     await builder
       .getByLabel("Property type", { exact: true })
       .selectOption("Relation");
-    await builder
-      .getByLabel("Related database", { exact: true })
-      .selectOption(f.target.id);
+    await builder.getByLabel("Related database", { exact: true }).click();
+    const databasePicker = owner.getByRole("dialog", {
+      name: "Choose a database",
+      exact: true,
+    });
+    await databasePicker
+      .getByRole("searchbox", { name: "Search databases", exact: true })
+      .fill("Projects");
+    await databasePicker
+      .getByRole("button")
+      .filter({ hasText: "Projects" })
+      .click();
     await builder
       .getByRole("button", { name: "Add property", exact: true })
       .click();

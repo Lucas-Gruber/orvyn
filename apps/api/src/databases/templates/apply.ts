@@ -148,7 +148,7 @@ async function defaults(
     if (((values[p.id] as string[] | null) || []).some((id) => !files.has(id)))
       fail(400, "Choose attachments included in this template.");
   await checkPeople(c, t.space_id, context.properties, values);
-  await checkRelations(c, uid, t.space_id, context.properties, values);
+  await checkRelations(c, uid, context.properties, values);
   return { values, omitted: preset.omitted };
 }
 async function insertPage(
@@ -222,7 +222,7 @@ async function cloneSchema(
   await c.query("INSERT INTO databases(page_id) VALUES($1)", [pageId]);
   for (const p of schema.properties) {
     if (p.type === "Relation")
-      await checkRelationTarget(c, uid, t.space_id, p.config.databaseId!);
+      await checkRelationTarget(c, uid, p.config.databaseId!);
     await c.query(
       "INSERT INTO database_properties(id,database_id,name,type,config,position) VALUES($1,$2,$3,$4,$5,$6)",
       [p.id, pageId, p.name, p.type, p.config, p.position],
@@ -233,13 +233,7 @@ async function cloneSchema(
     if (p.type === "Formula")
       formulaType(p.config.expression!, context.properties);
     if (p.type === "Rollup")
-      await rollupConfig(
-        c,
-        uid,
-        t.space_id,
-        context.properties,
-        p.config.rollup!,
-      );
+      await rollupConfig(c, uid, context.properties, p.config.rollup!);
   }
   for (const v of schema.views) {
     checkedView(context.properties, v.type, v.config);

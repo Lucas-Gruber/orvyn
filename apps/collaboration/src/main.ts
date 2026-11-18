@@ -158,7 +158,7 @@ async function relationSnapshot(connection: Connection<Identity>) {
       FROM record_relations rr JOIN database_properties dp ON dp.id=rr.property_id AND dp.database_id=d.page_id AND dp.type='Relation' AND dp.deleted_at IS NULL
       JOIN database_records source_record ON source_record.page_id=rr.source_id AND source_record.database_id=dp.database_id
       JOIN pages source ON source.id=rr.source_id JOIN database_records tr ON tr.page_id=rr.target_id AND tr.database_id::text=dp.config->>'databaseId'
-      JOIN databases target_database ON target_database.page_id=tr.database_id JOIN pages target ON target.id=rr.target_id AND target.space_id=source.space_id
+      JOIN databases target_database ON target_database.page_id=tr.database_id JOIN pages target ON target.id=rr.target_id
       WHERE rr.source_id=ANY($2::uuid[]) AND ($4::uuid[] IS NULL OR dp.id=ANY($4)) AND orvyn_page_role(source.id,$3)>=10 AND orvyn_page_role(target.id,$3)>=10
     ) item) AS targets FROM databases d WHERE d.page_id=$1`,
       [

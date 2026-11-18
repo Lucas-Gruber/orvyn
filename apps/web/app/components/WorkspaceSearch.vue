@@ -10,8 +10,14 @@ interface SearchResult {
   highlights: { start: number; end: number }[];
   match_source: "title" | "content" | "recent";
 }
-defineProps<{ spaces: { id: string; name: string }[] }>();
-const emit = defineEmits<{ select: [id: string] }>();
+const props = withDefaults(
+  defineProps<{
+    spaces: { id: string; name: string }[];
+    mode?: "workspace" | "database";
+  }>(),
+  { mode: "workspace" },
+);
+const emit = defineEmits<{ select: [id: string, result: SearchResult] }>();
 const visible = ref(false),
   query = ref(""),
   spaceId = ref(""),
@@ -116,8 +122,8 @@ async function open() {
   opening = true;
   query.value = "";
   spaceId.value = "";
-  kind.value = "all";
-  scope.value = "all";
+  kind.value = props.mode === "database" ? "database" : "all";
+  scope.value = props.mode === "database" ? "title" : "all";
   opening = false;
   visible.value = true;
   schedule(0);
@@ -135,7 +141,7 @@ function close() {
 }
 function choose(result: SearchResult) {
   close();
-  emit("select", result.id);
+  emit("select", result.id, result);
 }
 async function keys(event: KeyboardEvent) {
   if (
@@ -229,7 +235,7 @@ defineExpose({ open, close });
 <template>
   <UiDialog
     :open="visible"
-    title="Search your workspace"
+    :title="mode === 'database' ? 'Choose a database' : 'Search your workspace'"
     wide
     class="workspace-search"
     @close="close"
@@ -239,9 +245,13 @@ defineExpose({ open, close });
         ref="input"
         v-model="query"
         type="search"
-        aria-label="Search pages"
+        :aria-label="mode === 'database' ? 'Search databases' : 'Search pages'"
         :aria-describedby="uid + '-help'"
-        placeholder="Search titles and document text…"
+        :placeholder="
+          mode === 'database'
+            ? 'Find a database in any accessible space…'
+            : 'Search titles and document text…'
+        "
         autocomplete="off"
         @keydown="keys"
       />
@@ -258,7 +268,7 @@ defineExpose({ open, close });
           </option>
         </select>
       </div>
-      <div>
+      <div v-if="mode !== 'database'">
         <AppIcon name="file" :size="14" /><select
           v-model="kind"
           aria-label="Content type"
@@ -273,7 +283,7 @@ defineExpose({ open, close });
           </option>
         </select>
       </div>
-      <div>
+      <div v-if="mode !== 'database'">
         <AppIcon name="text" :size="14" /><select
           v-model="scope"
           aria-label="Search in"
@@ -370,7 +380,9 @@ defineExpose({ open, close });
       </div>
       <p :id="uid + '-help'">
         <span><kbd>↑</kbd> <kbd>↓</kbd> Choose</span
-        ><span><kbd>Enter</kbd> Open</span><span><kbd>Esc</kbd> Close</span>
+        ><span
+          ><kbd>Enter</kbd> {{ mode === "database" ? "Choose" : "Open" }}</span
+        ><span><kbd>Esc</kbd> Close</span>
       </p>
     </div>
     <span class="sr-only" role="status">{{

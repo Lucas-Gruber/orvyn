@@ -195,20 +195,9 @@ class DatabasesController {
       const context = await database(c, uid, id, 30, true);
       const config = propertyConfig(input, context.properties);
       if (input.type === "Rollup")
-        await rollupConfig(
-          c,
-          uid,
-          context.page.space_id,
-          context.properties,
-          input.rollup!,
-        );
+        await rollupConfig(c, uid, context.properties, input.rollup!);
       if (input.type === "Relation")
-        await checkRelationTarget(
-          c,
-          uid,
-          context.page.space_id,
-          input.relationDatabaseId!,
-        );
+        await checkRelationTarget(c, uid, input.relationDatabaseId!);
       if (context.properties.length >= 50)
         fail(400, "A database supports up to 50 active properties");
       const position =
@@ -264,13 +253,7 @@ class DatabasesController {
                 context.views,
               )
             : input.rollup !== undefined
-              ? await rollupConfig(
-                  c,
-                  uid,
-                  context.page.space_id,
-                  context.properties,
-                  input.rollup,
-                )
+              ? await rollupConfig(c, uid, context.properties, input.rollup)
               : input.formula === undefined
                 ? existing.config
                 : formulaConfig(input.formula, context.properties),
@@ -633,13 +616,7 @@ class DatabasesController {
         0,
         "record",
       );
-      await checkRelations(
-        c,
-        uid,
-        context.page.space_id,
-        context.properties,
-        values,
-      );
+      await checkRelations(c, uid, context.properties, values);
       const p = (
         await c.query(
           "INSERT INTO pages(space_id,parent_id,title,kind,created_by,last_edited_by,visibility) VALUES($1,$2,$3,'record',$4,$4,$5) RETURNING *",
@@ -706,14 +683,7 @@ class DatabasesController {
         previous.values,
       );
       await checkFiles(c, page.id, context.properties, values);
-      await checkRelations(
-        c,
-        uid,
-        context.page.space_id,
-        context.properties,
-        values,
-        previous.values,
-      );
+      await checkRelations(c, uid, context.properties, values, previous.values);
       const r = await c.query(
         "UPDATE database_records SET values=values||$1::jsonb,version=version+1 WHERE page_id=$2 AND database_id=$3 AND version=$4 RETURNING page_id",
         [values, page.id, context.page.id, input.version],

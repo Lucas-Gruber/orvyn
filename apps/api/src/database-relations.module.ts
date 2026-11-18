@@ -27,7 +27,6 @@ class DatabaseRelationsController {
       const properties = await targetProperties(
         c,
         uid,
-        context.page.space_id,
         field.config.databaseId!,
       );
       if (!properties) fail(404, "Related database is unavailable");
@@ -66,8 +65,8 @@ class DatabaseRelationsController {
         fail(404, "Related database is unavailable");
       const target = (
         await c.query(
-          "SELECT p.id,p.title FROM pages p JOIN databases d ON d.page_id=p.id WHERE p.id=$1 AND p.space_id=$2 AND orvyn_page_role(p.id,$3)>=10",
-          [field.config.databaseId, context.page.space_id, uid],
+          "SELECT p.id,p.title FROM pages p JOIN databases d ON d.page_id=p.id WHERE p.id=$1 AND orvyn_page_role(p.id,$2)>=10",
+          [field.config.databaseId, uid],
         )
       ).rows[0];
       if (!target) fail(404, "Related database is unavailable");

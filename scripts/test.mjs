@@ -147,6 +147,7 @@ try {
           "tests/database-person.test.mjs",
           "tests/database-files.test.mjs",
           "tests/database-relations.test.mjs",
+          "tests/cross-space-relations.test.mjs",
           "tests/database-formulas.test.mjs",
           "tests/database-rollups.test.mjs",
           "tests/database-templates.test.mjs",

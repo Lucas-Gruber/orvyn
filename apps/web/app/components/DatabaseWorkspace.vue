@@ -38,6 +38,9 @@ const templateLibrary = ref<{ open: () => void }>(),
   templateLoading = ref(false);
 const propertyManager = ref<{ open: (id?: string) => Promise<void> }>();
 const viewLayout = ref<{ open: (id: string) => Promise<void> }>();
+const relationSearch = ref<{ open: () => Promise<void> }>();
+const relationSpaces = ref<{ id: string; name: string }[]>([]);
+const relationChoice = ref<{ id: string; title: string; space_name: string }>();
 let templateDefaults: Record<string, unknown> = {},
   templateTitle = "",
   createRequest = "",
@@ -273,8 +276,7 @@ const title = ref(""),
   propertyName = ref(""),
   propertyType = ref<string>("Text"),
   optionNames = ref(""),
-  relationDatabaseId = ref(""),
-  relationDatabases = ref<any[]>([]);
+  relationDatabaseId = ref("");
 const formulaSource = ref(""),
   editingFormula = ref<Property | null>(null),
   formulaDraft = ref(""),
@@ -901,18 +903,26 @@ async function saveView() {
     notice.value = "View saved";
   });
 }
-watch(propertyType, async (type) => {
+watch(propertyType, () => {
   relationDatabaseId.value = "";
-  relationDatabases.value = [];
-  if (type !== "Relation" || !metadata.value) return;
+  relationChoice.value = undefined;
+});
+async function chooseRelationDatabase() {
   try {
-    relationDatabases.value = await $fetch<any[]>(
-      "/api/v1/spaces/" + metadata.value.spaceId + "/databases",
-    );
+    relationSpaces.value =
+      await $fetch<{ id: string; name: string }[]>("/api/v1/spaces");
+    await relationSearch.value?.open();
   } catch {
     error.value = "Databases could not be loaded.";
   }
-});
+}
+function selectRelationDatabase(
+  id: string,
+  result: { id: string; title: string; space_name: string },
+) {
+  relationDatabaseId.value = id;
+  relationChoice.value = result;
+}
 async function addProperty() {
   await mutate(async () => {
     await api("/properties", "POST", {
@@ -1230,6 +1240,13 @@ onBeforeUnmount(() => {
         :before-change="preparePropertyChange"
         @changed="load"
         @error="error = $event"
+      />
+      <WorkspaceSearch
+        v-if="canEdit"
+        ref="relationSearch"
+        :spaces="relationSpaces"
+        mode="database"
+        @select="selectRelationDatabase"
       />
       <DatabaseTransfer
         ref="transfer"
@@ -1795,20 +1812,19 @@ onBeforeUnmount(() => {
               required /></template
           ><template v-if="propertyType === 'Relation'"
             ><label :for="'relation-database-' + domId">Related database</label
-            ><select
+            ><button
+              type="button"
+              class="relation-target-choice"
               :id="'relation-database-' + domId"
-              v-model="relationDatabaseId"
-              required
+              aria-label="Related database"
+              @click="chooseRelationDatabase"
             >
-              <option value="" disabled>Choose a database in this space</option>
-              <option
-                v-for="database in relationDatabases"
-                :key="database.id"
-                :value="database.id"
-              >
-                {{ database.title }}
-              </option>
-            </select></template
+              <AppIcon name="database" :size="17" /><span
+                >{{ relationChoice?.title || "Choose a database…"
+                }}<small v-if="relationChoice">{{
+                  relationChoice.space_name
+                }}</small></span
+              ><AppIcon name="chevronDown" :size="15" /></button></template
           ><DatabaseFormulaEditor
             v-if="propertyType === 'Formula'"
             v-model="formulaSource"
@@ -1822,7 +1838,13 @@ onBeforeUnmount(() => {
             :disabled="busy"
           />
           <div class="actions">
-            <button class="primary" :disabled="busy">Add property</button
+            <button
+              class="primary"
+              :disabled="
+                busy || (propertyType === 'Relation' && !relationDatabaseId)
+              "
+            >
+              Add property</button
             ><button type="button" @click="showPropertyCreate = false">
               Cancel
             </button>
@@ -2197,6 +2219,29 @@ onBeforeUnmount(() => {
   font-weight: 400;
   color: var(--muted);
   justify-content: flex-start;
+}
+.relation-target-choice {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  text-align: left;
+  min-width: 0;
+  padding: 9px 11px;
+}
+.relation-target-choice > span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.relation-target-choice small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 2px;
+}
+.relation-target-choice > svg {
+  flex: none;
+  color: var(--muted);
 }
 .property-header-button:hover {
   background: var(--surface-hover);

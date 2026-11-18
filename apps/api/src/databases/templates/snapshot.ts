@@ -184,8 +184,8 @@ export async function templateDefaults(
     if (p.type === "Relation" && Array.isArray(value) && value.length) {
       value = (
         await c.query(
-          "SELECT p.id FROM database_records r JOIN pages p ON p.id=r.page_id WHERE r.database_id=$1 AND p.space_id=$2 AND p.id=ANY($3::uuid[]) AND orvyn_page_role(p.id,$4)>=10 ORDER BY p.id",
-          [p.config.databaseId, context.page.space_id, value, uid],
+          "SELECT p.id FROM database_records r JOIN pages p ON p.id=r.page_id WHERE r.database_id=$1 AND p.id=ANY($2::uuid[]) AND orvyn_page_role(p.id,$3)>=10 ORDER BY p.id",
+          [p.config.databaseId, value, uid],
         )
       ).rows.map((r) => r.id);
     }

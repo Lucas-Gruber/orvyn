@@ -148,13 +148,7 @@ class TransferController {
     if (!converted.errors.length)
       for (const [index, record] of converted.records.entries()) {
         try {
-          await checkRelations(
-            db,
-            uid,
-            context.page.space_id,
-            properties,
-            record.values,
-          );
+          await checkRelations(db, uid, properties, record.values);
         } catch (e: any) {
           if (converted.errors.length < 20)
             converted.errors.push({
@@ -241,13 +235,7 @@ class TransferController {
       if (converted.errors.length)
         fail(400, "CSV contains invalid values; preview it again");
       for (const record of converted.records)
-        await checkRelations(
-          c,
-          uid,
-          context.page.space_id,
-          properties,
-          record.values,
-        );
+        await checkRelations(c, uid, properties, record.values);
       await newPageParent(
         c,
         uid,

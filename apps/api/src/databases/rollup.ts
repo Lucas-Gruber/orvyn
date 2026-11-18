@@ -11,21 +11,19 @@ const catalogs = new WeakMap<Property[], Map<string, Property[]>>();
 export async function targetProperties(
   c: Pool | PoolClient,
   uid: string,
-  spaceId: string,
   databaseId: string,
 ): Promise<Property[] | null> {
   const result = await c.query(
     `SELECT d.page_id,coalesce(jsonb_agg(jsonb_build_object('id',dp.id,'name',dp.name,'type',dp.type,'config',dp.config,'position',dp.position) ORDER BY dp.position,dp.id) FILTER(WHERE dp.id IS NOT NULL),'[]'::jsonb) AS properties
      FROM databases d JOIN pages p ON p.id=d.page_id LEFT JOIN database_properties dp ON dp.database_id=d.page_id AND dp.deleted_at IS NULL
-     WHERE d.page_id=$1 AND p.space_id=$2 AND orvyn_page_role(p.id,$3)>=10 GROUP BY d.page_id`,
-    [databaseId, spaceId, uid],
+     WHERE d.page_id=$1 AND orvyn_page_role(p.id,$2)>=10 GROUP BY d.page_id`,
+    [databaseId, uid],
   );
   return result.rows[0]?.properties || null;
 }
 export async function loadRollupCatalog(
   c: Pool | PoolClient,
   uid: string,
-  spaceId: string,
   properties: Property[],
 ) {
   const ids = new Set(
@@ -43,7 +41,7 @@ export async function loadRollupCatalog(
     ),
     catalog = new Map<string, Property[]>();
   for (const id of ids) {
-    const target = await targetProperties(c, uid, spaceId, id);
+    const target = await targetProperties(c, uid, id);
     if (target) catalog.set(id, target);
   }
   catalogs.set(properties, catalog);
@@ -51,7 +49,6 @@ export async function loadRollupCatalog(
 export async function rollupConfig(
   c: Pool | PoolClient,
   uid: string,
-  spaceId: string,
   properties: Property[],
   input: RollupConfig,
 ) {
@@ -60,12 +57,7 @@ export async function rollupConfig(
   );
   if (!relation?.config.databaseId)
     fail(400, "Choose a current relation property.");
-  const targets = await targetProperties(
-    c,
-    uid,
-    spaceId,
-    relation!.config.databaseId!,
-  );
+  const targets = await targetProperties(c, uid, relation!.config.databaseId!);
   if (!targets) fail(400, "The related database is unavailable.");
   if (input.aggregation === "count") {
     if (input.targetPropertyId)
