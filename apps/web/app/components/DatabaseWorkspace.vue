@@ -412,6 +412,7 @@ async function api(path: string, method = "GET", body?: unknown) {
   });
 }
 async function load() {
+  refreshRequested = false;
   const request = ++generation;
   loading.value = true;
   try {
@@ -450,6 +451,7 @@ async function load() {
         ? {
             relationProperties: result.relationProperties || [],
             fingerprint: result.fingerprint,
+            requiresPolling: result.requiresPolling,
           }
         : undefined,
     );
@@ -468,14 +470,20 @@ async function load() {
       }
     }
   } finally {
-    if (request === generation) loading.value = false;
+    if (request === generation) {
+      loading.value = false;
+      if (refreshRequested) schedule();
+    }
   }
 }
+let refreshRequested = false;
 function schedule() {
   if (disposed) return;
   clearTimeout(timer);
   timer = setTimeout(() => {
-    if (!disposed) void load();
+    if (disposed) return;
+    if (loading.value) refreshRequested = true;
+    else void load();
   }, 100);
 }
 const events = useDatabaseEvents(props.databaseId, schedule);
@@ -1067,7 +1075,14 @@ watch(notice, (value) => {
 onMounted(() => {
   void load();
   interval = setInterval(() => {
-    if ((!events.live.value || cellWrites.entries.value.length) && !disposed)
+    if (
+      (!events.live.value ||
+        events.polling.value ||
+        cellWrites.entries.value.length) &&
+      !loading.value &&
+      !busy.value &&
+      !disposed
+    )
       void load();
   }, 5000);
 });
@@ -1123,9 +1138,11 @@ onBeforeUnmount(() => {
               : 'Live updates reconnecting'
           "
           :title="
-            events.live.value
-              ? 'Live updates connected'
-              : 'Live updates reconnecting'
+            events.polling.value
+              ? 'Large calculation graphs refresh every five seconds'
+              : events.live.value
+                ? 'Live updates connected'
+                : 'Live updates reconnecting'
           "
           ><span :class="{ connected: events.live.value }" /><span
             class="sr-only"

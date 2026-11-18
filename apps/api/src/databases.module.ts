@@ -43,9 +43,10 @@ import {
   type Property,
   type ViewConfig,
   orderedViewProperties,
+  rollupDependencyState,
 } from "@orvyn/shared";
 import { db, fail, text, mutation, user } from "./runtime.js";
-import { transaction, audit } from "./auth/security.js";
+import { transaction, audit, readSnapshot } from "./auth/security.js";
 import {
   spaceAccess,
   pageAccess,
@@ -63,6 +64,7 @@ import {
   querySql,
   recordDTO,
   recordSnapshot,
+  recordSnapshotRow,
 } from "./databases/model.js";
 const recordInput = z
   .object({
@@ -277,7 +279,13 @@ class DatabasesController {
                 context.views,
               )
             : input.rollup !== undefined
-              ? await rollupConfig(c, uid, context.properties, input.rollup)
+              ? await rollupConfig(
+                  c,
+                  uid,
+                  context.properties,
+                  input.rollup,
+                  existing.id,
+                )
               : input.formula === undefined
                 ? existing.config
                 : formulaConfig(input.formula, context.properties),
@@ -520,7 +528,7 @@ class DatabasesController {
     mutation(req);
     const uid = await user(req),
       input = parse<QueryInput>(queryInput, body);
-    return transaction(async (c) => {
+    return readSnapshot(async (c) => {
       await c.query(
         "SELECT s.id FROM spaces s JOIN pages p ON p.space_id=s.id WHERE p.id::text=$1 FOR SHARE OF s",
         [id],
@@ -530,45 +538,51 @@ class DatabasesController {
         ? context.views.find((v) => v.id === input.viewId)
         : context.views[0];
       if (!view) return fail(404, "View not found");
-      const config = checkedView(context.properties, view.type, view.config),
-        query = querySql(
-          context.properties,
-          config,
-          input,
-          uid,
-          context.page.id,
-        ),
-        rows = (await c.query(query.sql, query.params)).rows;
+      const config = checkedView(context.properties, view.type, view.config);
+      const properties = orderedViewProperties(context.properties, config);
+      const relationProperties = relationWatchProperties(
+        [
+          ...properties,
+          ...context.properties.filter((p) =>
+            [
+              ...(input.filters || config.filters),
+              ...(input.sorts || config.sorts),
+            ].some((item) => item.propertyId === p.id),
+          ),
+        ],
+        context.properties,
+      );
+      const query = querySql(
+        context.properties,
+        config,
+        input,
+        uid,
+        context.page.id,
+        relationProperties,
+      );
+      const rows = (await c.query(query.sql, query.params)).rows;
       const more = rows.length > input.limit;
       if (more) rows.pop();
-      const properties = orderedViewProperties(context.properties, config);
-      const records = rows.map((row) => recordDTO(row, properties)),
-        relationProperties = relationWatchProperties(
-          [
-            ...properties,
-            ...context.properties.filter((p) =>
-              [
-                ...(input.filters || config.filters),
-                ...(input.sorts || config.sorts),
-              ].some((item) => item.propertyId === p.id),
-            ),
-          ],
-          context.properties,
-        ),
-        targets = rows.flatMap((row) => {
-          const ids = new Set(
-            relationProperties.flatMap((id) => row.relation_values?.[id] || []),
-          );
-          return (row.relation_choices || []).filter((r: any) => ids.has(r.id));
-        });
+      const records = rows.map((row) => recordDTO(row, properties));
+      const dependencies = rollupDependencyState(
+        rows.map((row) => ({ pageId: row.id, ...row.rollup_dependencies })),
+      );
+      const targets = rows.flatMap((row) => {
+        const ids = new Set(
+          relationProperties.flatMap((id) => row.relation_values?.[id] || []),
+        );
+        return (row.relation_choices || []).filter((r: any) => ids.has(r.id));
+      });
       return {
         records,
         relationProperties,
+        requiresPolling: dependencies.polling,
         fingerprint: databaseFingerprint(
           context.schemaVersion,
           records,
           targets,
           relationProperties,
+          dependencies.token,
         ),
         schemaVersion: context.schemaVersion,
         nextOffset: more ? input.offset + input.limit : null,
@@ -583,33 +597,40 @@ class DatabasesController {
     @Param("record") recordId: string,
   ) {
     const uid = await user(req);
-    return transaction(async (c) => {
+    return readSnapshot(async (c) => {
       await c.query(
         "SELECT s.id FROM spaces s JOIN pages p ON p.space_id=s.id WHERE p.id::text=$1 FOR SHARE OF s",
         [id],
       );
-      const context = await database(c, uid, id),
-        record = await recordSnapshot(
-          c,
-          uid,
-          context.page.id,
-          recordId,
-          context.properties,
-        ),
-        relationProperties = relationWatchProperties(
-          context.properties,
-          context.properties,
-        );
+      const context = await database(c, uid, id);
+      const relationProperties = relationWatchProperties(
+        context.properties,
+        context.properties,
+      );
+      const row = await recordSnapshotRow(
+        c,
+        uid,
+        context.page.id,
+        recordId,
+        context.properties,
+        relationProperties,
+      );
+      const record = recordDTO(row, context.properties);
+      const dependencies = rollupDependencyState([
+        { pageId: record.pageId, ...row.rollup_dependencies },
+      ]);
       return {
         record,
         properties: context.properties,
         schemaVersion: context.schemaVersion,
         relationProperties,
+        requiresPolling: dependencies.polling,
         fingerprint: databaseFingerprint(
           context.schemaVersion,
           [record],
           record.relations || [],
           relationProperties,
+          dependencies.token,
         ),
         database: {
           id: context.page.id,

@@ -323,21 +323,31 @@ function calculatedField(
   actor: string,
   page = "p",
   record = "r",
+  rollups: ReadonlySet<string> = new Set(),
 ): string {
   if (property.type === "Formula")
     return formulaSql(property.config.expression!, properties, bind, (p) =>
-      calculatedField(p, properties, bind, actor, page, record),
+      calculatedField(p, properties, bind, actor, page, record, rollups),
     ).sql;
   if (property.type === "Rollup")
-    return rollupSql(property, properties, bind, actor, (target, targets) =>
-      calculatedField(
-        target,
-        targets,
-        bind,
-        actor,
-        "rollup_page",
-        "rollup_record",
-      ),
+    return rollupSql(
+      property,
+      properties,
+      bind,
+      actor,
+      page,
+      record,
+      rollups,
+      (target, targets, targetPage, targetRecord, path) =>
+        calculatedField(
+          target,
+          targets,
+          bind,
+          actor,
+          targetPage,
+          targetRecord,
+          path,
+        ),
     );
   return formulaBaseField(property, bind, actor, page, record);
 }
@@ -347,6 +357,7 @@ export function querySql(
   input: QueryInput,
   uid: string,
   id: string,
+  watchRelations?: string[],
 ) {
   const params: any[] = [];
   const bind = (value: unknown) => {
@@ -508,7 +519,7 @@ export function querySql(
   sorts.push("p.id ASC");
   const limit = bind(input.limit + 1),
     offset = bind(input.offset);
-  const sql = `SELECT ${recordColumns(bind(uid), properties, bind)} ${recordFrom} WHERE ${conditions.join(" AND ")} ORDER BY ${sorts.join(",")} LIMIT ${limit} OFFSET ${offset}`;
+  const sql = `SELECT ${recordColumns(bind(uid), properties, bind, watchRelations)} ${recordFrom} WHERE ${conditions.join(" AND ")} ORDER BY ${sorts.join(",")} LIMIT ${limit} OFFSET ${offset}`;
   return { sql, params };
 }
 
@@ -518,6 +529,7 @@ export function recordColumns(
   actor: string,
   properties: Property[],
   bind: (value: unknown) => string,
+  watchRelations?: string[],
 ) {
   const computed = properties
     .filter((p) => p.type === "Formula" || p.type === "Rollup")
@@ -531,7 +543,11 @@ export function recordColumns(
     (SELECT coalesce(jsonb_agg(jsonb_build_object('id',item.id,'title',item.title,'icon',item.icon,'revision',item.revision) ORDER BY item.title,item.id),'[]'::jsonb) FROM (
       SELECT DISTINCT target.id,target.title,target.icon,concat_ws(':',target.version,target.title_version,target.appearance_version,tr.version,target_database.schema_version) AS revision FROM record_relations rr JOIN database_properties dp ON dp.id=rr.property_id AND dp.database_id=r.database_id AND dp.type='Relation' AND dp.deleted_at IS NULL JOIN database_records tr ON tr.page_id=rr.target_id AND tr.database_id::text=dp.config->>'databaseId' JOIN databases target_database ON target_database.page_id=tr.database_id JOIN pages target ON target.id=tr.page_id WHERE rr.source_id=p.id AND orvyn_page_role(p.id,${actor}::uuid)>=10 AND orvyn_page_role(target.id,${actor}::uuid)>=10
     ) item) AS relation_choices`;
-  return `${files},${relations},${formulas},p.id,p.title,p.icon,p.cover_preset,p.title_version,p.created_at,p.updated_at,p.created_by,p.last_edited_by,creator.email AS creator_email,editor.email AS editor_email,r.values,r.version,orvyn_page_role(p.id,${actor}) AS access_rank,CASE WHEN p.appearance_version=1 THEN (SELECT id FROM files WHERE page_id=p.id AND state='ready' AND media_type IN ('image/png','image/jpeg','image/gif','image/webp') ORDER BY created_at LIMIT 1) ELSE (SELECT id FROM files WHERE id=p.cover_file_id AND page_id=p.id AND state='ready' AND media_type IN ('image/png','image/jpeg','image/gif','image/webp')) END AS cover_file_id`;
+  const dependencies =
+    watchRelations === undefined
+      ? ""
+      : `orvyn_rollup_watch_summary(r.database_id,p.id,${bind(watchRelations)}::uuid[],${actor}::uuid) AS rollup_dependencies,`;
+  return `${dependencies}${files},${relations},${formulas},p.id,p.title,p.icon,p.cover_preset,p.title_version,p.created_at,p.updated_at,p.created_by,p.last_edited_by,creator.email AS creator_email,editor.email AS editor_email,r.values,r.version,orvyn_page_role(p.id,${actor}) AS access_rank,CASE WHEN p.appearance_version=1 THEN (SELECT id FROM files WHERE page_id=p.id AND state='ready' AND media_type IN ('image/png','image/jpeg','image/gif','image/webp') ORDER BY created_at LIMIT 1) ELSE (SELECT id FROM files WHERE id=p.cover_file_id AND page_id=p.id AND state='ready' AND media_type IN ('image/png','image/jpeg','image/gif','image/webp')) END AS cover_file_id`;
 }
 export function recordDTO(row: any, properties: Property[]) {
   const values: Record<string, unknown> = {};
@@ -625,17 +641,30 @@ export async function recordSnapshot(
   pageId: string,
   properties: Property[],
 ) {
+  return recordDTO(
+    await recordSnapshotRow(c, uid, id, pageId, properties),
+    properties,
+  );
+}
+export async function recordSnapshotRow(
+  c: Pool | PoolClient,
+  uid: string,
+  id: string,
+  pageId: string,
+  properties: Property[],
+  watchRelations?: string[],
+) {
   const params: unknown[] = [pageId, uid, id],
     bind = (value: unknown) => {
       params.push(value);
       return "$" + params.length;
     };
   const r = await c.query(
-    `SELECT ${recordColumns("$2", properties, bind)} ${recordFrom} WHERE r.page_id::text=$1 AND r.database_id=$3 AND orvyn_page_role(p.id,$2)>=10`,
+    `SELECT ${recordColumns("$2", properties, bind, watchRelations)} ${recordFrom} WHERE r.page_id::text=$1 AND r.database_id=$3 AND orvyn_page_role(p.id,$2)>=10`,
     params,
   );
   if (!r.rowCount) return fail(404, "Record not found");
-  return recordDTO(r.rows[0], properties);
+  return r.rows[0];
 }
 
 // Callers must authorize the space/page before resolving this directory.

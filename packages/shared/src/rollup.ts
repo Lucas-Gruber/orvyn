@@ -27,14 +27,14 @@ export const rollupInput = z
   .strict();
 export type RollupConfig = z.infer<typeof rollupInput>;
 
-// Rollups aggregate local fields on directly related records. Reject external
-// dependencies so a target-only change is covered by that record's revision.
+// Numeric rollup targets are validated against the actor's two-step catalog by
+// the API. Formula targets must still depend only on their local scalar fields.
 export function rollupTargetSupported(
   property: Property,
   properties: Property[],
   aggregation: string,
 ) {
-  if (["Files", "Relation", "Rollup"].includes(property.type)) return false;
+  if (["Files", "Relation"].includes(property.type)) return false;
   const seen = new Set<string>();
   function visit(n: FormulaNode): boolean {
     if (n.kind === "property") {

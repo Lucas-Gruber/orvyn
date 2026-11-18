@@ -75,6 +75,23 @@ export async function transaction<T>(fn: (c: PoolClient) => Promise<T>) {
     c.release();
   }
 }
+// Read routes compile actor-authorized schemas and values from one snapshot.
+// Their callbacks have no external side effects and can retry a concurrent lock.
+export async function readSnapshot<T>(fn: (c: PoolClient) => Promise<T>) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await transaction(async (c) => {
+        await c.query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ");
+        // These interactive reads contain bounded, nested calculated fields.
+        // Avoid LLVM compilation pauses when planner estimates grow with data.
+        await c.query("SET LOCAL jit=off");
+        return fn(c);
+      });
+    } catch (error: any) {
+      if (error.code !== "40001" || attempt >= 2) throw error;
+    }
+  }
+}
 export async function audit(
   c: PoolClient,
   uid: string | null,

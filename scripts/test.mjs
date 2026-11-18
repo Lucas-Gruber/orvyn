@@ -151,6 +151,7 @@ try {
           "tests/reciprocal-relations.test.mjs",
           "tests/database-formulas.test.mjs",
           "tests/database-rollups.test.mjs",
+          "tests/multi-hop-rollups.test.mjs",
           "tests/database-templates.test.mjs",
           "tests/database-ux.test.mjs",
           "tests/database-drafts.test.mjs",

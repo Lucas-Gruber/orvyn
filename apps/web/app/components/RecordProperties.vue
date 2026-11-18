@@ -28,6 +28,7 @@ const props = defineProps<{
   saving = ref(false),
   denied = ref(false);
 let disposed = false,
+  pollTimer: ReturnType<typeof setInterval> | undefined,
   generation = 0,
   job: Promise<void> | undefined;
 const displayed = computed(() =>
@@ -60,6 +61,7 @@ async function load() {
     events.watchRecords([props.recordId], {
       relationProperties: data.relationProperties,
       fingerprint: data.fingerprint,
+      requiresPolling: data.requiresPolling,
     });
     const directory = await $fetch<any[]>(
       `/api/v1/spaces/${data.database.spaceId}/directory`,
@@ -190,8 +192,13 @@ function beforeUnload(event: BeforeUnloadEvent) {
 onMounted(() => {
   void load();
   window.addEventListener("beforeunload", beforeUnload);
+  pollTimer = setInterval(() => {
+    if (events.polling.value && !saving.value && !loading.value && !disposed)
+      void load();
+  }, 5000);
 });
 onBeforeUnmount(() => {
+  clearInterval(pollTimer);
   disposed = true;
   generation++;
   window.removeEventListener("beforeunload", beforeUnload);

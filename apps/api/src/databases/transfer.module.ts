@@ -31,7 +31,13 @@ import {
   orderedViewProperties,
 } from "@orvyn/shared";
 import { db, fail, user, hash } from "../runtime.js";
-import { transaction, audit, origin, rateLimit } from "../auth/security.js";
+import {
+  transaction,
+  audit,
+  origin,
+  rateLimit,
+  readSnapshot,
+} from "../auth/security.js";
 import { newPageParent } from "../permissions/access.js";
 import {
   database,
@@ -322,7 +328,7 @@ class TransferController {
     format: "csv" | "json",
     safe: boolean,
   ) {
-    return transaction(async (c) => {
+    return readSnapshot(async (c) => {
       await c.query(
         "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY",
       );

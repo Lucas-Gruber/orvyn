@@ -276,7 +276,7 @@ test("rollups aggregate current readable targets, local formulas, nulls and uniq
   }
 });
 
-test("rollup configuration validates compatible target scope/permissions, blocks external chains, preserves versions and hides unavailable target schemas", async () => {
+test("rollup configuration validates compatible target scope/permissions, blocks externally dependent formulas, preserves versions and hides unavailable target schemas", async () => {
   const db = new Pool({ connectionString: process.env.DATABASE_URL });
   try {
     const f = await fixture(db),

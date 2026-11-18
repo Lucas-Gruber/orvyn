@@ -33,7 +33,7 @@ Work through these areas in order, preserving working features and committing/pu
    - [x] Per-view property order/visibility with header drag, keyboard movement, export ordering and template ID remapping.
    - [x] Cross-space relations and direct rollups with independent target permissions, searchable database selection and live access refresh.
    - [x] Two-way relation properties with atomic mirror writes, independent record permissions, self-links and template/import support.
-   - [ ] Multi-hop rollups.
+   - [x] Rollups across two relation steps, with independent permissions, consistent snapshots and live dependency refresh.
 4. Search
    - [x] Indexed title/document full-text search with excerpts, space/type filters, ranked pagination and current access checks.
    - [ ] Search database property values, tags and additional metadata.

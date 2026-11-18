@@ -174,7 +174,8 @@ onBeforeUnmount(() => {
     <p v-if="error" role="alert" class="error">{{ error }}</p>
     <p class="rollup-help">
       Calculates from records you can currently read. Numbers and local numeric
-      formulas support sums and averages.
+      formulas support sums and averages. A related rollup can be used for a
+      calculation across two relation steps.
     </p>
   </div>
 </template>

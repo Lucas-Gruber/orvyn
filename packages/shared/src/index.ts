@@ -201,3 +201,5 @@ export type { RollupConfig } from "./rollup.js";
 export { cloneDatabaseSchema } from "./database-templates.js";
 export type { TemplateView } from "./database-templates.js";
 export { orderedViewProperties, reorderPropertyIds } from "./view-layout.js";
+export { rollupDependencyState } from "./rollup-dependencies.js";
+export type { RollupDependencySummary } from "./rollup-dependencies.js";

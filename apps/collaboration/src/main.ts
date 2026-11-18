@@ -7,7 +7,7 @@ import {
 import { Redis as RedisExtension } from "@hocuspocus/extension-redis";
 import { Redis as RedisClient } from "ioredis";
 import { Pool, type PoolClient } from "pg";
-import { databaseFingerprint } from "@orvyn/shared";
+import { databaseFingerprint, rollupDependencyState } from "@orvyn/shared";
 import { authenticateCookie } from "@orvyn/auth";
 import {
   documentToYDoc,
@@ -28,6 +28,10 @@ type Identity = {
   notifiedRank: number;
   relationSignatures: string;
   relationProperties: string[] | null;
+  polling: boolean;
+  supportsPolling: boolean;
+  lastPoll: number;
+  watchGeneration: number;
 };
 const db = new Pool({ connectionString: process.env.DATABASE_URL });
 const live = new Set<Connection<Identity>>();
@@ -146,12 +150,16 @@ function guardOutbound(connection: Connection<Identity>) {
       });
   };
 }
-async function relationSnapshot(connection: Connection<Identity>) {
+async function relationSnapshot(
+  connection: Connection<Identity>,
+  skipDependencies = false,
+) {
   if (!connection.context.visibleRecords.size)
-    return { signature: "", fingerprint: null };
+    return { signature: "", fingerprint: null, polling: false };
   const row = (
     await db.query(
       `SELECT d.schema_version,
+    CASE WHEN $5::boolean THEN '[]'::jsonb ELSE (SELECT coalesce(jsonb_agg(jsonb_build_object('pageId',r.page_id)||orvyn_rollup_watch_summary(d.page_id,r.page_id,$4::uuid[],$3::uuid)),'[]'::jsonb) FROM database_records r WHERE r.database_id=d.page_id AND r.page_id=ANY($2::uuid[]) AND orvyn_page_role(r.page_id,$3)>=10) END AS dependencies,
     (SELECT coalesce(jsonb_agg(jsonb_build_object('pageId',p.id,'version',r.version) ORDER BY p.id),'[]'::jsonb) FROM database_records r JOIN pages p ON p.id=r.page_id WHERE r.database_id=d.page_id AND r.page_id=ANY($2::uuid[]) AND orvyn_page_role(p.id,$3)>=10) AS records,
     (SELECT coalesce(jsonb_agg(jsonb_build_object('id',item.id,'revision',item.revision) ORDER BY item.id),'[]'::jsonb) FROM (
       SELECT DISTINCT target.id,concat_ws(':',target.version,target.title_version,target.appearance_version,tr.version,target_database.schema_version) AS revision
@@ -166,17 +174,26 @@ async function relationSnapshot(connection: Connection<Identity>) {
         [...connection.context.visibleRecords],
         connection.context.userId,
         connection.context.relationProperties,
+        skipDependencies,
       ],
     )
   ).rows[0];
-  if (!row) return { signature: "", fingerprint: null };
+  if (!row) return { signature: "", fingerprint: null, polling: false };
+  const dependencies = skipDependencies
+    ? { token: "poll", polling: true }
+    : rollupDependencyState(row.dependencies);
   return {
-    signature: row.targets.length ? JSON.stringify(row.targets) : "",
+    signature:
+      row.targets.length || dependencies.token
+        ? JSON.stringify([row.targets, dependencies.token || null])
+        : "",
+    polling: dependencies.polling,
     fingerprint: databaseFingerprint(
       row.schema_version,
       row.records,
       row.targets,
       connection.context.relationProperties || [],
+      dependencies.token,
     ),
   };
 }
@@ -193,9 +210,22 @@ async function revalidate() {
             connection.context,
             connection.document.name,
           );
-          const { signature } = await relationSnapshot(connection);
+          const { signature } = await relationSnapshot(
+            connection,
+            connection.context.polling,
+          );
           if (signature !== connection.context.relationSignatures) {
             connection.context.relationSignatures = signature;
+            connection.sendStateless(
+              JSON.stringify({ type: "database-changed" }),
+            );
+          }
+          if (
+            connection.context.polling &&
+            !connection.context.supportsPolling &&
+            Date.now() - connection.context.lastPoll >= 5000
+          ) {
+            connection.context.lastPoll = Date.now();
             connection.sendStateless(
               JSON.stringify({ type: "database-changed" }),
             );
@@ -255,6 +285,10 @@ const server = new Server<Identity>({
       notifiedRank: p.rows[0].rank,
       relationSignatures: "",
       relationProperties: null,
+      polling: false,
+      supportsPolling: false,
+      lastPoll: 0,
+      watchGeneration: 0,
     };
   },
   async connected({ connection }) {
@@ -409,6 +443,16 @@ const server = new Server<Identity>({
     }
     if (data.type !== "watch-records") return;
     if (
+      data.supportsPolling !== undefined &&
+      typeof data.supportsPolling !== "boolean"
+    )
+      deny();
+    if (
+      data.watchId !== undefined &&
+      (!Number.isSafeInteger(data.watchId) || data.watchId < 0)
+    )
+      deny();
+    if (
       !Array.isArray(data.recordIds) ||
       data.recordIds.length > 2000 ||
       data.recordIds.some(
@@ -439,7 +483,8 @@ const server = new Server<Identity>({
         !/^[a-f0-9]{16}$/.test(data.fingerprint))
     )
       deny();
-    connection.context.relationProperties =
+    const generation = ++connection.context.watchGeneration;
+    const relationProperties =
       data.relationProperties === undefined
         ? null
         : [...new Set<string>(data.relationProperties)];
@@ -448,11 +493,17 @@ const server = new Server<Identity>({
       "SELECT r.page_id FROM database_records r WHERE r.database_id=$1 AND r.page_id=ANY($2::uuid[]) AND orvyn_page_role(r.page_id,$3)>=10",
       [documentName, ids, connection.context.userId],
     );
+    if (generation !== connection.context.watchGeneration) return;
+    connection.context.relationProperties = relationProperties;
     connection.context.visibleRecords = new Set(
       rows.rows.map((r) => r.page_id),
     );
     const snapshot = await relationSnapshot(connection);
+    if (generation !== connection.context.watchGeneration) return;
     connection.context.relationSignatures = snapshot.signature;
+    connection.context.polling = snapshot.polling;
+    connection.context.supportsPolling = data.supportsPolling === true;
+    connection.context.lastPoll = Date.now();
     if (
       data.fingerprint &&
       snapshot.fingerprint &&
@@ -462,7 +513,12 @@ const server = new Server<Identity>({
     if (rows.rows.length !== ids.length)
       connection.sendStateless(JSON.stringify({ type: "database-changed" }));
     connection.sendStateless(
-      JSON.stringify({ type: "records-watched", count: rows.rows.length }),
+      JSON.stringify({
+        type: "records-watched",
+        count: rows.rows.length,
+        requiresPolling: snapshot.polling,
+        watchId: data.watchId,
+      }),
     );
   },
   async beforeHandleAwareness({ states, removedClients, awareness, context }) {

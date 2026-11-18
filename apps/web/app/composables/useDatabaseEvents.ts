@@ -2,22 +2,41 @@ import { HocuspocusProvider } from "@hocuspocus/provider";
 import * as Y from "yjs";
 export function useDatabaseEvents(id: string, changed: () => void) {
   const live = ref(false),
+    polling = ref(false),
     denied = ref(false),
     document = new Y.Doc();
   let provider: HocuspocusProvider | undefined;
   let watchedIds: string[] = [],
+    watchId = 0,
     watchedScope:
-      { relationProperties: string[]; fingerprint: string } | undefined;
+      | {
+          relationProperties: string[];
+          fingerprint: string;
+          requiresPolling?: boolean;
+        }
+      | undefined;
   const config = useRuntimeConfig();
   function watchRecords(
     ids: string[],
-    scope?: { relationProperties: string[]; fingerprint: string },
+    scope?: {
+      relationProperties: string[];
+      fingerprint: string;
+      requiresPolling?: boolean;
+    },
   ) {
     watchedIds = ids;
     watchedScope = scope;
+    const request = ++watchId;
+    if (scope) polling.value = scope.requiresPolling === true;
     if (provider?.isAuthenticated)
       provider.sendStateless(
-        JSON.stringify({ type: "watch-records", recordIds: ids, ...scope }),
+        JSON.stringify({
+          type: "watch-records",
+          recordIds: ids,
+          ...scope,
+          supportsPolling: true,
+          watchId: request,
+        }),
       );
   }
   onMounted(() => {
@@ -48,11 +67,13 @@ export function useDatabaseEvents(id: string, changed: () => void) {
       },
       onStateless({ payload }) {
         try {
+          const message = JSON.parse(payload);
           if (
-            ["database-changed", "permissions"].includes(
-              JSON.parse(payload).type,
-            )
+            message.type === "records-watched" &&
+            (message.watchId === undefined || message.watchId === watchId)
           )
+            polling.value = message.requiresPolling === true;
+          if (["database-changed", "permissions"].includes(message.type))
             changed();
         } catch {}
       },
@@ -74,6 +95,7 @@ export function useDatabaseEvents(id: string, changed: () => void) {
   });
   return {
     live,
+    polling,
     denied,
     watchRecords,
     reconnect() {

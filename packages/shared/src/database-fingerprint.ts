@@ -5,6 +5,7 @@ export function databaseFingerprint(
   records: { pageId: string; version: number }[],
   targets: { id: string; revision?: string }[],
   properties: string[],
+  dependencyToken?: string,
 ) {
   const unique = new Map(
     targets.map((target) => [target.id, target.revision || ""]),
@@ -18,6 +19,7 @@ export function databaseFingerprint(
       ),
     [...unique].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
     [...properties].sort(),
+    dependencyToken || null,
   ]);
   let a = 2166136261,
     b = 5381;
