@@ -182,7 +182,7 @@ test("Chromium: handles select/reorder multiple blocks, native drag, duplicate h
     page = await session(owner);
     await page.goto(base + pageLink(source.id));
     const doc = page.getByRole("textbox", { name: "Document", exact: true }),
-      handles = doc.getByRole("button", { name: "Block actions", exact: true }),
+      handles = doc.locator(":scope > .block-handle-anchor > .block-handle"),
       menu = page.getByRole("menu", { name: "Block actions", exact: true }),
       selected = doc.locator(":scope > .orvyn-block-selected");
     await expect(doc).toBeEditable();

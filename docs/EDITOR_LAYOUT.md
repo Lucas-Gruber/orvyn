@@ -4,7 +4,7 @@ Use `/2 columns` or `/3 columns` to create balanced, editable columns. They cont
 
 Drag the divider between columns to resize the adjacent pair. Each column retains at least 15% of the layout width. Focus a divider and use Left/Right for 2% steps, Shift Left/Right for 10% steps, or Home/End for the limits. Double-click a divider or choose Equal widths to balance the layout again. Escape or pointer cancellation abandons an active gesture. A drag previews locally and commits one undoable document change on release; remote width changes cancel an unfinished local gesture rather than overwriting the remote layout. Content edits continue normally during resizing.
 
-On screens up to 760px wide, columns stack in their original reading order and resizing controls disappear. Saved proportions return on wider screens. Empty columns remain editable. Drag-based restructuring is not implemented yet.
+On screens up to 760px wide, columns stack in their original reading order and resizing controls disappear. Saved proportions return on wider screens. Empty columns remain editable. Individual blocks can be rearranged between columns and other containers with their grips or Move to…; see BLOCK_CONTROLS.md.
 
 Selecting text shows a floating toolbar for bold, italic, underline, strikethrough, internal links and clearing formatting. It preserves the selection when its buttons are clicked and remains usable while its own controls have focus. It is hidden in read-only documents and code blocks. The existing top toolbar remains available for other editing operations.
 

@@ -10,7 +10,7 @@ Work through these areas in order, preserving working features and committing/pu
    - [x] Opt-in YouTube/Vimeo/Loom video embeds.
    - [x] Two/three-column layouts and a floating selection formatting toolbar.
    - [x] Persistent column proportions with pointer/keyboard resizing, cancellation, collaboration and responsive stacking.
-   - [ ] Nested block selection and restructuring across containers.
+   - [x] Nested block selection and restructuring between columns, callouts, quotes, toggle bodies and the document.
    - [x] Whole document-block selection, movement, drag handles, duplication and deletion.
    - [x] Page/space emoji icons and preset covers; private image covers for pages.
    - [x] Folders, hierarchy dragging and keyboard reorder/nest/outdent.

@@ -240,6 +240,7 @@ export {
   selectedBlocks,
   moveBlocks,
   blockAction,
+  blockMoveTargets,
 } from "./block-controls.js";
 export {
   CalloutBlock,

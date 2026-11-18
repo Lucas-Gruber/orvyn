@@ -193,6 +193,9 @@ onBeforeUnmount(() => {
   min-height: 36px;
   padding: 4px 0;
 }
+.columns-content [data-orvyn-column] + [data-orvyn-column] {
+  padding-left: 20px;
+}
 .block-editor
   .tiptap
   [data-orvyn-column]
@@ -276,7 +279,7 @@ onBeforeUnmount(() => {
     grid-template-columns: 1fr !important;
     gap: 12px;
   }
-  [data-orvyn-column] + [data-orvyn-column] {
+  .columns-content [data-orvyn-column] + [data-orvyn-column] {
     border-top: 1px solid var(--line-soft);
     padding: 14px 0 0;
   }

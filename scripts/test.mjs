@@ -169,6 +169,7 @@ try {
           "tests/editor-layout.test.mjs",
           "tests/column-resizing.test.mjs",
           "tests/block-controls.test.mjs",
+          "tests/nested-blocks.test.mjs",
           "tests/appearance.test.mjs",
           "tests/editor-batching.test.mjs",
           "tests/hierarchy.test.mjs",

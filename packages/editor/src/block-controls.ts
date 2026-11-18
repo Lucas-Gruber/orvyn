@@ -17,9 +17,18 @@ export interface BlockRange {
   from: number;
   to: number;
 }
-export type BlockAction = "up" | "down" | "duplicate" | "delete";
+export type BlockAction = "up" | "down" | "out" | "duplicate" | "delete";
 
-// Only document children are reordered. Nested structures travel intact.
+function isBlockContainer(node: Node) {
+  return [
+    "doc",
+    "orvynColumn",
+    "orvynCallout",
+    "orvynToggleContent",
+    "blockquote",
+  ].includes(node.type.name);
+}
+// A range contains whole siblings in the nearest editable block container.
 export function blockRange(
   doc: Node,
   from: number,
@@ -33,13 +42,23 @@ export function blockRange(
     to > doc.content.size
   )
     return null;
+  const $from = doc.resolve(from);
+  let depth = $from.depth;
+  while (
+    depth > 0 &&
+    (!isBlockContainer($from.node(depth)) || to > $from.end(depth))
+  )
+    depth--;
+  const parent = $from.node(depth),
+    start = $from.start(depth);
   let first = -1,
     last = -1;
-  doc.forEach((node, pos) => {
+  parent.forEach((node, offset) => {
+    const pos = start + offset;
     const end = pos + node.nodeSize;
     if (
       from === to
-        ? from >= pos && (from < end || end === doc.content.size)
+        ? from >= pos && (from < end || end === $from.end(depth))
         : from < end && to > pos
     ) {
       if (first < 0) first = pos;
@@ -90,7 +109,7 @@ export class BlockSelection extends Selection {
   }
   static create(doc: Node, range: BlockRange) {
     if (!exactRange(doc, range))
-      throw new RangeError("Whole document blocks required");
+      throw new RangeError("Whole sibling blocks required");
     return new BlockSelection(doc.resolve(range.from), doc.resolve(range.to));
   }
   eq(other: Selection) {
@@ -137,34 +156,55 @@ export function moveBlocks(
     !Number.isInteger(destination) ||
     destination < 0 ||
     destination > doc.content.size ||
-    doc.resolve(destination).depth !== 0 ||
     (destination >= range.from && destination <= range.to)
   )
     return null;
-  const size = range.to - range.from,
-    fragment = doc.slice(range.from, range.to).content,
-    tr = state.tr.insert(destination, fragment);
-  if (destination < range.from) tr.delete(range.from + size, range.to + size);
-  else tr.delete(range.from, range.to);
-  const from = destination < range.from ? destination : destination - size;
+  const target = doc.resolve(destination),
+    source = doc.resolve(range.from),
+    fragment = doc.slice(range.from, range.to).content;
+  if (
+    !isBlockContainer(target.parent) ||
+    !target.parent.canReplace(target.index(), target.index(), fragment)
+  )
+    return null;
+  const tr = state.tr.insert(destination, fragment);
+  const fromSource = tr.mapping.map(range.from, 1),
+    toSource = tr.mapping.map(range.to, -1);
+  if (range.from === source.start() && range.to === source.end())
+    tr.replaceWith(
+      fromSource,
+      toSource,
+      state.schema.nodes.paragraph!.create(),
+    );
+  else tr.delete(fromSource, toSource);
+  const from = tr.mapping.map(destination, -1);
   return closeHistory(tr)
     .setMeta("orvyn-block-action", true)
-    .setSelection(BlockSelection.create(tr.doc, { from, to: from + size }))
+    .setSelection(
+      BlockSelection.create(tr.doc, { from, to: from + fragment.size }),
+    )
     .scrollIntoView();
 }
 export function blockAction(state: EditorState, action: BlockAction) {
   const range = selectedBlocks(state);
   if (!range) return null;
+  if (action === "out") {
+    const source = state.doc.resolve(range.from);
+    for (let depth = source.depth; depth > 0; depth--)
+      if (isBlockContainer(source.node(depth - 1)))
+        return moveBlocks(state, range, source.after(depth));
+    return null;
+  }
   if (action === "up" || action === "down") {
-    const index = state.doc
-      .resolve(action === "up" ? range.from : range.to)
-      .index(0);
-    if (action === "up" ? index === 0 : index === state.doc.childCount)
+    const boundary = state.doc.resolve(action === "up" ? range.from : range.to),
+      index = boundary.index(),
+      parent = boundary.parent;
+    if (action === "up" ? index === 0 : index === parent.childCount)
       return null;
     const destination =
       action === "up"
-        ? range.from - state.doc.child(index - 1).nodeSize
-        : range.to + state.doc.child(index).nodeSize;
+        ? range.from - parent.child(index - 1).nodeSize
+        : range.to + parent.child(index).nodeSize;
     return moveBlocks(state, range, destination);
   }
   const tr = state.tr;
@@ -177,12 +217,55 @@ export function blockAction(state: EditorState, action: BlockAction) {
       }),
     );
   } else {
-    tr.delete(range.from, range.to);
+    const source = state.doc.resolve(range.from);
+    if (range.from === source.start() && range.to === source.end())
+      tr.replaceWith(
+        range.from,
+        range.to,
+        state.schema.nodes.paragraph!.create(),
+      );
+    else tr.delete(range.from, range.to);
     tr.setSelection(
       Selection.near(tr.doc.resolve(Math.min(range.from, tr.doc.content.size))),
     );
   }
   return closeHistory(tr).setMeta("orvyn-block-action", true).scrollIntoView();
+}
+
+export function blockMoveTargets(state: EditorState) {
+  const range = selectedBlocks(state);
+  if (!range) return [];
+  const fragment = state.doc.slice(range.from, range.to).content;
+  const targets: { position: number; label: string }[] = [];
+  function add(node: Node, position: number, label: string) {
+    if (
+      !(position >= range!.from && position <= range!.to) &&
+      node.canReplace(node.childCount, node.childCount, fragment)
+    )
+      targets.push({ position, label });
+  }
+  add(state.doc, state.doc.content.size, "Page · after all blocks");
+  state.doc.descendants((node, position, parent, index) => {
+    if (!isBlockContainer(node)) return;
+    const name =
+      node.type.name === "orvynColumn"
+        ? `Column ${index + 1}`
+        : node.type.name === "orvynCallout"
+          ? "Callout"
+          : node.type.name === "blockquote"
+            ? "Quote"
+            : "Toggle";
+    const text = (
+      node.type.name === "orvynToggleContent"
+        ? parent?.firstChild?.textContent
+        : node.firstChild?.textContent
+    )
+      ?.replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 60);
+    add(node, position + node.nodeSize - 1, `${name} · ${text || "Empty"}`);
+  });
+  return targets;
 }
 
 interface DragState {
@@ -194,10 +277,30 @@ const dragType = "application/x-orvyn-blocks";
 function dropBoundary(view: EditorView, x: number, y: number) {
   const rect = view.dom.getBoundingClientRect();
   if (x < rect.left - 40 || x > rect.right + 40) return null;
-  let boundary = view.state.doc.content.size,
+  let parent = view.state.doc,
+    start = 0;
+  view.state.doc.descendants((node, position) => {
+    if (!isBlockContainer(node)) return;
+    const dom = view.nodeDOM(position);
+    if (!(dom instanceof HTMLElement)) return;
+    const box = dom.getBoundingClientRect();
+    if (
+      box.width &&
+      box.height &&
+      x >= box.left &&
+      x <= box.right &&
+      y >= box.top &&
+      y <= box.bottom
+    ) {
+      parent = node;
+      start = position + 1;
+    }
+  });
+  let boundary = start + parent.content.size,
     found = false;
-  view.state.doc.forEach((node, pos) => {
+  parent.forEach((node, offset) => {
     if (found) return;
+    const pos = start + offset;
     const dom = view.nodeDOM(pos);
     if (!(dom instanceof HTMLElement)) return;
     const block = dom.getBoundingClientRect();
@@ -214,6 +317,7 @@ declare module "@tiptap/core" {
     orvynBlockControls: {
       selectBlocks: (range?: BlockRange, extend?: boolean) => ReturnType;
       blockAction: (action: BlockAction) => ReturnType;
+      moveBlocksTo: (position: number) => ReturnType;
     };
   }
 }
@@ -233,10 +337,12 @@ export const BlockControls = Extension.create<{
           let next = range || selectedBlocks(state);
           if (!next || !exactRange(state.doc, next)) return false;
           if (extend && state.selection instanceof BlockSelection)
-            next = {
-              from: Math.min(next.from, state.selection.from),
-              to: Math.max(next.to, state.selection.to),
-            };
+            next = blockRange(
+              state.doc,
+              Math.min(next.from, state.selection.from),
+              Math.max(next.to, state.selection.to),
+            );
+          if (!next) return false;
           if (dispatch) tr.setSelection(BlockSelection.create(tr.doc, next));
           return true;
         },
@@ -245,6 +351,16 @@ export const BlockControls = Extension.create<{
         ({ state, dispatch }) => {
           if (!this.editor.isEditable) return false;
           const tr = blockAction(state, action);
+          if (!tr) return false;
+          if (dispatch) dispatch(tr);
+          return true;
+        },
+      moveBlocksTo:
+        (position) =>
+        ({ state, dispatch }) => {
+          if (!this.editor.isEditable) return false;
+          const range = selectedBlocks(state),
+            tr = range && moveBlocks(state, range, position);
           if (!tr) return false;
           if (dispatch) dispatch(tr);
           return true;
@@ -258,6 +374,7 @@ export const BlockControls = Extension.create<{
       "Mod-Shift-Space": () => this.editor.commands.selectBlocks(),
       "Alt-Shift-ArrowUp": () => this.editor.commands.blockAction("up"),
       "Alt-Shift-ArrowDown": () => this.editor.commands.blockAction("down"),
+      "Alt-Shift-ArrowLeft": () => this.editor.commands.blockAction("out"),
       Backspace: () => selected() && this.editor.commands.blockAction("delete"),
       Delete: () => selected() && this.editor.commands.blockAction("delete"),
       Enter: () => {
@@ -318,9 +435,11 @@ export const BlockControls = Extension.create<{
             if (!editor.isEditable) return DecorationSet.empty;
             const decorations: Decoration[] = [],
               selection = state.selection;
-            state.doc.forEach((node, pos) => {
+            state.doc.descendants((node, pos, parent) => {
+              if (!parent || !isBlockContainer(parent)) return;
               const active =
                 selection instanceof BlockSelection &&
+                selection.$from.parent === parent &&
                 pos >= selection.from &&
                 pos < selection.to;
               if (active)
