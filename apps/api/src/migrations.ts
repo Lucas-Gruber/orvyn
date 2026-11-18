@@ -6,6 +6,7 @@ import { crossSpaceRelationMigration } from "./databases/cross-space-migration.j
 import { reciprocalRelationMigration } from "./databases/reciprocal-migration.js";
 import { multiHopRollupMigration } from "./databases/multi-hop-migration.js";
 import { propertySearchMigration } from "./property-search-migration.js";
+import { propertyConversionMigration } from "./databases/conversion-migration.js";
 export const migrations = [
   {
     version: 1,
@@ -629,6 +630,7 @@ END $$;`,
   { version: 37, sql: reciprocalRelationMigration },
   { version: 38, sql: multiHopRollupMigration },
   { version: 39, sql: propertySearchMigration },
+  { version: 40, sql: propertyConversionMigration },
 ] as const;
 
 export async function migrate(pool: Pool, target = migrations.at(-1)!.version) {

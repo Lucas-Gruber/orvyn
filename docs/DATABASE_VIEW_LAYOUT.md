@@ -30,4 +30,4 @@ These are additive JSON configuration fields and need no database migration. Upg
 
 `tests/database-column-widths.test.mjs` covers active-ID/type-limit/role/revision checks, independent views, template rebinding, delete/restore repair and unchanged record data. Chromium checks pointer previews with one commit on release, Escape/pointer cancellation, remote gesture cancellation, keyboard limits/reset/focus, double-click reset, live readers, per-view reload, mobile geometry, stale writes and retained failed cell drafts. Existing header drag/keyboard tests guard the separation of move and resize controls.
 
-Property type conversion remains separate unfinished work.
+Owner-reviewed scalar type conversion and its view/width repairs are described in PROPERTY_CONVERSION.md. Selection/reference/computed conversion remains unfinished.

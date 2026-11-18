@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Property } from "@orvyn/shared";
+import { convertiblePropertyTypes, type Property } from "@orvyn/shared";
 import { propertyIcon } from "../utils/databaseFields";
 type Option = { id?: string; label: string; color: string };
 const props = defineProps<{
@@ -29,6 +29,8 @@ const name = ref(""),
   confirmRemoval = ref(false),
   deleting = ref(false);
 const uid = useId();
+const conversion = ref<{ open: (id: string) => Promise<void> }>();
+let conversionField = "";
 let generation = 0;
 function clearUnavailable(e: any) {
   if (![401, 404].includes(e.status || e.statusCode)) return;
@@ -260,6 +262,25 @@ function create() {
   visible.value = false;
   emit("create");
 }
+async function changeType() {
+  if (!selected.value || dirty.value || saving.value) return;
+  try {
+    await props.beforeChange();
+    conversionField = selected.value.id;
+    visible.value = false;
+    await nextTick();
+    await conversion.value?.open(conversionField);
+  } catch (e: any) {
+    visible.value = true;
+    error.value =
+      e.data?.message ||
+      e.message ||
+      "Save or discard pending changes before changing the field type.";
+  }
+}
+function conversionClosed() {
+  void open(conversionField);
+}
 defineExpose({ open });
 </script>
 <template>
@@ -334,6 +355,30 @@ defineExpose({ open });
               <AppIcon :name="propertyIcon(selected)" :size="15" />{{
                 selected.type
               }}
+            </p>
+            <button
+              v-if="
+                metadata.accessRank >= 50 &&
+                (convertiblePropertyTypes as readonly string[]).includes(
+                  selected.type,
+                )
+              "
+              type="button"
+              class="ghost"
+              :disabled="dirty"
+              @click="changeType"
+            >
+              <AppIcon name="refresh" :size="14" />Change type…
+            </button>
+            <p
+              v-else-if="
+                (convertiblePropertyTypes as readonly string[]).includes(
+                  selected.type,
+                )
+              "
+              class="hint"
+            >
+              The space owner can change this field's type.
             </p>
             <p v-if="selected.config.reciprocalPropertyId" class="hint">
               This is a two-way relation. Adding or removing links in either
@@ -541,6 +586,13 @@ defineExpose({ open });
       </div></UiDialog
     >
   </UiDialog>
+  <DatabasePropertyConversion
+    ref="conversion"
+    :database-id="databaseId"
+    :before-change="beforeChange"
+    @changed="emit('changed')"
+    @closed="conversionClosed"
+  />
 </template>
 <style scoped>
 .property-manager-layout {

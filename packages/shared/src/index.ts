@@ -210,6 +210,8 @@ export type { TemplateView } from "./database-templates.js";
 export { orderedViewProperties, reorderPropertyIds } from "./view-layout.js";
 export { rollupDependencyState } from "./rollup-dependencies.js";
 export type { RollupDependencySummary } from "./rollup-dependencies.js";
+export { convertiblePropertyTypes } from "./property-conversion.js";
+export type { ConvertiblePropertyType } from "./property-conversion.js";
 export {
   databaseColumnMaxWidth,
   databaseColumnMinWidth,

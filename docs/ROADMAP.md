@@ -16,6 +16,8 @@ Work through these areas in order, preserving working features and committing/pu
    - [x] Folders, hierarchy dragging and keyboard reorder/nest/outdent.
    - [x] Empty-heading caret/level hints, icon/description slash menu, consistent modal spacing and discoverable keyboard shortcuts.
    - [x] Headings H1–H4 across Markdown, slash commands, formatting, shortcuts, outlines and permanent links.
+   - [ ] Clear editor tables with cell/row/column menus, resizing and unobtrusive empty cells.
+   - [ ] Pointer cursors for text links in both editable and read-only documents.
 2. Collaboration
    - [x] Page discussion threads, replies, author editing, moderation and resolve/reopen.
    - [x] Text-anchored comments with relative positions and changed/deleted text handling.
@@ -35,13 +37,15 @@ Work through these areas in order, preserving working features and committing/pu
    - [x] Two-way relation properties with atomic mirror writes, independent record permissions, self-links and template/import support.
    - [x] Rollups across two relation steps, with independent permissions, consistent snapshots and live dependency refresh.
    - [x] Saved table column widths with pointer/keyboard resizing, cancellation, live readers, template remapping and conflict-safe view updates.
-   - [ ] Property type conversion with concrete previews and retained originals.
+   - [x] Owner-reviewed scalar type conversion with signed snapshots, retained originals and restoration that preserves newer edits.
+   - [ ] Additional conversion types, larger batches and type-history pagination.
+   - [ ] Read-only Kanban cards with first-image covers and improved card movement.
 4. Search
    - [x] Indexed title/document full-text search with excerpts, space/type filters, ranked pagination and current access checks.
    - [x] Search stored scalar fields, option labels/tags and configured date/time metadata, with explicit scopes and matching-field previews.
    - [ ] Search computed/reference fields and identity metadata without copying actor-dependent or inaccessible content.
 5. Whiteboards
-   - [ ] Drawing/diagram editor, persistence, document embedding and collaboration.
+   - [ ] Excalidraw-like drawing/diagram editor, persistence, direct document embedding and collaboration.
 6. Sharing
    - [ ] Explicit public publication, view/record scope and hierarchy preview.
    - [ ] Revocable, expiring and optional password-protected links.
