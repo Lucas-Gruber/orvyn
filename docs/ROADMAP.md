@@ -34,7 +34,7 @@ Work through these areas in order, preserving working features and committing/pu
    - [x] Cross-space relations and direct rollups with independent target permissions, searchable database selection and live access refresh.
    - [x] Two-way relation properties with atomic mirror writes, independent record permissions, self-links and template/import support.
    - [x] Rollups across two relation steps, with independent permissions, consistent snapshots and live dependency refresh.
-   - [ ] Saved table column widths with pointer/keyboard resizing and conflict-safe view updates.
+   - [x] Saved table column widths with pointer/keyboard resizing, cancellation, live readers, template remapping and conflict-safe view updates.
    - [ ] Property type conversion with concrete previews and retained originals.
 4. Search
    - [x] Indexed title/document full-text search with excerpts, space/type filters, ranked pagination and current access checks.

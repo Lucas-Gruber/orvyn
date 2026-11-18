@@ -10,6 +10,7 @@ import {
   type ViewConfig,
   type QueryInput,
   formulaPropertyType,
+  databaseColumnMinWidth,
 } from "@orvyn/shared";
 import { formulaConfig, formulaSql } from "./formula.js";
 import { loadRollupCatalog, rollupSql } from "./rollup.js";
@@ -262,6 +263,10 @@ export function checkedView(
   )
     fail(400, "Duplicate ordered property");
   for (const id of config.propertyOrder || []) find(id);
+  for (const [id, width] of Object.entries(config.propertyWidths || {})) {
+    if (width < databaseColumnMinWidth(find(id)))
+      fail(400, "This column is too narrow for its property type");
+  }
   if (
     config.groupBy &&
     !["Status", "Select"].includes(find(config.groupBy).type)

@@ -12,6 +12,8 @@ import {
   type RecordOpenMode,
   orderedViewProperties,
   reorderPropertyIds,
+  databaseColumnWidth,
+  databaseColumnDefaultWidth,
 } from "@orvyn/shared";
 import { pageLink } from "@orvyn/editor/links";
 import { copyText } from "../utils/clipboard";
@@ -527,6 +529,97 @@ async function preparePropertyChange(allowDrafts = false) {
 const columnDrag = ref<{ property: string; view: any } | null>(null),
   columnDrop = ref<{ property: string; after: boolean } | null>(null),
   columnBusy = ref(false);
+const widthPreview = ref<{ property: string; width: number } | null>(null);
+const widthRevision = computed(() =>
+  JSON.stringify([
+    currentView.value?.id,
+    currentView.value?.version,
+    metadata.value?.schemaVersion,
+    columns.value.map((property) => [property.id, property.type]),
+  ]),
+);
+watch(widthRevision, () => {
+  widthPreview.value = null;
+});
+function displayedColumnWidth(property: Property) {
+  return widthPreview.value?.property === property.id
+    ? widthPreview.value.width
+    : databaseColumnWidth(property, currentView.value?.config.propertyWidths);
+}
+const tableWidth = computed(() =>
+  columns.value.reduce(
+    (sum, property) => sum + displayedColumnWidth(property),
+    0,
+  ),
+);
+function previewColumnWidth(property: Property, width: number | null) {
+  if (width === null) {
+    if (widthPreview.value?.property === property.id) widthPreview.value = null;
+  } else widthPreview.value = { property: property.id, width };
+}
+async function saveColumnWidth(
+  property: Property,
+  width: number,
+  revision: string,
+) {
+  if (!canEdit.value || columnBusy.value || !currentView.value) {
+    widthPreview.value = null;
+    return;
+  }
+  if (revision !== widthRevision.value) {
+    widthPreview.value = null;
+    error.value = "This view changed. Try resizing the column again.";
+    return;
+  }
+  const view = currentView.value;
+  if (width === databaseColumnWidth(property, view.config.propertyWidths)) {
+    widthPreview.value = null;
+    return;
+  }
+  const config: ViewConfig = { ...view.config };
+  const widths = { ...config.propertyWidths };
+  if (width === databaseColumnDefaultWidth(property))
+    delete widths[property.id];
+  else widths[property.id] = width;
+  if (Object.keys(widths).length) config.propertyWidths = widths;
+  else delete config.propertyWidths;
+  columnBusy.value = true;
+  try {
+    await mutate(async () => {
+      if (
+        disposed ||
+        currentView.value?.id !== view.id ||
+        currentView.value?.version !== view.version
+      ) {
+        error.value =
+          "This view changed. Reload it before resizing columns again.";
+        if (!disposed) await load();
+        return;
+      }
+      const saved = await api("/views/" + view.id, "PATCH", {
+        name: view.name,
+        type: view.type,
+        version: view.version,
+        config,
+      });
+      const index =
+        metadata.value?.views.findIndex(
+          (candidate: any) => candidate.id === view.id,
+        ) ?? -1;
+      if (
+        !disposed &&
+        index >= 0 &&
+        metadata.value.views[index].version <= saved.version
+      )
+        metadata.value.views[index] = saved;
+      await load();
+      notice.value = "Column width saved";
+    }, true);
+  } finally {
+    columnBusy.value = false;
+    widthPreview.value = null;
+  }
+}
 const columnTransferType = "application/x-orvyn-column-order";
 function columnDragStart(event: DragEvent, property: Property) {
   if (
@@ -1470,7 +1563,14 @@ onBeforeUnmount(() => {
         class="database-table"
         :aria-busy="loading"
       >
-        <table>
+        <table :style="{ width: tableWidth + 'px' }">
+          <colgroup>
+            <col
+              v-for="property in columns"
+              :key="property.id"
+              :style="{ width: displayedColumnWidth(property) + 'px' }"
+            />
+          </colgroup>
           <thead>
             <tr>
               <th
@@ -1486,6 +1586,23 @@ onBeforeUnmount(() => {
                 @drop="columnDropAt($event, property)"
                 @dragend="clearColumnDrag"
               >
+                <DatabaseColumnResizer
+                  v-if="canEdit"
+                  :property="property"
+                  :width="displayedColumnWidth(property)"
+                  :revision="widthRevision"
+                  :disabled="
+                    columnBusy ||
+                    !!columnDrag ||
+                    busy ||
+                    (!!widthPreview && widthPreview.property !== property.id)
+                  "
+                  @preview="previewColumnWidth(property, $event)"
+                  @commit="
+                    (width, revision) =>
+                      saveColumnWidth(property, width, revision)
+                  "
+                />
                 <button
                   v-if="canEdit && property.type !== 'Title'"
                   type="button"
@@ -1519,6 +1636,7 @@ onBeforeUnmount(() => {
                   v-else-if="canEdit"
                   class="property-header-button"
                   :aria-label="'Edit ' + property.name + ' property'"
+                  :title="property.name"
                   @click="propertyManager?.open(property.id)"
                 >
                   <AppIcon :name="propertyIcon(property)" :size="14" />{{
@@ -2399,11 +2517,11 @@ onBeforeUnmount(() => {
 }
 .database-table thead th:has(.column-order-grip) {
   position: relative;
-  padding-right: 32px;
+  padding-right: 38px;
 }
 .column-order-grip {
   position: absolute;
-  right: 5px;
+  right: 12px;
   top: 50%;
   transform: translateY(-50%);
   display: grid;
@@ -2508,6 +2626,7 @@ onBeforeUnmount(() => {
 .database-table table {
   border-collapse: collapse;
   width: 100%;
+  table-layout: fixed;
 }
 .database-table th,
 .database-table td {
@@ -2784,6 +2903,7 @@ small {
   min-height: 70px;
 }
 .database-table th {
+  position: relative;
   font-size: 13px;
   font-weight: 500;
   color: var(--muted);
@@ -3234,6 +3354,29 @@ small {
 }
 .formula-header span {
   color: var(--accent);
+}
+.database-table th,
+.database-table td,
+.database-table td:first-child {
+  min-width: 0;
+  box-sizing: border-box;
+}
+.database-table td {
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.database-table input,
+.database-table select {
+  min-width: 0;
+  max-width: 100%;
+}
+.database-table .property-header-button,
+.database-table .formula-header,
+.database-table .database-column-label {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .database-notice {
   position: fixed;

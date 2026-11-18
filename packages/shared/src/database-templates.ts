@@ -89,6 +89,16 @@ export function cloneDatabaseSchema(
         ...(v.config.propertyOrder
           ? { propertyOrder: v.config.propertyOrder.map(local) }
           : {}),
+        ...(v.config.propertyWidths
+          ? {
+              propertyWidths: Object.fromEntries(
+                Object.entries(v.config.propertyWidths).map(([id, width]) => [
+                  local(id),
+                  width,
+                ]),
+              ),
+            }
+          : {}),
         groupBy: v.config.groupBy ? local(v.config.groupBy) : null,
         dateProperty: v.config.dateProperty
           ? local(v.config.dateProperty)

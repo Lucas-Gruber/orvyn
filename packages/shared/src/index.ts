@@ -98,6 +98,13 @@ export const viewConfigInput = z
     sorts: z.array(sortInput).max(3).default([]),
     visibleProperties: z.array(z.uuid()).max(50).default([]),
     propertyOrder: z.array(z.uuid()).max(50).optional(),
+    propertyWidths: z
+      .record(z.uuid(), z.number().int().min(100).max(960))
+      .refine(
+        (value) => Object.keys(value).length <= 50,
+        "Too many column widths",
+      )
+      .optional(),
     groupBy: z.uuid().nullable().default(null),
     dateProperty: z.uuid().nullable().default(null),
   })
@@ -203,3 +210,10 @@ export type { TemplateView } from "./database-templates.js";
 export { orderedViewProperties, reorderPropertyIds } from "./view-layout.js";
 export { rollupDependencyState } from "./rollup-dependencies.js";
 export type { RollupDependencySummary } from "./rollup-dependencies.js";
+export {
+  databaseColumnMaxWidth,
+  databaseColumnMinWidth,
+  databaseColumnDefaultWidth,
+  clampDatabaseColumnWidth,
+  databaseColumnWidth,
+} from "./column-widths.js";

@@ -153,6 +153,15 @@ export async function cleanViews(
               : previous.propertyOrder.filter((id) => id !== propertyId),
           }
         : {}),
+      ...(previous.propertyWidths && !removedOptions
+        ? {
+            propertyWidths: Object.fromEntries(
+              Object.entries(previous.propertyWidths).filter(
+                ([id]) => id !== propertyId,
+              ),
+            ),
+          }
+        : {}),
       groupBy:
         !removedOptions && previous.groupBy === propertyId
           ? null
