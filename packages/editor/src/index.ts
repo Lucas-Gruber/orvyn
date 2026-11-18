@@ -21,13 +21,13 @@ import { ImageBlock, FileBlock } from "./asset-blocks.js";
 import { PagePreviewBlock } from "./page-preview.js";
 import { VideoEmbedBlock } from "./video-embed.js";
 import { validVideo } from "./embed-model.js";
-import { ColumnsBlock, ColumnBlock } from "./columns.js";
+import { ColumnsBlock, ColumnBlock, validColumnWidths } from "./columns.js";
 import { BlockControls } from "./block-controls.js";
 import { PersonMention } from "./person-mention.js";
 import { validPersonId, documentPeople } from "./mention-model.js";
 import { CommentHighlights } from "./comment-highlights.js";
 const lowlight = createLowlight(common);
-export const documentSchemaVersion = 10;
+export const documentSchemaVersion = 11;
 export function editorExtensions(collaborative = false): AnyExtension[] {
   return [
     StarterKit.configure({
@@ -75,6 +75,12 @@ export function validateDocument(input: unknown) {
   const bounded = (n: any, depth: number) => {
     if (++nodes > 3000 || depth > 64)
       throw Error("Document structure limit exceeded");
+    if (
+      n.type.name === "orvynColumns" &&
+      n.attrs.widths !== null &&
+      !validColumnWidths(n.attrs.widths, n.childCount)
+    )
+      throw Error("Invalid layout column widths");
     if (n.type.name === "orvynPerson" && !validPersonId(n.attrs.userId))
       throw Error("Invalid person reference");
     if (n.type.name === "orvynDatabase") {
@@ -217,7 +223,12 @@ export { default as TaskItem } from "@tiptap/extension-task-item";
 export { TableKit } from "@tiptap/extension-table";
 
 export { DatabaseBlock } from "./database-node.js";
-export { ColumnsBlock, ColumnBlock } from "./columns.js";
+export {
+  ColumnsBlock,
+  ColumnBlock,
+  columnWidths,
+  resizeColumnPair,
+} from "./columns.js";
 export {
   CommentHighlights,
   type CommentHighlight,

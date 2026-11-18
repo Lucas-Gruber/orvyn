@@ -8,6 +8,8 @@ import {
   documentHeadings,
   pageLink,
   headingFromHash,
+  columnWidths,
+  resizeColumnPair,
 } from "../packages/editor/dist/index.js";
 import {
   parseVideoUrl,
@@ -455,4 +457,54 @@ test("columns preserve nested blocks and reject invalid column counts and standa
     ],
   ])
     assert.throws(() => validateDocument({ type: "doc", content }));
+});
+
+test("column widths round-trip through Yjs, bound adjacent resizing and reject malformed layouts", () => {
+  const layout = (widths) => ({
+    type: "doc",
+    content: [
+      {
+        type: "orvynColumns",
+        attrs: { widths },
+        content: [
+          { type: "orvynColumn", content: [{ type: "paragraph" }] },
+          { type: "orvynColumn", content: [{ type: "paragraph" }] },
+        ],
+      },
+    ],
+  });
+  const normalized = validateDocument(layout([6700, 3300]));
+  const ydoc = documentToYDoc(normalized);
+  try {
+    assert.deepEqual(yDocToDocument(ydoc), normalized);
+  } finally {
+    ydoc.destroy();
+  }
+  assert.equal(validateDocument(layout(null)).content[0].attrs.widths, null);
+  for (const invalid of [
+    [10000],
+    [5000, 5000, 0],
+    [0, 10000],
+    [1499, 8501],
+    [5000, 5001],
+    [5000.5, 4999.5],
+    ["5000", 5000],
+    "50%",
+    {},
+    [],
+  ])
+    assert.throws(
+      () => validateDocument(layout(invalid)),
+      /layout column widths/,
+    );
+  assert.deepEqual(columnWidths(null, 3), [3333, 3334, 3333]);
+  assert.deepEqual(
+    resizeColumnPair([3000, 4000, 3000], 0, 9900),
+    [5500, 1500, 3000],
+  );
+  assert.deepEqual(
+    resizeColumnPair([3000, 4000, 3000], 1, -10),
+    [3000, 1500, 5500],
+  );
+  assert.deepEqual(resizeColumnPair([5000, 5000], 0, NaN), [5000, 5000]);
 });

@@ -4,7 +4,7 @@ Hover a block to reveal its left-hand grip. Click for a keyboard-accessible menu
 
 `Ctrl/Cmd Shift Space` selects the current document block or expands a text selection to complete blocks. `Alt Shift Up/Down` moves the selection across an adjacent block. Delete/Backspace removes selected blocks, Escape returns to text editing, and Enter creates a paragraph after the selection. Copy/cut uses a closed ProseMirror slice containing whole blocks. Deleting the entire document retains the schema's empty paragraph.
 
-These controls reorder **top-level document children**. A list, table, callout, toggle or column layout moves as one unit with its nested content. Dragging individual nested items across containers, marquee selection, and column resizing/restructuring remain unimplemented. Ordinary nested text selection/editing remains available.
+These controls reorder **top-level document children**. A list, table, callout, toggle or column layout moves as one unit with its nested content. Dragging individual nested items across containers, marquee selection, and column restructuring remain unimplemented. Ordinary nested text selection/editing remains available. Column resizing is described in EDITOR_LAYOUT.md.
 
 Movement preserves block attributes, marks, file/database/page references and heading IDs. Duplication runs the editor's existing heading identity normalization, leaving the original target intact and generating new IDs for copies. Selected ranges and active drag ranges map through document transactions; invalidated ranges fall back or cancel. The drag payload is scoped to the originating editor. Drops inside the source range are no-ops. Server validation and edit permissions continue to govern document writes.
 
