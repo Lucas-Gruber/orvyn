@@ -23,7 +23,7 @@ async function search() {
   error.value = "";
   try {
     const result = await $fetch<any[]>("/api/v1/search", {
-      query: { q: query.value },
+      query: { q: query.value, scope: "title" },
     });
     if (request === generation && props.open) pages.value = result;
   } catch {

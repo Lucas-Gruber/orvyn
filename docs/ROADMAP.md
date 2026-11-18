@@ -30,7 +30,8 @@ Work through these areas in order, preserving working features and committing/pu
    - [x] Edit/delete/restore properties and selection options with stable IDs, retained record values, schema conflict checks and saved-view repair.
    - [ ] Reciprocal/cross-space relations and multi-hop rollups.
 4. Search
-   - [ ] Indexed document full-text search, tags/metadata and space/type filters.
+   - [x] Indexed title/document full-text search with excerpts, space/type filters, ranked pagination and current access checks.
+   - [ ] Search database property values, tags and additional metadata.
 5. Whiteboards
    - [ ] Drawing/diagram editor, persistence, document embedding and collaboration.
 6. Sharing

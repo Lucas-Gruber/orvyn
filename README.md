@@ -1,4 +1,5 @@
 # orvyn.
+
 Your knowledge. Organized.
 
 Orvyn is an early implementation of a self-hosted collaborative workspace. **Not production ready.** The complete product specification is in [docs/PRODUCT.md](docs/PRODUCT.md).
@@ -22,6 +23,8 @@ Private attachments: [docs/FILES.md](docs/FILES.md). Recovery evidence and remai
 Structured databases and tested view behavior: [docs/DATABASES.md](docs/DATABASES.md).
 
 Workspace navigation, themes, keyboard behavior and UI verification: [docs/UI.md](docs/UI.md).
+
+Indexed title/document search, space/type filters and current boundaries: [docs/SEARCH.md](docs/SEARCH.md).
 
 Slash commands and links to documents or specific headings: [docs/DOCUMENT_LINKS.md](docs/DOCUMENT_LINKS.md).
 

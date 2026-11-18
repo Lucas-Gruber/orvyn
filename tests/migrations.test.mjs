@@ -69,7 +69,35 @@ test("migrations install, upgrade existing records, serialize and roll back fail
         ],
       )
     ).rows[0].id;
+    await migrate(db, 33);
+    const beforeSearch = (
+      await db.query(
+        "SELECT version,updated_at::text AS modified FROM pages WHERE id=$1",
+        [oldPage],
+      )
+    ).rows[0];
     await Promise.all([migrate(db), migrate(db)]);
+    assert.deepEqual(
+      (
+        await db.query(
+          "SELECT version,updated_at::text AS modified FROM pages WHERE id=$1",
+          [oldPage],
+        )
+      ).rows[0],
+      beforeSearch,
+    );
+    const indexed = (
+      await db.query(
+        "SELECT body_text,search_vector@@orvyn_search_query('knowledge') AS matches FROM page_search WHERE page_id=$1",
+        [oldPage],
+      )
+    ).rows[0];
+    assert.equal(indexed.matches, true);
+    assert.ok(
+      indexed.body_text.includes(
+        "Preserved legacy knowledge <script> stays text",
+      ),
+    );
     assert.equal(
       (
         await db.query(

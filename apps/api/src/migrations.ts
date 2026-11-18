@@ -1,6 +1,7 @@
 import { Pool, type PoolClient } from "pg";
 import { documentReferences } from "@orvyn/editor/links";
 import { templateMigration } from "./databases/templates/migration.js";
+import { searchMigration } from "./search-migration.js";
 export const migrations = [
   {
     version: 1,
@@ -615,6 +616,7 @@ END $$;`,
  deleted_at timestamptz NOT NULL DEFAULT now(),PRIMARY KEY(property_id,option_id)
 );`,
   },
+  { version: 34, sql: searchMigration },
 ] as const;
 
 export async function migrate(pool: Pool, target = migrations.at(-1)!.version) {

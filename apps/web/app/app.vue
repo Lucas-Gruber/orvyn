@@ -127,13 +127,7 @@ const sidebarOpen = ref(true),
   expanded = ref<string[]>([]),
   favorites = ref<string[]>([]),
   recent = ref<string[]>([]);
-const searchOpen = ref(false),
-  searchTerm = ref(""),
-  searchResults = ref<any[]>([]),
-  searchLoading = ref(false),
-  searchError = ref(""),
-  searchIndex = ref(0),
-  searchInput = ref<HTMLInputElement>();
+const workspaceSearch = ref<{ open: () => Promise<void>; close: () => void }>();
 const themes = [
     { id: "cybercade", name: "Cybercade" },
     { id: "graphite", name: "Graphite" },
@@ -164,10 +158,8 @@ watch([titleInput, () => page.value?.title, fullWidth, sidebarOpen], () =>
   nextTick(resizePageTitle),
 );
 let titleTimer: ReturnType<typeof setTimeout> | undefined,
-  searchTimer: ReturnType<typeof setTimeout> | undefined,
   noticeTimer: ReturnType<typeof setTimeout> | undefined,
-  titleJob: Promise<void> | undefined,
-  searchGeneration = 0;
+  titleJob: Promise<void> | undefined;
 let viewport: MediaQueryList | undefined,
   commentViewport: MediaQueryList | undefined;
 watch(
@@ -442,7 +434,7 @@ function signedOut() {
   favorites.value = [];
   recent.value = [];
   view.value = "workspace";
-  searchOpen.value = false;
+  workspaceSearch.value?.close();
   void router.replace({ path: "/", query: {} });
 }
 watch(
@@ -887,55 +879,10 @@ function documentText(node: any): string {
   return node.text || (node.content || []).map(documentText).join(" ");
 }
 async function openSearch() {
-  searchOpen.value = true;
-  searchTerm.value = "";
-  searchIndex.value = 0;
-  await fetchSearch();
-  await nextTick();
-  searchInput.value?.focus();
+  await workspaceSearch.value?.open();
 }
-async function fetchSearch() {
-  const generation = ++searchGeneration;
-  searchLoading.value = true;
-  searchError.value = "";
-  try {
-    const results = await api(
-      "search?q=" + encodeURIComponent(searchTerm.value),
-    );
-    if (generation === searchGeneration) {
-      searchResults.value = results;
-      searchIndex.value = 0;
-    }
-  } catch {
-    if (generation === searchGeneration)
-      searchError.value = "Search is unavailable. Try again.";
-  } finally {
-    if (generation === searchGeneration) searchLoading.value = false;
-  }
-}
-watch(searchTerm, () => {
-  clearTimeout(searchTimer);
-  searchResults.value = [];
-  searchLoading.value = true;
-  searchTimer = setTimeout(() => void fetchSearch(), 180);
-});
-async function openSearchResult(result: any) {
-  searchOpen.value = false;
-  await navigate(() => openPage(result.id));
-}
-function searchKeys(event: KeyboardEvent) {
-  if (!["ArrowDown", "ArrowUp", "Enter"].includes(event.key)) return;
-  event.preventDefault();
-  if (searchLoading.value) return;
-  if (event.key === "Enter") {
-    const result = searchResults.value[searchIndex.value];
-    if (result) void openSearchResult(result);
-  } else
-    searchIndex.value =
-      (searchIndex.value +
-        (event.key === "ArrowDown" ? 1 : -1) +
-        Math.max(searchResults.value.length, 1)) %
-      Math.max(searchResults.value.length, 1);
+async function openSearchResult(id: string) {
+  await navigate(() => openPage(id));
 }
 function globalKeys(event: KeyboardEvent) {
   if (
@@ -1135,7 +1082,6 @@ onMounted(async () => {
 });
 onBeforeUnmount(() => {
   clearTimeout(titleTimer);
-  clearTimeout(searchTimer);
   clearTimeout(noticeTimer);
   window.removeEventListener("keydown", globalKeys);
   window.removeEventListener("popstate", fromHistory);
@@ -2189,64 +2135,13 @@ onBeforeUnmount(() => {
       </div>
     </form></UiDialog
   >
-  <UiDialog
-    :open="searchOpen"
-    title="Search your workspace"
-    wide
-    @close="searchOpen = false"
-    ><div class="command-search">
-      <AppIcon name="search" :size="21" /><input
-        ref="searchInput"
-        v-model="searchTerm"
-        aria-label="Search pages"
-        placeholder="Search pages and databases…"
-        autofocus
-        autocomplete="off"
-        @keydown="searchKeys"
-      />
-    </div>
-    <p v-if="searchError" class="error" role="alert">{{ searchError }}</p>
-    <p v-if="searchLoading" class="hint" role="status">Searching…</p>
-    <div class="command-results">
-      <button
-        v-for="(result, index) in searchResults"
-        :key="result.id"
-        :class="{ 'command-active': index === searchIndex }"
-        @click="openSearchResult(result)"
-      >
-        <AppIcon
-          :name="result.kind === 'database' ? 'database' : 'file'"
-          :size="18"
-        /><span
-          >{{ result.title
-          }}<small
-            >{{ result.space_name }} ·
-            {{
-              result.kind === "database"
-                ? "Database"
-                : result.kind === "record"
-                  ? "Record"
-                  : "Page"
-            }}</small
-          ></span
-        ><AppIcon v-if="index === searchIndex" name="enter" :size="15" />
-      </button>
-    </div>
-    <p
-      v-if="!searchLoading && !searchResults.length && !searchError"
-      class="hint"
-    >
-      {{
-        searchTerm
-          ? "No pages found. Try a different search."
-          : "Your accessible pages will appear here."
-      }}
-    </p>
-    <div class="command-footer">
-      <span><kbd>↑</kbd> <kbd>↓</kbd> Navigate</span
-      ><span><kbd>Enter</kbd> Open</span><span><kbd>Esc</kbd> Close</span>
-    </div></UiDialog
-  >
+  <WorkspaceSearch
+    v-if="signedIn"
+    :key="'search-' + me?.id"
+    ref="workspaceSearch"
+    :spaces="spaces"
+    @select="openSearchResult"
+  />
   <LazyActivityPanel
     v-if="space"
     :key="'activity-' + me?.id + '-' + space.id"

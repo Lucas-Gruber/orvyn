@@ -1284,54 +1284,6 @@ dialog.link-database-dialog::backdrop {
   align-items: center;
   font-size: 0.8rem;
 }
-.command-search {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 17px;
-}
-.command-search > input {
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-  font-size: 1.1rem;
-  padding: 5px;
-}
-.command-results {
-  display: grid;
-  gap: 3px;
-  max-height: 420px;
-  overflow: auto;
-}
-.command-results > button {
-  justify-content: flex-start;
-  text-align: left;
-  border: 0;
-  background: transparent;
-  min-height: 45px;
-}
-.command-results > button:hover,
-.command-results > button.command-active {
-  background: var(--surface-hover);
-}
-.command-results > button > span {
-  flex: 1;
-  min-width: 0;
-}
-.command-results small {
-  display: block;
-  margin-top: 3px;
-  color: var(--faint);
-}
-.command-footer {
-  border-top: 1px solid var(--line);
-  padding-top: 12px;
-  margin-top: 15px;
-  color: var(--faint);
-  font-size: 0.73rem;
-  display: flex;
-  gap: 15px;
-}
 .settings-page {
   max-width: 850px;
   margin: 45px auto;
