@@ -1587,7 +1587,7 @@ onBeforeUnmount(() => {
           >
             <AppIcon name="star" :size="17" /></button
           ><button
-            v-if="page.access_rank >= 40 && page.kind !== 'database'"
+            v-if="page.access_rank >= 40"
             class="ghost desktop-action"
             @click="showPermissions = true"
           >
@@ -1651,7 +1651,7 @@ onBeforeUnmount(() => {
             ><button role="menuitem" @click="run(openHistory)">
               <AppIcon name="history" :size="16" />Version history</button
             ><button
-              v-if="page.access_rank >= 40 && page.kind !== 'database'"
+              v-if="page.access_rank >= 40"
               role="menuitem"
               @click="showPermissions = true"
             >

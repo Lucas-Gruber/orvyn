@@ -3,7 +3,7 @@ const props = defineProps<{ page: any; flush?: () => Promise<void> }>(),
   emit = defineEmits<{ changed: [] }>(),
   tab = ref("people");
 const publishable = computed(() =>
-  ["page", "folder", "whiteboard"].includes(props.page.kind),
+  ["page", "folder", "whiteboard", "database"].includes(props.page.kind),
 );
 </script>
 <template>

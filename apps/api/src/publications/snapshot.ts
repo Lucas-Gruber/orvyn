@@ -16,6 +16,7 @@ import {
   validateWhiteboardScene,
   whiteboardFiles,
 } from "@orvyn/editor/whiteboards";
+import { publicationDatabases } from "./databases.js";
 import { publicWhiteboardElement } from "./whiteboard.js";
 import { origin } from "../auth/security.js";
 import { fail } from "../runtime.js";
@@ -27,7 +28,13 @@ const imageTypes = new Set([
   "image/gif",
   "image/webp",
 ]);
-const supportedKinds = new Set(["page", "folder", "whiteboard"]);
+const supportedKinds = new Set([
+  "page",
+  "folder",
+  "whiteboard",
+  "database",
+  "record",
+]);
 const placeholder = (text: string) => ({
   type: "paragraph",
   content: [{ type: "text", text }],
@@ -63,9 +70,13 @@ export async function publicationSnapshot(
   input: PublicationInput,
   write = false,
 ) {
-  if (input.scope.databases.length)
-    fail(400, "Choose document or whiteboard pages for this publication");
-  const selected = [...new Set([rootId, ...input.scope.pageIds])];
+  const selected = [
+    ...new Set([
+      rootId,
+      ...input.scope.pageIds,
+      ...input.scope.databases.map((item) => item.databaseId),
+    ]),
+  ];
   if (selected.length > publicationLimits.pages)
     fail(400, "Choose at most 100 pages");
   const sourceIds = new Set(selected);
@@ -93,12 +104,29 @@ export async function publicationSnapshot(
   if (pages.length !== selected.length)
     fail(404, "A selected page is unavailable or cannot be published");
   if (pages.some((page) => !supportedKinds.has(page.kind)))
-    fail(400, "Choose document or whiteboard pages for this publication");
+    fail(400, "Choose supported pages for this publication");
   const root =
     pages.find((page) => page.id === rootId) || fail(404, "Page not found");
+  const databases = await publicationDatabases(c, actor, input.scope);
+  for (const id of databases.sourceIds) sourceIds.add(id);
+  for (const page of pages) {
+    if (page.kind === "database" && !databases.projections.has(page.id))
+      fail(
+        400,
+        "Select a view, records and properties for each published database",
+      );
+    if (page.kind === "record" && !databases.recordOwners.has(page.id))
+      fail(
+        400,
+        "A record page must also be selected in its published database view",
+      );
+  }
   const rawDocuments = new Map<string, any>(),
     rawBoards = new Map<string, any>();
-  const wantedFiles = new Set(input.scope.extraFileIds),
+  const wantedFiles = new Set([
+      ...input.scope.extraFileIds,
+      ...databases.wantedFiles,
+    ]),
     fileLabels = new Map<string, string>();
   for (const page of pages) {
     if (page.document_schema_version > documentSchemaVersion)
@@ -146,17 +174,31 @@ export async function publicationSnapshot(
   const files = (
     await c.query(
       `SELECT f.* FROM files f WHERE f.id=ANY($1::uuid[]) AND f.state='ready'
-    AND orvyn_page_role(f.page_id,$2)>=40 AND (f.page_id=ANY($3::uuid[]) OR f.id=ANY($4::uuid[])) ORDER BY f.id`,
-      [[...wantedFiles], actor, selected, input.scope.extraFileIds],
+    AND orvyn_page_role(f.page_id,$2)>=40 AND (f.page_id=ANY($3::uuid[]) OR f.id=ANY($4::uuid[]) OR f.id=ANY($5::uuid[])) ORDER BY f.id`,
+      [
+        [...wantedFiles],
+        actor,
+        selected,
+        input.scope.extraFileIds,
+        [...databases.wantedFiles],
+      ],
     )
   ).rows;
   const byFile = new Map(files.map((file) => [file.id, file]));
+  for (const file of files)
+    if (databases.fileFields.has(file.id))
+      fileLabels.set(file.id, file.filename);
   for (const id of extras)
     if (!byFile.has(id))
       fail(404, "A selected attachment is unavailable or cannot be published");
   const usedFiles = new Set<string>(),
     publishedIds = new Set(selected),
-    warnings = { excludedBlocks: 0, excludedFiles: 0, anonymousMentions: 0 };
+    warnings = {
+      excludedBlocks: 0,
+      excludedFiles: 0,
+      anonymousMentions: 0,
+      excludedRelations: databases.omittedRelations,
+    };
   function useFile(id: unknown, image = false) {
     if (typeof id !== "string") return false;
     const file = byFile.get(id);
@@ -171,6 +213,11 @@ export async function publicationSnapshot(
       return { type: "text", text: "@person" };
     }
     if (node.type === "orvynDatabase") {
+      if (databases.projections.has(node.attrs?.databaseId))
+        return {
+          type: node.type,
+          attrs: { databaseId: node.attrs.databaseId },
+        };
       warnings.excludedBlocks++;
       return placeholder("Linked database not included");
     }
@@ -204,6 +251,13 @@ export async function publicationSnapshot(
     if (result.content) result.content = result.content.map(documentNode);
     return result;
   }
+  for (const projection of databases.projections.values())
+    for (const record of projection.records)
+      for (const property of projection.properties)
+        if (property.type === "Files")
+          record.values[property.id] = (
+            record.values[property.id] as string[]
+          ).filter((id) => useFile(id));
   const publicPages: PublicPage[] = pages.map((page) => {
     const board = rawBoards.get(page.id)?.scene;
     if (board)
@@ -237,6 +291,19 @@ export async function publicationSnapshot(
         : null,
       document: documentNode(rawDocuments.get(page.id)),
       ...(board ? { whiteboard: board } : {}),
+      ...(databases.projections.has(page.id)
+        ? { database: databases.projections.get(page.id)! }
+        : {}),
+      ...(page.kind === "record"
+        ? {
+            record: {
+              properties: databases.recordProperties.get(page.id)!,
+              values: databases.projections
+                .get(databases.recordOwners.get(page.id)!)!
+                .records.find((record) => record.pageId === page.id)!.values,
+            },
+          }
+        : {}),
     };
   });
   for (const id of extras) useFile(id);
@@ -276,6 +343,7 @@ export async function publicationSnapshot(
     sourceIds: [...sourceIds].sort(),
     fileIds: [...usedFiles].sort(),
     fingerprint: {
+      databases: databases.fingerprints,
       pages: pages.map((page) => [
         page.id,
         page.version,

@@ -363,6 +363,11 @@ export function querySql(
   uid: string,
   id: string,
   watchRelations?: string[],
+  selection?: {
+    recordIds?: string[];
+    minRank: 10 | 40;
+    identitiesOnly?: boolean;
+  },
 ) {
   const params: any[] = [];
   const bind = (value: unknown) => {
@@ -404,9 +409,11 @@ export function querySql(
       : baseField(property);
   const conditions = [
     `r.database_id=${bind(id)}`,
-    `orvyn_page_role(p.id,${actor})>=10`,
+    `orvyn_page_role(p.id,${actor})>=${selection?.minRank === 40 ? 40 : 10}`,
     `strpos(lower(p.title),lower(${bind(input.search)}))>0`,
   ];
+  if (selection?.recordIds)
+    conditions.push(`p.id=ANY(${bind(selection.recordIds)}::uuid[])`);
   for (const filter of input.filters || config.filters) {
     const original = find(filter.propertyId),
       property = formulaFilterProperty(original),
@@ -524,7 +531,7 @@ export function querySql(
   sorts.push("p.id ASC");
   const limit = bind(input.limit + 1),
     offset = bind(input.offset);
-  const sql = `SELECT ${recordColumns(bind(uid), properties, bind, watchRelations)} ${recordFrom} WHERE ${conditions.join(" AND ")} ORDER BY ${sorts.join(",")} LIMIT ${limit} OFFSET ${offset}`;
+  const sql = `SELECT ${selection?.identitiesOnly ? "p.id,p.title" : recordColumns(bind(uid), properties, bind, watchRelations)} ${recordFrom} WHERE ${conditions.join(" AND ")} ORDER BY ${sorts.join(",")} LIMIT ${limit} OFFSET ${offset}`;
   return { sql, params };
 }
 

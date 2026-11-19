@@ -21,6 +21,7 @@ import {
   publicationPreviewInput,
   publicationCommitInput,
   publicationChangeInput,
+  queryInput,
   type PublicationInput,
 } from "@orvyn/shared";
 import { db, fail, hash, derive, mutation, user } from "../runtime.js";
@@ -34,6 +35,8 @@ import {
 } from "../auth/security.js";
 import { pageAccess, pageWrite } from "../permissions/access.js";
 import { storage, bucket, GetObjectCommand } from "../files/storage.js";
+import { database, querySql } from "../databases/model.js";
+import { publicViewProperties, publicPropertyTypes } from "./databases.js";
 import { publicationSnapshot } from "./snapshot.js";
 import {
   signPublicationPreview,
@@ -131,12 +134,115 @@ class Publications {
     const pages = (
       await db.query(
         `SELECT p.id,p.title,p.kind,p.parent_id,s.name AS space_name FROM pages p JOIN spaces s ON s.id=p.space_id
-   WHERE p.kind IN ('page','folder','whiteboard') AND orvyn_page_role(p.id,$1)>=40 AND ($2='' OR strpos(lower(p.title),lower($2))>0 OR p.id=ANY($4::uuid[]))
+   WHERE p.kind IN ('page','folder','whiteboard','database') AND orvyn_page_role(p.id,$1)>=40 AND ($2='' OR strpos(lower(p.title),lower($2))>0 OR p.id=ANY($4::uuid[]))
    ORDER BY (p.id::text=$3) DESC,(p.id=ANY($4::uuid[])) DESC,p.title,p.id LIMIT 200`,
         [uid, q.slice(0, 200), root, selected],
       )
     ).rows;
     return { pages };
+  }
+  @Get("databases/:databaseId") async databaseChoices(
+    @Req() req: any,
+    @Param("root") root: string,
+    @Param("databaseId") id: string,
+  ) {
+    const uid = await user(req);
+    return readSnapshot(async (c) => {
+      await pageAccess(c, uid, root, 40);
+      const context = await database(c, uid, id, 40);
+      return {
+        id: context.page.id,
+        title: context.page.title,
+        schemaVersion: context.schemaVersion,
+        views: context.views.map((view) => {
+          const { config, properties } = publicViewProperties(context, view);
+          return {
+            id: view.id,
+            name: view.name,
+            type: view.type,
+            version: view.version,
+            properties: properties.map((property) => ({
+              id: property.id,
+              name: property.name,
+              type: property.type,
+              allowed: publicPropertyTypes.has(property.type),
+            })),
+            required: properties
+              .filter(
+                (property) =>
+                  property.type === "Title" ||
+                  (view.type === "Board" && property.id === config.groupBy) ||
+                  (view.type === "Calendar" &&
+                    property.id === config.dateProperty),
+              )
+              .map((property) => property.id),
+          };
+        }),
+      };
+    });
+  }
+  @Post("databases/:databaseId/records") async databaseRecords(
+    @Req() req: any,
+    @Param("root") root: string,
+    @Param("databaseId") id: string,
+    @Body() body: unknown,
+  ) {
+    mutation(req);
+    const uid = await user(req),
+      input = parse(
+        z.strictObject({
+          viewId: z.uuid(),
+          search: z.string().max(200).default(""),
+          offset: z.number().int().min(0).max(1000000).default(0),
+          selectedIds: z.array(z.uuid()).max(500).default([]),
+        }),
+        body,
+      );
+    return readSnapshot(async (c) => {
+      await pageAccess(c, uid, root, 40);
+      const context = await database(c, uid, id, 40),
+        view =
+          context.views.find((view) => view.id === input.viewId) ||
+          fail(404, "Database view unavailable");
+      const { config } = publicViewProperties(context, view),
+        query = querySql(
+          context.properties,
+          config,
+          queryInput.parse({
+            viewId: input.viewId,
+            search: input.search,
+            offset: input.offset,
+            limit: 100,
+          }),
+          uid,
+          context.page.id,
+          [],
+          { minRank: 40, identitiesOnly: true },
+        ),
+        rows = (await c.query(query.sql, query.params)).rows;
+      const selected: any[] = [];
+      for (let offset = 0; offset < input.selectedIds.length; offset += 200) {
+        const query = querySql(
+          context.properties,
+          config,
+          queryInput.parse({ viewId: input.viewId, limit: 200, offset }),
+          uid,
+          context.page.id,
+          [],
+          { recordIds: input.selectedIds, minRank: 40, identitiesOnly: true },
+        );
+        selected.push(
+          ...(await c.query(query.sql, query.params)).rows.slice(0, 200),
+        );
+      }
+      return {
+        selected: selected.map((row) => ({ id: row.id, title: row.title })),
+        records: rows
+          .slice(0, 100)
+          .map((row) => ({ id: row.id, title: row.title })),
+        nextOffset: rows.length > 100 ? input.offset + 100 : null,
+      };
+    });
   }
   @Post("preview") async preview(
     @Req() req: any,

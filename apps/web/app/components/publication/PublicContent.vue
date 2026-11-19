@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { PublicationSnapshot } from "@orvyn/shared";
 import { documentHeadings } from "@orvyn/editor/links";
+import PublicValue from "./PublicValue.vue";
 import PublicDocumentNode from "./PublicDocumentNode.vue";
 const props = defineProps<{
   snapshot: PublicationSnapshot;
@@ -8,8 +9,25 @@ const props = defineProps<{
   fileUrl: (id: string) => string;
   preview?: boolean;
 }>();
-const route = useRoute(),
-  selected = ref("");
+const selected = ref("");
+function navigatePreview(event: MouseEvent) {
+  if (!props.preview || !(event.target instanceof Element)) return;
+  const anchor = event.target.closest("a[href]");
+  const href = anchor?.getAttribute("href");
+  if (!href?.startsWith("?page=")) return;
+  const url = new URL(href, window.location.href),
+    id = url.searchParams.get("page");
+  if (!props.snapshot.pages.some((page) => page.id === id)) return;
+  event.preventDefault();
+  event.stopPropagation();
+  selected.value = id!;
+  void nextTick(() => {
+    if (url.hash)
+      document
+        .getElementById(url.hash.slice(1))
+        ?.scrollIntoView({ block: "start" });
+  });
+}
 const page = computed(() =>
   props.snapshot.pages.find(
     (p) =>
@@ -43,7 +61,7 @@ watch(
 );
 </script>
 <template>
-  <div class="publication-content">
+  <div class="publication-content" @click.capture="navigatePreview">
     <nav
       v-if="snapshot.pages.length > 1"
       class="publication-pages"
@@ -71,7 +89,7 @@ watch(
     <article
       v-if="page"
       :key="page.id"
-      :class="{ 'has-canvas': !!page.whiteboard }"
+      :class="{ 'has-canvas': !!page.whiteboard || !!page.database }"
     >
       <div
         v-if="page.coverFileId || page.coverPreset"
@@ -93,8 +111,29 @@ watch(
         :scene="page.whiteboard"
         :file-url="fileUrl"
       />
+      <PublicationPublicDatabase
+        v-else-if="page.database"
+        :database="page.database"
+        :snapshot="snapshot"
+        :file-url="fileUrl"
+      />
+      <div v-if="page.record" class="public-page-properties">
+        <div
+          v-for="property in page.record.properties.filter(
+            (property) => property.type !== 'Title',
+          )"
+          :key="property.id"
+        >
+          <span>{{ property.name }}</span><PublicValue
+            :property="property"
+            :value="page.record.values[property.id]"
+            :snapshot="snapshot"
+            :file-url="fileUrl"
+          />
+        </div>
+      </div>
       <PublicDocumentNode
-        v-else
+        v-if="!page.whiteboard && !page.database"
         :node="page.document"
         :snapshot="snapshot"
         :file-url="fileUrl"
@@ -167,6 +206,22 @@ watch(
   line-height: 1.3;
   scroll-margin-top: 80px;
   letter-spacing: -0.025em;
+}
+.public-page-properties {
+  border-block: 1px solid var(--line);
+  padding: 14px 0;
+  margin-bottom: 28px;
+}
+.public-page-properties > div {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 16px;
+  padding: 8px 0;
+  font-size: 13px;
+}
+.public-page-properties > div > span {
+  font-size: 12px;
+  color: var(--muted);
 }
 .publication-content p {
   color: var(--text);

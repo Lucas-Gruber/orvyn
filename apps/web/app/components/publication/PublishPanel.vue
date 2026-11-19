@@ -25,6 +25,41 @@ const links = ref<any[]>([]),
     input: PublicationInput;
   } | null>(null),
   previewOpen = ref(false);
+const databaseScopes = ref<PublicationInput["scope"]["databases"]>([]),
+  scopeGeneration = ref(0);
+const totalRecords = computed(() =>
+  databaseScopes.value.reduce((sum, item) => sum + item.recordIds.length, 0),
+);
+function syncDatabases() {
+  const ids = new Set([
+    ...choices.value
+      .filter(
+        (page) => page.kind === "database" && selected.value.includes(page.id),
+      )
+      .map((page) => page.id),
+    ...(props.page.kind === "database" ? [props.page.id] : []),
+  ]);
+  const removed = databaseScopes.value
+    .filter((scope) => !ids.has(scope.databaseId))
+    .flatMap((scope) => scope.recordIds);
+  if (removed.some((id) => selected.value.includes(id)))
+    selected.value = selected.value.filter((id) => !removed.includes(id));
+  databaseScopes.value = [...ids].map(
+    (id) =>
+      databaseScopes.value.find((scope) => scope.databaseId === id) || {
+        databaseId: id,
+        viewId: "",
+        recordIds: [],
+        propertyIds: [],
+      },
+  );
+}
+watch([selected, choices], syncDatabases, { immediate: true });
+function setDatabase(value: PublicationInput["scope"]["databases"][number]) {
+  databaseScopes.value = databaseScopes.value.map((scope) =>
+    scope.databaseId === value.databaseId ? value : scope,
+  );
+}
 const count = computed(() => new Set([props.page.id, ...selected.value]).size);
 const filtered = computed(() =>
   choices.value.filter(
@@ -39,6 +74,7 @@ let alive = true,
 watch(
   [
     selected,
+    databaseScopes,
     extras,
     label,
     protectedLink,
@@ -112,7 +148,18 @@ onBeforeUnmount(() => {
 });
 function edit(link: any) {
   target.value = { id: link.id, version: link.version };
-  selected.value = [...link.scope.pageIds];
+  selected.value = [
+    ...new Set([
+      ...link.scope.pageIds,
+      ...link.scope.databases.map((scope: any) => scope.databaseId),
+    ]),
+  ];
+  databaseScopes.value = link.scope.databases.map((scope: any) => ({
+    ...scope,
+    recordIds: [...scope.recordIds],
+    propertyIds: [...scope.propertyIds],
+  }));
+  scopeGeneration.value++;
   extras.value = [...link.scope.extraFileIds];
   label.value = link.label;
   protectedLink.value = link.passwordProtected;
@@ -141,6 +188,9 @@ function linkState(link: any) {
 function fresh() {
   target.value = null;
   selected.value = [];
+  databaseScopes.value = [];
+  syncDatabases();
+  scopeGeneration.value++;
   extras.value = [];
   password.value = "";
   review.value = null;
@@ -150,7 +200,11 @@ function input(): PublicationInput {
   return {
     scope: {
       pageIds: selected.value.filter((id) => id !== props.page.id),
-      databases: [],
+      databases: databaseScopes.value.map((scope) => ({
+        ...scope,
+        recordIds: [...scope.recordIds],
+        propertyIds: [...scope.propertyIds],
+      })),
       extraFileIds: extras.value,
     },
     settings: {
@@ -367,6 +421,18 @@ const previewFile = (id: string) => "/api/v1/files/" + id + "/preview";
           ></label
         >
       </div>
+      <PublicationDatabaseScope
+        v-for="scope in databaseScopes"
+        :key="scope.databaseId + ':' + scopeGeneration"
+        :root-id="page.id"
+        :scope="scope"
+        :record-pages="selected"
+        :page-count="count"
+        :total-records="totalRecords"
+        :busy="busy"
+        @change="setDatabase"
+        @pages="selected = $event"
+      />
       <p class="publish-hint">
         Subpages and linked pages are included only when selected. Images
         attached to selected pages are included; unrelated attachments stay
@@ -430,7 +496,12 @@ const previewFile = (id: string) => "/api/v1/files/" + id + "/preview";
         Future edits stay private until you update the snapshot. Changing source
         permissions revokes this link.
       </p>
-      <button class="primary publish-review" :disabled="busy || !label.trim()">
+      <button
+        class="primary publish-review"
+        :disabled="
+          busy || !label.trim() || databaseScopes.some((scope) => !scope.viewId)
+        "
+      >
         <AppIcon name="globe" :size="16" />{{
           busy ? "Preparing…" : "Review publication"
         }}<AppIcon name="arrowRight" :size="16" />
@@ -471,15 +542,17 @@ const previewFile = (id: string) => "/api/v1/files/" + id + "/preview";
           v-if="
             review.warnings.excludedBlocks ||
             review.warnings.excludedFiles ||
-            review.warnings.anonymousMentions
+            review.warnings.anonymousMentions ||
+            review.warnings.excludedRelations
           "
           class="publish-review-warning"
         >
           <AppIcon name="info" :size="16" /><span
             >{{ review.warnings.excludedBlocks }} linked blocks and
             {{ review.warnings.excludedFiles }} files excluded.
-            {{ review.warnings.anonymousMentions }} person mentions
-            anonymized.</span
+            {{ review.warnings.anonymousMentions }} person mentions anonymized.
+            {{ review.warnings.excludedRelations || 0 }} links to unselected
+            records excluded.</span
           >
         </div>
         <div class="publication-review-document">

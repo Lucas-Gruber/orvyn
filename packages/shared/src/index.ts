@@ -227,6 +227,10 @@ export type {
   PublicationSnapshot,
   PublicPage,
   PublicFile,
+  PublicDatabase,
+  PublicProperty,
+  PublicRecord,
+  PublicValue,
 } from "./publication.js";
 export {
   databaseColumnMaxWidth,

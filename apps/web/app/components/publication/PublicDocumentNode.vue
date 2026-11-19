@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { documentHeadings } from "@orvyn/editor/links";
 import type { PublicationSnapshot } from "@orvyn/shared";
 
 import PublicInline from "./PublicInline";
@@ -7,6 +8,17 @@ const props = defineProps<{
   snapshot: PublicationSnapshot;
   fileUrl: (id: string) => string;
 }>();
+if (props.node.type === "doc")
+  provide(
+    "orvyn.public.headings",
+    computed(() => documentHeadings(props.node)),
+  );
+const linkedDatabase = computed(
+  () =>
+    props.snapshot.pages.find(
+      (page) => page.id === props.node.attrs?.databaseId,
+    )?.database,
+);
 const target = computed(() =>
   props.snapshot.pages.find((p) => p.id === props.node.attrs?.pageId),
 );
@@ -129,6 +141,12 @@ const widths = computed(() => {
       :key="target.id"
     />
   </div>
+  <PublicationPublicDatabase
+    v-else-if="node.type === 'orvynDatabase' && linkedDatabase"
+    :database="linkedDatabase"
+    :snapshot="snapshot"
+    :file-url="fileUrl"
+  />
   <VideoEmbedPublic v-else-if="node.type === 'orvynVideo'" :node="node" />
   <details v-else-if="node.type === 'orvynToggle'">
     <PublicDocumentNode
