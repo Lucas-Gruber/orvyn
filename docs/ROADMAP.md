@@ -47,8 +47,9 @@ Work through these areas in order, preserving working features and committing/pu
 5. Whiteboards
    - [x] Excalidraw drawing/diagram editor with private images, durable element collaboration, standalone pages, direct document embedding, import/export and recovery checkpoints.
 6. Sharing
-   - [ ] Explicit public publication, view/record scope and hierarchy preview.
-   - [ ] Revocable, expiring and optional password-protected links.
+   - [x] Explicit document/folder/whiteboard snapshot publication with scope preview and an isolated anonymous reader.
+   - [ ] Database saved-view, record and visible-property publication scope; richer public hierarchy navigation.
+   - [x] Revocable, expiring and optional password-protected links with current source checks and permanent revocation on source policy changes.
 7. Localization, branding and administration
    - [ ] Runtime German/English/system language and synchronized preferences.
    - [ ] Instance/organization/space appearance, complete administration.

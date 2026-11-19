@@ -214,6 +214,21 @@ export type { RollupDependencySummary } from "./rollup-dependencies.js";
 export { convertiblePropertyTypes } from "./property-conversion.js";
 export type { ConvertiblePropertyType } from "./property-conversion.js";
 export {
+  publicationLimits,
+  publicationScopeInput,
+  publicationSettingsInput,
+  publicationPreviewInput,
+  publicationCommitInput,
+  publicationChangeInput,
+} from "./publication.js";
+export type {
+  PublicationInput,
+  PublicationScope,
+  PublicationSnapshot,
+  PublicPage,
+  PublicFile,
+} from "./publication.js";
+export {
   databaseColumnMaxWidth,
   databaseColumnMinWidth,
   databaseColumnDefaultWidth,

@@ -1152,7 +1152,7 @@ dialog.link-database-dialog::backdrop {
 .ui-dialog.drawer .dialog-content .settings-card {
   padding: 15px;
 }
-.ui-dialog.drawer .dialog-content h1 {
+.ui-dialog.drawer .dialog-content > h1 {
   font-size: 1.25rem;
 }
 .menu-popover {
