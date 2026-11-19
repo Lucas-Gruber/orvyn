@@ -17,12 +17,14 @@ const links = ref<any[]>([]),
   target = ref<any>(null),
   error = ref(""),
   notice = ref(""),
+  reviewError = ref(""),
   busy = ref(false),
   review = ref<{
     snapshot: PublicationSnapshot;
     warnings: any;
     previewToken: string;
     input: PublicationInput;
+    requestId: string;
   } | null>(null),
   previewOpen = ref(false);
 const databaseScopes = ref<PublicationInput["scope"]["databases"]>([]),
@@ -85,6 +87,7 @@ watch(
   ],
   () => {
     review.value = null;
+    reviewError.value = "";
     previewOpen.value = false;
   },
   { deep: true, flush: "sync" },
@@ -233,7 +236,12 @@ async function prepare() {
         body: value,
       });
     if (alive) {
-      review.value = { ...result, input: value };
+      review.value = {
+        ...result,
+        input: value,
+        requestId: crypto.randomUUID(),
+      };
+      reviewError.value = "";
       previewOpen.value = true;
     }
   } catch (e: any) {
@@ -247,32 +255,55 @@ async function publish() {
   if (busy.value || !review.value) return;
   busy.value = true;
   error.value = "";
+  reviewError.value = "";
   try {
     const reviewed = review.value;
-    const link = await $fetch<any>(path.value, {
-      method: "POST",
-      body: {
-        requestId: crypto.randomUUID(),
-        previewToken: reviewed.previewToken,
-        input: reviewed.input,
-      },
-    });
+    const body = {
+      requestId: reviewed.requestId,
+      previewToken: reviewed.previewToken,
+      input: reviewed.input,
+    };
+    let link: any;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        link = await $fetch<any>(path.value, { method: "POST", body });
+        break;
+      } catch (e: any) {
+        const status = e.statusCode || e.response?.status || 0;
+        if (attempt === 0 && (!status || status >= 500)) continue;
+        throw e;
+      }
+    }
     if (!alive) return;
     await loadLinks();
     review.value = null;
     previewOpen.value = false;
     target.value = null;
     password.value = "";
-    notice.value = "Published. Copy the link below to share this snapshot.";
+    notice.value = link.revokedAt
+      ? "The snapshot was saved, but this link was revoked after source access changed. Review and create a new link."
+      : !link.enabled
+        ? "The snapshot is saved. This link is currently turned off."
+        : "Published. Copy the link below to share this snapshot.";
   } catch (e: any) {
     if (alive) {
-      review.value = null;
-      previewOpen.value = false;
-      error.value = e.data?.message || "Could not publish this page.";
+      const status = e.statusCode || e.response?.status || 0;
+      if (!status || status >= 500) {
+        reviewError.value =
+          "Could not confirm the publication. Retry to check the result; the same request will not create another link.";
+      } else {
+        review.value = null;
+        previewOpen.value = false;
+        error.value = e.data?.message || "Could not publish this page.";
+      }
     }
   } finally {
     if (alive) busy.value = false;
   }
+}
+function closeReview() {
+  previewOpen.value = false;
+  if (reviewError.value) void loadLinks().catch(() => {});
 }
 async function change(link: any, remove = false) {
   if (busy.value) return;
@@ -510,8 +541,9 @@ const previewFile = (id: string) => "/api/v1/files/" + id + "/preview";
     <UiDialog
       :open="previewOpen && !!review"
       title="Review publication"
+      :error="reviewError"
       wide
-      @close="previewOpen = false"
+      @close="closeReview"
       ><template v-if="review"
         ><div class="publish-review-bar">
           <div>
@@ -532,9 +564,11 @@ const previewFile = (id: string) => "/api/v1/files/" + id + "/preview";
             <AppIcon name="globe" :size="16" />{{
               busy
                 ? "Publishing…"
-                : target
-                  ? "Update publication"
-                  : "Publish snapshot"
+                : reviewError
+                  ? "Retry publication"
+                  : target
+                    ? "Update publication"
+                    : "Publish snapshot"
             }}
           </button>
         </div>

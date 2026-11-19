@@ -176,6 +176,7 @@ try {
           "tests/whiteboards.test.mjs",
           "tests/publications.test.mjs",
           "tests/database-publications.test.mjs",
+          "tests/publication-navigation.test.mjs",
           "tests/editor-assets.test.mjs",
           "tests/page-previews.test.mjs",
           "tests/video-embeds.test.mjs",

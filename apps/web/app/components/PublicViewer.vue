@@ -194,6 +194,10 @@ const fileUrl = (id: string) =>
   align-items: center;
   gap: 14px;
   height: 57px;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: var(--panel);
   padding: 0 24px;
   border-bottom: 1px solid var(--line);
   font-size: 13px;

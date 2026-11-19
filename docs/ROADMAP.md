@@ -49,7 +49,8 @@ Work through these areas in order, preserving working features and committing/pu
 6. Sharing
    - [x] Explicit document/folder/whiteboard snapshot publication with scope preview and an isolated anonymous reader.
    - [x] Database saved-view, explicit record and visible-property publication scope, optional record bodies and five isolated public read-only views.
-   - [ ] Public calculation/identity dependency policy, direct record-root publishing and richer public hierarchy navigation.
+   - [x] Hierarchical public navigation with local search, breadcrumbs, a mobile picker and retained automatic/manual publication retries.
+   - [ ] Public calculation/identity dependency policy and direct record-root publishing.
    - [x] Revocable, expiring and optional password-protected links with current source checks and permanent revocation on source policy changes.
 7. Localization, branding and administration
    - [ ] Runtime German/English/system language and synchronized preferences.

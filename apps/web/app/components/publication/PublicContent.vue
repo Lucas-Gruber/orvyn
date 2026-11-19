@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { PublicationSnapshot } from "@orvyn/shared";
 import { documentHeadings } from "@orvyn/editor/links";
+import { publicationTrail } from "../../utils/publicationTree";
 import PublicValue from "./PublicValue.vue";
 import PublicDocumentNode from "./PublicDocumentNode.vue";
 const props = defineProps<{
@@ -42,13 +43,11 @@ const additionalFiles = computed(() =>
     props.snapshot.attachmentIds.includes(file.id),
   ),
 );
-const ordered = computed(() =>
-  [...props.snapshot.pages].sort((a, b) =>
-    a.id === props.snapshot.rootId
-      ? -1
-      : b.id === props.snapshot.rootId
-        ? 1
-        : a.order - b.order || a.title.localeCompare(b.title),
+const trail = computed(() =>
+  publicationTrail(
+    props.snapshot.pages,
+    props.snapshot.rootId,
+    page.value?.id || props.snapshot.rootId,
   ),
 );
 provide(
@@ -61,36 +60,37 @@ watch(
 );
 </script>
 <template>
-  <div class="publication-content" @click.capture="navigatePreview">
-    <nav
+  <div
+    class="publication-content"
+    :class="{ 'has-sidebar': !preview && snapshot.pages.length > 1 }"
+    @click.capture="navigatePreview"
+  >
+    <PublicationNavigation
       v-if="snapshot.pages.length > 1"
-      class="publication-pages"
-      aria-label="Published pages"
-    >
-      <template v-for="item in ordered" :key="item.id"
-        ><button
-          v-if="preview"
-          :aria-current="page?.id === item.id ? 'page' : undefined"
-          @click="selected = item.id"
-        >
-          <PageSymbol :icon="item.icon" :kind="item.kind" :size="15" />{{
-            item.title
-          }}</button
-        ><a
-          v-else
-          :href="'?page=' + item.id"
-          :aria-current="page?.id === item.id ? 'page' : undefined"
-          ><PageSymbol :icon="item.icon" :kind="item.kind" :size="15" />{{
-            item.title
-          }}</a
-        ></template
-      >
-    </nav>
+      :snapshot="snapshot"
+      :active-id="page?.id || snapshot.rootId"
+      :preview="preview"
+      @select="selected = $event"
+    />
     <article
       v-if="page"
       :key="page.id"
       :class="{ 'has-canvas': !!page.whiteboard || !!page.database }"
     >
+      <nav
+        v-if="trail.length > 1"
+        class="publication-breadcrumbs"
+        aria-label="Published breadcrumbs"
+      >
+        <template v-for="ancestor in trail.slice(0, -1)" :key="ancestor.id"
+          ><component
+            :is="preview ? 'button' : 'a'"
+            :href="preview ? undefined : '?page=' + ancestor.id"
+            @click="preview && (selected = ancestor.id)"
+            >{{ ancestor.title }}</component
+          ><AppIcon name="chevronRight" :size="12" /></template
+        ><span>{{ page.title }}</span>
+      </nav>
       <div
         v-if="page.coverFileId || page.coverPreset"
         class="publication-cover"
@@ -161,6 +161,50 @@ watch(
   </div>
 </template>
 <style>
+.publication-breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin: -16px 0 28px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.publication-content .publication-breadcrumbs :is(a, button) {
+  border: 0;
+  background: none;
+  font-size: 11px;
+  padding: 0;
+  min-height: 24px;
+  line-height: 1.4;
+  text-decoration: none;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.publication-breadcrumbs > span {
+  overflow-wrap: anywhere;
+}
+.publication-breadcrumbs > .app-icon {
+  flex-shrink: 0;
+}
+.publication-content.has-sidebar {
+  flex: 1;
+}
+.publication-content.has-sidebar article {
+  width: 100%;
+}
+@media (min-width: 1000px) {
+  .publication-content.has-sidebar {
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+  .publication-content.has-sidebar article {
+    max-width: 900px;
+  }
+  .publication-content.has-sidebar article.has-canvas {
+    max-width: 1100px;
+  }
+}
 .publication-content {
   width: 100%;
   min-width: 0;
@@ -391,33 +435,6 @@ watch(
   margin-bottom: 8px;
   text-decoration: none;
 }
-.publication-pages {
-  display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
-  border-bottom: 1px solid var(--line);
-  padding: 12px 24px;
-  font-size: 12px;
-}
-.publication-pages :is(a, button) {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  text-decoration: none;
-  padding: 6px 10px;
-  background: transparent;
-  border: 0;
-  border-radius: 5px;
-  font-size: 12px;
-  max-width: 100%;
-  overflow-wrap: anywhere;
-  min-height: 32px;
-  color: var(--muted);
-}
-.publication-pages [aria-current="page"] {
-  background: var(--surface);
-  color: var(--text);
-}
 .publication-cover {
   height: 180px;
   background: linear-gradient(120deg, #dde9e4, #eadfcf);
@@ -457,15 +474,6 @@ watch(
   .publication-title h1 {
     font-size: 30px;
     letter-spacing: -0.8px;
-  }
-  .publication-pages {
-    padding: 10px 12px;
-    flex-wrap: nowrap;
-    overflow: auto;
-  }
-  .publication-pages :is(a, button) {
-    white-space: nowrap;
-    flex-shrink: 0;
   }
   .public-columns {
     display: block;
