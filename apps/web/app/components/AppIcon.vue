@@ -45,6 +45,7 @@ import {
   SlidersHorizontal,
   ArrowUpDown,
   Download,
+  Upload,
   Paperclip,
   Shield,
   Command,
@@ -78,11 +79,14 @@ import {
   Globe,
   LoaderCircle,
   GripVertical,
+  PencilRuler,
 } from "@lucide/vue";
 const props = withDefaults(defineProps<{ name: string; size?: number }>(), {
   size: 18,
 });
 const icons: Record<string, any> = {
+  upload: Upload,
+  whiteboard: PencilRuler,
   grip: GripVertical,
   info: Info,
   inbox: Inbox,

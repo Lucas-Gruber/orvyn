@@ -172,8 +172,8 @@ class PagesController {
     const uid = await user(req),
       title = text(body?.title, 300);
     const kind = body?.kind ?? "page";
-    if (!["page", "folder"].includes(kind))
-      fail(400, "Choose a page or folder");
+    if (!["page", "folder", "whiteboard"].includes(kind))
+      fail(400, "Choose a page, folder or whiteboard");
     return transaction(async (c) => {
       const s = await spaceAccess(c, uid, id, 30, true);
       const parent = await newPageParent(c, uid, s.id, body.parentId, 0, kind);
@@ -182,6 +182,10 @@ class PagesController {
         [s.id, title, parent, kind, uid],
       );
       const p = r.rows[0];
+      if (kind === "whiteboard")
+        await c.query("INSERT INTO whiteboard_documents(page_id) VALUES($1)", [
+          p.id,
+        ]);
       await c.query(
         "INSERT INTO page_revisions(page_id,version,title,document,author_id) VALUES($1,$2,$3,$4,$5)",
         [p.id, p.version, p.title, p.document, uid],
@@ -200,6 +204,8 @@ class PagesController {
       input = documentInput(body);
     return transaction(async (c) => {
       const p = await pageWrite(c, uid, id);
+      if (p.kind === "whiteboard")
+        fail(409, "Edit this whiteboard through its collaboration connection");
       if (p.document_schema_version > documentSchemaVersion)
         fail(409, "Document format requires a newer server");
       if (

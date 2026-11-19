@@ -27,8 +27,9 @@ import { PersonMention } from "./person-mention.js";
 import { validPersonId, documentPeople } from "./mention-model.js";
 import { CommentHighlights } from "./comment-highlights.js";
 import { EditorTables } from "./table-controls.js";
+import { WhiteboardBlock } from "./whiteboard-node.js";
 const lowlight = createLowlight(common);
-export const documentSchemaVersion = 12;
+export const documentSchemaVersion = 13;
 export function editorExtensions(collaborative = false): AnyExtension[] {
   return [
     StarterKit.configure({
@@ -43,6 +44,7 @@ export function editorExtensions(collaborative = false): AnyExtension[] {
     TableKit.configure({ table: { resizable: false, cellMinWidth: 96 } }),
     EditorTables,
     DatabaseBlock,
+    WhiteboardBlock,
     HeadingIdentity,
     CalloutBlock,
     ToggleBlock,
@@ -83,6 +85,8 @@ export function validateDocument(input: unknown) {
       !validColumnWidths(n.attrs.widths, n.childCount)
     )
       throw Error("Invalid layout column widths");
+    if (n.type.name === "orvynWhiteboard" && !validPersonId(n.attrs.pageId))
+      throw Error("Invalid whiteboard reference");
     if (n.type.name === "orvynPerson" && !validPersonId(n.attrs.userId))
       throw Error("Invalid person reference");
     if (n.type.name === "orvynDatabase") {

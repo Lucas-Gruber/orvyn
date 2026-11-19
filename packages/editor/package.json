@@ -26,6 +26,10 @@
   },
   "type": "module",
   "exports": {
+    "./whiteboards": {
+      "types": "./dist/whiteboard-model.d.ts",
+      "default": "./dist/whiteboard-model.js"
+    },
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"

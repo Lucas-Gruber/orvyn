@@ -15,7 +15,13 @@ withDefaults(
   <AppIcon
     v-else
     :name="
-      kind === 'database' ? 'database' : kind === 'folder' ? 'folder' : 'file'
+      kind === 'database'
+        ? 'database'
+        : kind === 'folder'
+          ? 'folder'
+          : kind === 'whiteboard'
+            ? 'whiteboard'
+            : 'file'
     "
     :size="size"
   />

@@ -7,6 +7,7 @@ import { reciprocalRelationMigration } from "./databases/reciprocal-migration.js
 import { multiHopRollupMigration } from "./databases/multi-hop-migration.js";
 import { propertySearchMigration } from "./property-search-migration.js";
 import { propertyConversionMigration } from "./databases/conversion-migration.js";
+import { whiteboardMigration } from "./whiteboard-migration.js";
 export const migrations = [
   {
     version: 1,
@@ -635,6 +636,7 @@ END $$;`,
     version: 41,
     sql: "ALTER TABLE pages ALTER COLUMN document_schema_version SET DEFAULT 12",
   },
+  { version: 42, sql: whiteboardMigration },
 ] as const;
 
 export async function migrate(pool: Pool, target = migrations.at(-1)!.version) {

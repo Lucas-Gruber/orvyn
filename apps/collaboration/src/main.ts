@@ -18,12 +18,14 @@ import * as Y from "yjs";
 import { documentPeople } from "@orvyn/editor/mentions";
 import { documentReferences, newDocumentAssets } from "@orvyn/editor/links";
 import { createHash } from "node:crypto";
+import { loadWhiteboard, saveWhiteboard } from "./whiteboards.js";
 
 type Identity = {
   userId: string;
   email: string;
   sessionHash: string;
   spaceId: string;
+  kind: string;
   visibleRecords: Set<string>;
   notifiedRank: number;
   relationSignatures: string;
@@ -94,11 +96,11 @@ async function authorization(
       [pageId],
     );
   const r = await c.query(
-    "SELECT orvyn_page_role(id,$2) AS rank FROM pages WHERE id=$1",
+    "SELECT kind,orvyn_page_role(id,$2) AS rank FROM pages WHERE id=$1",
     [pageId, identity.userId],
   );
   const rank = r.rows[0]?.rank || 0;
-  if (rank < 10) deny();
+  if (rank < 10 || r.rows[0].kind !== identity.kind) deny();
   return rank as number;
 }
 // Hocuspocus exposes synchronous sends. Queue each outbound frame behind the
@@ -273,7 +275,7 @@ const server = new Server<Identity>({
     );
     if (!identity) deny();
     const p = await db.query(
-      "SELECT space_id,orvyn_page_role(id,$2) AS rank FROM pages WHERE id=$1",
+      "SELECT space_id,kind,orvyn_page_role(id,$2) AS rank FROM pages WHERE id=$1",
       [documentName, identity.userId],
     );
     if (!p.rowCount || p.rows[0].rank < 10) deny();
@@ -281,6 +283,7 @@ const server = new Server<Identity>({
     return {
       ...identity,
       spaceId: p.rows[0].space_id,
+      kind: p.rows[0].kind,
       visibleRecords: new Set<string>(),
       notifiedRank: p.rows[0].rank,
       relationSignatures: "",
@@ -312,6 +315,10 @@ const server = new Server<Identity>({
       await c.query("SELECT pg_advisory_xact_lock(hashtextextended($1,3829))", [
         documentName,
       ]);
+      if (context.kind === "whiteboard") {
+        await loadWhiteboard(c, documentName, document);
+        return;
+      }
       const schema = (
         await c.query("SELECT document_schema_version FROM pages WHERE id=$1", [
           documentName,
@@ -361,6 +368,15 @@ const server = new Server<Identity>({
       await c.query("SELECT pg_advisory_xact_lock(hashtextextended($1,3829))", [
         documentName,
       ]);
+      if (connection.context.kind === "whiteboard") {
+        await saveWhiteboard(
+          c,
+          documentName,
+          payload,
+          connection.context.userId,
+        );
+        return;
+      }
       const row = await c.query(
         "SELECT e.state,p.document FROM editor_documents e JOIN pages p ON p.id=e.page_id WHERE e.page_id=$1 FOR UPDATE OF e",
         [documentName],

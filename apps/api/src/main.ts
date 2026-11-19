@@ -18,6 +18,7 @@ import { DatabasePropertyConversionsModule } from "./database-property-conversio
 import { ActivityModule } from "./activity.module.js";
 import { NotificationsModule } from "./notifications.module.js";
 import { CommentsModule } from "./comments.module.js";
+import { WhiteboardsModule } from "./whiteboards.module.js";
 @Module({
   imports: [
     DatabaseTransferModule,
@@ -34,6 +35,7 @@ import { CommentsModule } from "./comments.module.js";
     DatabaseRelationsModule,
     DatabaseTemplatesModule,
     DatabasePropertyConversionsModule,
+    WhiteboardsModule,
   ],
 })
 class App {}

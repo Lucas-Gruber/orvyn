@@ -732,9 +732,13 @@ async function createSpace() {
     await select(s);
   });
 }
+const whiteboardHandle = ref<{
+  flush: () => Promise<void>;
+  openHistory: () => Promise<void>;
+}>();
 async function createPage(
   parentId: string | null = null,
-  kind: "page" | "folder" = "page",
+  kind: "page" | "folder" | "whiteboard" = "page",
 ) {
   if (!space.value || !canCreate.value || pageLoading.value) return;
   pageLoading.value = true;
@@ -743,7 +747,12 @@ async function createPage(
     page.value = undefined;
     view.value = "workspace";
     const p = await api(`spaces/${space.value.id}/pages`, "POST", {
-      title: kind === "folder" ? "Untitled folder" : "Untitled",
+      title:
+        kind === "folder"
+          ? "Untitled folder"
+          : kind === "whiteboard"
+            ? "Untitled whiteboard"
+            : "Untitled",
       parentId,
       kind,
     });
@@ -871,6 +880,10 @@ async function openSettings(target: string) {
   if (mobile.value) sidebarOpen.value = false;
 }
 async function openHistory() {
+  if (page.value?.kind === "whiteboard") {
+    await whiteboardHandle.value?.openHistory();
+    return;
+  }
   history.value = await api("pages/" + page.value.id + "/history");
   showHistory.value = true;
   revision.value = undefined;
@@ -1391,6 +1404,11 @@ onBeforeUnmount(() => {
                 <AppIcon name="database" :size="16" />New database</button
               ><button
                 role="menuitem"
+                @click="navigate(() => createPage(null, 'whiteboard'))"
+              >
+                <AppIcon name="whiteboard" :size="16" />New whiteboard</button
+              ><button
+                role="menuitem"
                 @click="navigate(() => createPage(null, 'folder'))"
               >
                 <AppIcon name="folder" :size="16" />New folder
@@ -1529,7 +1547,13 @@ onBeforeUnmount(() => {
                 {{ ancestor.title }}
               </button></template
             ><AppIcon name="chevronRight" :size="13" /><AppIcon
-              :name="page.kind === 'database' ? 'database' : 'file'"
+              :name="
+                page.kind === 'database'
+                  ? 'database'
+                  : page.kind === 'whiteboard'
+                    ? 'whiteboard'
+                    : 'file'
+              "
               :size="14"
             /><span>{{ page.title }}</span></template
           ><template v-else-if="view !== 'workspace'"
@@ -1752,7 +1776,7 @@ onBeforeUnmount(() => {
         <article
           v-else-if="page"
           class="document-page"
-          :class="{ 'full-width': fullWidth }"
+          :class="{ 'full-width': fullWidth || page.kind === 'whiteboard' }"
         >
           <button
             v-if="page.kind === 'record' && page.parent_id"
@@ -1842,8 +1866,15 @@ onBeforeUnmount(() => {
             @template-access="canSaveRecordTemplate = $event"
             @manage="showAttachments = true"
           />
+          <LazyWhiteboard
+            v-if="page.kind === 'whiteboard'"
+            :key="page.id"
+            ref="whiteboardHandle"
+            :page-id="page.id"
+            :paused="navigating || pageLoading"
+          />
           <LazyBlockEditor
-            v-if="me"
+            v-else-if="me"
             ref="editorHandle"
             :key="page.id"
             :page-id="page.id"

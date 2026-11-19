@@ -8,6 +8,7 @@ import CalloutNode from "./CalloutNode.vue";
 import ToggleNode from "./ToggleNode.vue";
 import TableOfContentsNode from "./TableOfContentsNode.vue";
 import CodeBlockNode from "./CodeBlockNode.vue";
+import WhiteboardNode from "./WhiteboardNode.vue";
 import AssetNode from "./AssetNode.vue";
 import PagePreviewNode from "./PagePreviewNode.vue";
 import VideoEmbedNode from "./VideoEmbedNode.vue";
@@ -73,6 +74,7 @@ const openPage = inject(pageNavigationKey),
   showDocumentLink = ref(false),
   linkAsPreview = ref(false),
   showAsset = ref(false),
+  showWhiteboard = ref(false),
   showVideo = ref(false),
   assetImage = ref(true),
   selectedLinkText = ref(""),
@@ -509,6 +511,14 @@ const commands: SlashCommand[] = [
         .insertTable({ rows: 3, cols: 3, withHeaderRow: true })
         .run(),
   },
+  {
+    label: "Whiteboard",
+    icon: "whiteboard",
+    keepSelection: true,
+    run: () => {
+      void openWhiteboard(true);
+    },
+  },
 ];
 const basicCommands = [
   "Paragraph",
@@ -528,6 +538,7 @@ const basicCommands = [
   "Mention person",
   "Table",
   "Linked database",
+  "Whiteboard",
   "Code block",
   "Image",
   "File",
@@ -557,6 +568,7 @@ const commandDescriptions: Record<string, string> = {
   "Mention person": "Bring someone into the conversation",
   Table: "Arrange content in rows and columns",
   "Linked database": "Insert a live view of your database",
+  Whiteboard: "Embed a collaborative drawing canvas",
   "Code block": "Write code with syntax highlighting",
   Image: "Upload an image",
   File: "Attach a file to this page",
@@ -614,6 +626,7 @@ function initialize() {
           "orvynVideo",
           "orvynColumns",
           "orvynPerson",
+          "orvynWhiteboard",
         ].includes(extension.name)
           ? extension.extend({
               addNodeView() {
@@ -630,6 +643,7 @@ function initialize() {
                       orvynVideo: VideoEmbedNode,
                       orvynColumns: ColumnsNode,
                       orvynPerson: PersonMentionNode,
+                      orvynWhiteboard: WhiteboardNode,
                     } as Record<string, any>
                   )[extension.name],
                 );
@@ -985,6 +999,42 @@ function insertAsset(file: { fileId: string; label: string }) {
 }
 function closeAsset() {
   showAsset.value = false;
+  pickerSelectionActive = false;
+  editor.value?.commands.focus();
+}
+async function openWhiteboard(fromSlash = false) {
+  if (!editor.value?.isEditable) return;
+  insertionRange = fromSlash
+    ? { ...slashRange }
+    : {
+        from: editor.value.state.selection.from,
+        to: editor.value.state.selection.to,
+      };
+  pickerSelectionActive = true;
+  slashOpen.value = false;
+  try {
+    await flush();
+    showWhiteboard.value = true;
+  } catch {
+    pickerSelectionActive = false;
+    linkMessage.value = "Save pending changes before inserting a whiteboard.";
+  }
+}
+function insertWhiteboard(pageId: string) {
+  if (!editor.value?.isEditable) return;
+  pickerSelectionActive = false;
+  editor.value
+    .chain()
+    .focus()
+    .insertContentAt(insertionRange, [
+      { type: "orvynWhiteboard", attrs: { pageId } },
+      { type: "paragraph" },
+    ])
+    .run();
+  showWhiteboard.value = false;
+}
+function closeWhiteboard() {
+  showWhiteboard.value = false;
   pickerSelectionActive = false;
   editor.value?.commands.focus();
 }
@@ -1526,6 +1576,13 @@ onBeforeUnmount(() => {
         @comment="prepareComment"
       />
       <EditorTableMenu :editor="editor" />
+      <WhiteboardPicker
+        :open="showWhiteboard"
+        :space-id="spaceId"
+        :parent-id="pageId"
+        @insert="insertWhiteboard"
+        @close="closeWhiteboard"
+      />
       <div
         v-show="formattingOpen && !readOnly"
         :id="formattingId"

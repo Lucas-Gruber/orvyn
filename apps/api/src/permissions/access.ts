@@ -78,7 +78,7 @@ export async function newPageParent(
   spaceId: string,
   parentId: unknown,
   extraDepth = 0,
-  childKind: "page" | "folder" | "database" | "record" = "page",
+  childKind: "page" | "folder" | "database" | "record" | "whiteboard" = "page",
 ) {
   if (parentId === null || parentId === undefined) return null;
   if (typeof parentId !== "string") return fail(400, "Invalid parent page");

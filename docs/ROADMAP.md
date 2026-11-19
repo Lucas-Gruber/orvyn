@@ -45,7 +45,7 @@ Work through these areas in order, preserving working features and committing/pu
    - [x] Search stored scalar fields, option labels/tags and configured date/time metadata, with explicit scopes and matching-field previews.
    - [ ] Search computed/reference fields and identity metadata without copying actor-dependent or inaccessible content.
 5. Whiteboards
-   - [ ] Excalidraw-like drawing/diagram editor, persistence, direct document embedding and collaboration.
+   - [x] Excalidraw drawing/diagram editor with private images, durable element collaboration, standalone pages, direct document embedding, import/export and recovery checkpoints.
 6. Sharing
    - [ ] Explicit public publication, view/record scope and hierarchy preview.
    - [ ] Revocable, expiring and optional password-protected links.

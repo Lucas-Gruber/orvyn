@@ -35,7 +35,7 @@ export function documentReferences(document: any, origin: string) {
     base = new URL(origin);
   function walk(node: any) {
     if (
-      node.type === "orvynPagePreview" &&
+      ["orvynPagePreview", "orvynWhiteboard"].includes(node.type) &&
       typeof node.attrs?.pageId === "string" &&
       /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(
         node.attrs.pageId,
