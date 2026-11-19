@@ -250,11 +250,13 @@ const metadata = ref<any>(),
   showPropertyCreate = ref(false),
   showSettings = ref(false),
   newView = ref(false);
+let recordWriteRevision = 0;
 const cellWrites = useDatabaseDrafts({
   fetch: async (id) => (await api("/records/" + id)).record,
   patch: (id, version, values) =>
     api("/records/" + id, "PATCH", { version, values }),
   saved: (record) => {
+    recordWriteRevision++;
     const index = records.value.findIndex(
       (value) => value.pageId === record.pageId,
     );
@@ -416,6 +418,7 @@ async function api(path: string, method = "GET", body?: unknown) {
 async function load() {
   refreshRequested = false;
   const request = ++generation;
+  const startedAtWrite = recordWriteRevision;
   loading.value = true;
   try {
     const meta = await api("");
@@ -441,6 +444,10 @@ async function load() {
       $fetch<any[]>("/api/v1/spaces/" + meta.spaceId + "/directory"),
     ]);
     if (disposed || request !== generation) return;
+    if (startedAtWrite !== recordWriteRevision) {
+      refreshRequested = true;
+      return;
+    }
     directory.value = people;
     records.value = result.records;
     columns.value = result.properties;

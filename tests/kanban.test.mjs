@@ -647,3 +647,79 @@ test("Chromium: losing record edit permission during a drag removes its handles 
     await db.end();
   }
 });
+
+test("Chromium: a refresh snapshot started before a saved move cannot move its card back or detach its drag handle", async () => {
+  const db = new Pool({ connectionString: process.env.DATABASE_URL }),
+    browser = await launch();
+  let release = () => {};
+  try {
+    const f = await fixture(db),
+      page = await open(browser, f),
+      target = f.records[0],
+      groups = f.status.config.options;
+    let held;
+    const blocked = new Promise((resolve) => {
+        release = resolve;
+      }),
+      started = new Promise((resolve) => {
+        held = resolve;
+      });
+    let holding = true,
+      snapshot;
+    await page.route(`${base}/api/v1/${f.path}/query`, async (route) => {
+      const hold = holding;
+      const response = await route.fetch();
+      if (!hold) return route.fulfill({ response });
+      snapshot ||= response;
+      held();
+      await blocked;
+      await route.fulfill({ response: snapshot });
+    });
+    await page
+      .getByRole("button", { name: "Refresh records", exact: true })
+      .click();
+    await started;
+    await card(page, target.title)
+      .getByRole("button", { name: target.title, exact: true })
+      .focus();
+    await page.keyboard.press("Alt+Shift+ArrowRight");
+    await waitFor(
+      async () =>
+        (await f.record(target.pageId)).values[f.status.id] === groups[1].id,
+      "Move committed while the old query is held",
+    );
+    await expect(page.locator(".database-drafts")).toHaveCount(0);
+    const handle = await card(page, target.title)
+      .getByRole("button", { name: "Move " + target.title, exact: true })
+      .elementHandle();
+    holding = false;
+    release();
+    await expect(
+      page.getByText("Loading records…", { exact: true }),
+    ).toHaveCount(0);
+    assert.equal(
+      await handle.evaluate((node) => node.isConnected),
+      true,
+      "A stale query must not reparent the card after its move is saved",
+    );
+    await expect(
+      lane(page, groups[1].label).getByRole("button", {
+        name: target.title,
+        exact: true,
+      }),
+    ).toBeVisible();
+    await page.unroute(`${base}/api/v1/${f.path}/query`);
+    await card(page, target.title)
+      .getByRole("button", { name: "Move " + target.title, exact: true })
+      .dragTo(lane(page, groups[0].label));
+    await waitFor(
+      async () =>
+        (await f.record(target.pageId)).values[f.status.id] === groups[0].id,
+      "The same handle remains usable for dragging",
+    );
+  } finally {
+    release();
+    await browser.close();
+    await db.end();
+  }
+});

@@ -31,8 +31,7 @@ const drag = ref<{ id: string; property: string; group: unknown }>();
 const over = ref<string | null | undefined>();
 const failedImages = reactive(new Set<string>());
 const mime = "application/x-orvyn-board-card";
-let ghost: HTMLElement | undefined,
-  scrollFrame = 0,
+let scrollFrame = 0,
   pointer = { x: 0, y: 0 };
 const fields = computed(() =>
   props.columns.filter(
@@ -111,8 +110,6 @@ function finish() {
   over.value = undefined;
   cancelAnimationFrame(scrollFrame);
   scrollFrame = 0;
-  ghost?.remove();
-  ghost = undefined;
 }
 function start(event: DragEvent, record: DatabaseRecord) {
   if (!editable(record) || !event.dataTransfer) {
@@ -134,23 +131,17 @@ function start(event: DragEvent, record: DatabaseRecord) {
     }),
   );
   event.dataTransfer.effectAllowed = "move";
+  event.dataTransfer.setData("text/plain", record.title);
   const card = (event.currentTarget as HTMLElement).closest<HTMLElement>(
     "article",
   );
   if (card) {
-    ghost = card.cloneNode(true) as HTMLElement;
-    Object.assign(ghost.style, {
-      position: "fixed",
-      left: "-10000px",
-      top: "0",
-      width: `${card.offsetWidth}px`,
-      opacity: "1",
-      transform: "rotate(2deg)",
-    });
-    ghost.setAttribute("aria-hidden", "true");
-    ghost.inert = true;
-    board.value?.appendChild(ghost);
-    event.dataTransfer.setDragImage(ghost, 30, 24);
+    const bounds = card.getBoundingClientRect();
+    event.dataTransfer.setDragImage(
+      card,
+      Math.max(0, event.clientX - bounds.left),
+      Math.max(0, event.clientY - bounds.top),
+    );
   }
   announcement.value = `Moving ${record.title}. Drop in another group, or press Escape to cancel.`;
 }
