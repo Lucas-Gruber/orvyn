@@ -169,6 +169,7 @@ export interface DatabaseRecord {
   createdBy: { id: string; email: string } | null;
   lastEditedBy: { id: string; email: string } | null;
   coverFileId: string | null;
+  previewFileId: string | null;
   icon: string | null;
   coverPreset: string | null;
   files?: { id: string; filename: string; mediaType: string; size: number }[];

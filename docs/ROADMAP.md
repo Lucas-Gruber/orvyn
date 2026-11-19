@@ -39,7 +39,7 @@ Work through these areas in order, preserving working features and committing/pu
    - [x] Saved table column widths with pointer/keyboard resizing, cancellation, live readers, template remapping and conflict-safe view updates.
    - [x] Owner-reviewed scalar type conversion with signed snapshots, retained originals and restoration that preserves newer edits.
    - [ ] Additional conversion types, larger batches and type-history pagination.
-   - [ ] Read-only Kanban cards with first-image covers and improved card movement.
+   - [x] Read-only Kanban cards with first-image previews, scoped drag/drop, visible drop targets, keyboard/menu movement and retained failed-write drafts.
 4. Search
    - [x] Indexed title/document full-text search with excerpts, space/type filters, ranked pagination and current access checks.
    - [x] Search stored scalar fields, option labels/tags and configured date/time metadata, with explicit scopes and matching-field previews.

@@ -20,4 +20,6 @@ Incomplete: additional authentication hardening (identity linking, OIDC group ma
 
 Document tables now have unobtrusive empty cells, contextual table/row/column controls, header toggles, merge/split, persistent column resizing, a numeric width dialog and keyboard continuation. Native drag cancellation covers Escape, window blur and loss of edit permission. Schema 12 retains unspecified widths in merged cells. Text links use pointer cursors in editable and read-only documents. See EDITOR_TABLES.md for validation and remaining boundaries.
 
-Next: prioritize the requested Kanban covers/movement and directly embeddable whiteboards, then continue the remaining checklist in ROADMAP.md. Preserve all master requirements in PRODUCT.md.
+Kanban cards now open records without inline property editing, show nonempty fields and private first-image previews, and support visible scoped drag/drop plus keyboard/menu movement. Pending moves use the existing retained-draft/conflict queue. See KANBAN.md for image priority, permissions, cancellation and ordering boundaries.
+
+Next: implement the requested directly embeddable whiteboards, then continue the remaining checklist in ROADMAP.md. Preserve all master requirements in PRODUCT.md.

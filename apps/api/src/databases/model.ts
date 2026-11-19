@@ -552,7 +552,15 @@ export function recordColumns(
     watchRelations === undefined
       ? ""
       : `orvyn_rollup_watch_summary(r.database_id,p.id,${bind(watchRelations)}::uuid[],${actor}::uuid) AS rollup_dependencies,`;
-  return `${dependencies}${files},${relations},${formulas},p.id,p.title,p.icon,p.cover_preset,p.title_version,p.created_at,p.updated_at,p.created_by,p.last_edited_by,creator.email AS creator_email,editor.email AS editor_email,r.values,r.version,orvyn_page_role(p.id,${actor}) AS access_rank,CASE WHEN p.appearance_version=1 THEN (SELECT id FROM files WHERE page_id=p.id AND state='ready' AND media_type IN ('image/png','image/jpeg','image/gif','image/webp') ORDER BY created_at LIMIT 1) ELSE (SELECT id FROM files WHERE id=p.cover_file_id AND page_id=p.id AND state='ready' AND media_type IN ('image/png','image/jpeg','image/gif','image/webp')) END AS cover_file_id`;
+  // Card previews are distinct from an explicitly chosen/removed page cover.
+  // Resolve only ready images owned by this record, in document order first.
+  const preview = `coalesce(
+    (SELECT f.id FROM files f WHERE f.id=p.cover_file_id AND f.page_id=p.id AND f.state='ready' AND f.media_type IN ('image/png','image/jpeg','image/gif','image/webp')),
+    (SELECT f.id FROM jsonb_path_query(p.document,'$.** ? (@.type == "orvynImage").attrs.fileId') WITH ORDINALITY image(value,position)
+      JOIN files f ON f.id::text=image.value #>> '{}' AND f.page_id=p.id AND f.state='ready' AND f.media_type IN ('image/png','image/jpeg','image/gif','image/webp') ORDER BY image.position LIMIT 1),
+    (SELECT f.id FROM files f WHERE f.page_id=p.id AND f.state='ready' AND f.media_type IN ('image/png','image/jpeg','image/gif','image/webp') ORDER BY f.created_at,f.id LIMIT 1)
+  ) AS preview_file_id,`;
+  return `${dependencies}${preview}${files},${relations},${formulas},p.id,p.title,p.icon,p.cover_preset,p.title_version,p.created_at,p.updated_at,p.created_by,p.last_edited_by,creator.email AS creator_email,editor.email AS editor_email,r.values,r.version,orvyn_page_role(p.id,${actor}) AS access_rank,CASE WHEN p.appearance_version=1 THEN (SELECT id FROM files WHERE page_id=p.id AND state='ready' AND media_type IN ('image/png','image/jpeg','image/gif','image/webp') ORDER BY created_at LIMIT 1) ELSE (SELECT id FROM files WHERE id=p.cover_file_id AND page_id=p.id AND state='ready' AND media_type IN ('image/png','image/jpeg','image/gif','image/webp')) END AS cover_file_id`;
 }
 export function recordDTO(row: any, properties: Property[]) {
   const values: Record<string, unknown> = {};
@@ -625,6 +633,7 @@ export function recordDTO(row: any, properties: Property[]) {
       ? { id: row.last_edited_by, email: row.editor_email }
       : null,
     coverFileId: row.cover_file_id || null,
+    previewFileId: row.preview_file_id || null,
     icon: row.icon || null,
     coverPreset: row.cover_preset || null,
     ...(properties.some((p) => p.type === "Relation")

@@ -136,7 +136,9 @@ test("linked database blocks persist independent views and never grant access to
       }),
     ).toBeVisible();
     await expect(
-      page.getByText("All changes saved", { exact: true }),
+      page
+        .locator("#page-editor-tools")
+        .getByText("All changes saved", { exact: true }),
     ).toBeVisible();
     const persisted = (
       await request("pages/" + document.id, { cookie: owner.cookie })
@@ -157,7 +159,9 @@ test("linked database blocks persist independent views and never grant access to
       .getByRole("textbox", { name: "Document", exact: true })
       .fill("Record notes stay on the original record page.");
     await expect(
-      page.getByText("All changes saved", { exact: true }),
+      page
+        .locator("#peek-editor-tools")
+        .getByText("All changes saved", { exact: true }),
     ).toBeVisible();
     await openPageFromSidebar(page, "Document with linked data");
     await expect(

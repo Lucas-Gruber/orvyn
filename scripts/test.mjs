@@ -141,6 +141,7 @@ try {
           "tests/databases.test.mjs",
           "tests/database-events.test.mjs",
           "tests/database-browser.test.mjs",
+          "tests/kanban.test.mjs",
           "tests/rate-limit.test.mjs",
           "tests/embedded-database.test.mjs",
           "tests/database-transfer.test.mjs",

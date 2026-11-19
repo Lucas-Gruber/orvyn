@@ -811,22 +811,9 @@ async function patchRecord(
 ) {
   cellWrites.commit(record, values);
 }
-function drop(event: DragEvent, option: string | null) {
-  const id = event.dataTransfer?.getData("text/plain"),
-    record = records.value.find((r) => r.pageId === id);
-  if (!record || record.accessRank < 30 || !groupProperty.value) return;
-  void patchRecord(record, { [groupProperty.value.id]: option });
-}
-function startDrag(event: DragEvent, record: DatabaseRecord) {
-  if (!canEdit.value || record.accessRank < 30 || busy.value) return;
-  event.dataTransfer?.setData("text/plain", record.pageId);
-  if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
-}
-function focusStatus(event: MouseEvent) {
-  (event.currentTarget as HTMLElement)
-    .closest("article")
-    ?.querySelector("select")
-    ?.focus();
+function beginBoardRecord(group: string | null) {
+  beginRecord();
+  if (groupProperty.value) draft[groupProperty.value.id] = group;
 }
 async function chooseView(id: string) {
   viewId.value = id;
@@ -1741,66 +1728,22 @@ onBeforeUnmount(() => {
           </tbody>
         </table>
       </div>
-      <div
+      <DatabaseBoard
         v-else-if="currentView?.type === 'Board' && groupProperty"
-        class="database-board"
-      >
-        <section
-          v-for="group in boardGroups"
-          :key="group.id || 'unassigned'"
-          class="board-column"
-          :aria-label="group.label"
-          @dragover.prevent
-          @drop.prevent="drop($event, group.id)"
-        >
-          <h2>
-            {{ group.label }}
-            <small>{{ group.records.length }} on this page</small>
-          </h2>
-          <article
-            v-for="record in group.records"
-            :key="record.pageId"
-            :draggable="canEdit && record.accessRank >= 30 && !busy"
-            @dragstart="startDrag($event, record)"
-          >
-            <button
-              v-if="canEdit && record.accessRank >= 30"
-              class="card-drag-handle"
-              :aria-label="'Move ' + record.title"
-              :draggable="!busy"
-              :disabled="busy"
-              @dragstart.stop="startDrag($event, record)"
-              @click="focusStatus"
-            >
-              ↕
-            </button>
-            <button
-              @click="openRecord(record.pageId)"
-              @keydown="recordKeys($event, record)"
-              @contextmenu="recordContext($event, record)"
-            >
-              {{ record.title }}</button><DatabaseFieldInput
-              :database-id="databaseId"
-              :people="directory"
-              v-if="canEdit && record.accessRank >= 30"
-              :property="groupProperty"
-              :model-value="record.values[groupProperty.id]"
-              :disabled="busy"
-              @update:model-value="
-                patchRecord(record, { [groupProperty!.id]: $event })
-              "
-            />
-            <p
-              v-for="property in columns.filter(
-                (p) => p.type !== 'Title' && p.id !== groupProperty?.id,
-              )"
-              :key="property.id"
-            >
-              {{ property.name }}: {{ format(record, property) }}
-            </p>
-          </article>
-        </section>
-      </div>
+        :database-id="databaseId"
+        :view-id="currentView.id"
+        :groups="boardGroups"
+        :columns="columns"
+        :group-property="groupProperty"
+        :can-edit="canEdit"
+        :busy="busy"
+        :format="format"
+        @open="openRecord"
+        @context="recordContext"
+        @keys="recordKeys"
+        @move="patchRecord"
+        @create="beginBoardRecord"
+      />
       <div
         v-else-if="currentView?.type === 'Calendar'"
         class="database-calendar"
@@ -2643,29 +2586,6 @@ onBeforeUnmount(() => {
   width: auto;
   min-width: 0;
 }
-.database-board {
-  display: flex;
-  gap: 1rem;
-  overflow: auto;
-  align-items: flex-start;
-}
-.board-column {
-  min-width: 250px;
-  flex: 1;
-  background: var(--panel);
-  padding: 1rem;
-  border-radius: 0.5rem;
-  margin: 0;
-}
-.board-column h2 {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-}
-.board-column h2 small {
-  font-size: 0.75rem;
-}
-.board-column article,
 .database-gallery article {
   padding: 1rem;
   border: 1px solid var(--line);
@@ -2673,13 +2593,8 @@ onBeforeUnmount(() => {
   margin: 1rem 0;
   background: var(--bg);
 }
-.board-column article p,
 .database-gallery p {
   font-size: 0.85rem;
-}
-.board-column article select {
-  margin-top: 0.8rem;
-  max-width: 100%;
 }
 .calendar-grid {
   display: grid;
@@ -2761,10 +2676,6 @@ small {
 }
 .gallery-group-heading {
   grid-column: 1/-1;
-}
-.card-drag-handle {
-  cursor: grab;
-  float: right;
 }
 
 .database-workspace {
@@ -3040,31 +2951,6 @@ small {
 .database-empty .ghost {
   font-size: 0.8rem;
 }
-.database-board {
-  gap: 14px;
-  padding: 3px 0 15px;
-}
-.board-column {
-  padding: 11px;
-  background: var(--surface);
-  border: 1px solid var(--line-soft);
-  border-radius: 8px;
-  min-width: 235px;
-}
-.board-column h2 {
-  font-size: 0.82rem;
-  font-weight: 550;
-  margin: 3px 0 16px;
-  color: var(--muted);
-}
-.board-column h2 small {
-  font-size: 0.68rem;
-  background: var(--bg);
-  padding: 2px 5px;
-  border-radius: 4px;
-  color: var(--faint);
-}
-.board-column article,
 .database-gallery article {
   border: 1px solid var(--line);
   border-radius: 7px;
@@ -3073,11 +2959,9 @@ small {
   background: var(--bg);
   box-shadow: 0 2px 4px #0001;
 }
-.board-column article:hover,
 .database-gallery article:hover {
   border-color: var(--faint);
 }
-.board-column article > button:not(.card-drag-handle),
 .database-gallery article > button {
   background: transparent;
   border: 0;
@@ -3088,38 +2972,10 @@ small {
   min-height: 24px;
   text-align: left;
 }
-.board-column article p,
 .database-gallery article p {
   font-size: 0.74rem;
   margin: 9px 0 0;
   color: var(--faint);
-}
-.board-column article select {
-  margin-top: 9px;
-  padding: 3px 6px;
-  min-height: 25px;
-  font-size: 0.74rem;
-  color: var(--accent);
-  background: var(--accent-soft);
-  border: 0;
-}
-.card-drag-handle {
-  background: transparent;
-  border: 0;
-  padding: 0;
-  min-height: 22px;
-  min-width: 17px;
-  opacity: 0.45;
-  color: var(--muted);
-}
-.board-column .actions {
-  margin: 14px 0 0;
-}
-.board-column .actions button {
-  font-size: 0.74rem;
-  background: transparent;
-  border-color: var(--line);
-  padding: 4px 6px;
 }
 .database-list li {
   padding: 11px 8px;
