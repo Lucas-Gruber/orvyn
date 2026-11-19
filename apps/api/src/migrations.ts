@@ -631,6 +631,10 @@ END $$;`,
   { version: 38, sql: multiHopRollupMigration },
   { version: 39, sql: propertySearchMigration },
   { version: 40, sql: propertyConversionMigration },
+  {
+    version: 41,
+    sql: "ALTER TABLE pages ALTER COLUMN document_schema_version SET DEFAULT 12",
+  },
 ] as const;
 
 export async function migrate(pool: Pool, target = migrations.at(-1)!.version) {

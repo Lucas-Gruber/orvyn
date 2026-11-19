@@ -26,8 +26,9 @@ import { BlockControls } from "./block-controls.js";
 import { PersonMention } from "./person-mention.js";
 import { validPersonId, documentPeople } from "./mention-model.js";
 import { CommentHighlights } from "./comment-highlights.js";
+import { EditorTables } from "./table-controls.js";
 const lowlight = createLowlight(common);
-export const documentSchemaVersion = 11;
+export const documentSchemaVersion = 12;
 export function editorExtensions(collaborative = false): AnyExtension[] {
   return [
     StarterKit.configure({
@@ -39,7 +40,8 @@ export function editorExtensions(collaborative = false): AnyExtension[] {
     }),
     TaskList,
     TaskItem.configure({ nested: true }),
-    TableKit.configure({ table: { resizable: false } }),
+    TableKit.configure({ table: { resizable: false, cellMinWidth: 96 } }),
+    EditorTables,
     DatabaseBlock,
     HeadingIdentity,
     CalloutBlock,
@@ -159,7 +161,7 @@ export function validateDocument(input: unknown) {
         (!Array.isArray(n.attrs.colwidth) ||
           n.attrs.colwidth.length > 100 ||
           n.attrs.colwidth.some(
-            (v: any) => !Number.isInteger(v) || v < 1 || v > 2000,
+            (v: any) => !Number.isInteger(v) || v < 0 || v > 2000,
           ))
       )
         throw Error("Invalid column width");
@@ -221,6 +223,16 @@ export { default as StarterKit } from "@tiptap/starter-kit";
 export { default as TaskList } from "@tiptap/extension-task-list";
 export { default as TaskItem } from "@tiptap/extension-task-item";
 export { TableKit } from "@tiptap/extension-table";
+export {
+  tableSelectionContext,
+  cancelEditorTableResize,
+  canRunEditorTableAction,
+  runEditorTableAction,
+  setEditorTableColumnWidth,
+  editorTableMinWidth,
+  editorTableMaxWidth,
+} from "./table-controls.js";
+export type { EditorTableAction } from "./table-controls.js";
 
 export { DatabaseBlock } from "./database-node.js";
 export {

@@ -26,6 +26,7 @@ import {
   pageLink,
   headingFromHash,
   validHeadingId,
+  cancelEditorTableResize,
 } from "@orvyn/editor";
 import { pageNavigationKey } from "../composables/pageNavigation";
 import * as Y from "yjs";
@@ -1303,17 +1304,19 @@ watch(
   [status, synced, readOnly, editor, denied, accessRank, () => props.paused],
   () => {
     persistInitialHeadingIds();
-    editor.value?.setEditable(
+    const editable =
       status.value === "connected" &&
-        synced.value &&
-        !readOnly.value &&
-        !denied.value &&
-        accessRank.value >= 30 &&
-        !props.paused,
-    );
+      synced.value &&
+      !readOnly.value &&
+      !denied.value &&
+      accessRank.value >= 30 &&
+      !props.paused;
+    if (editor.value && !editable) cancelEditorTableResize(editor.value);
+    editor.value?.setEditable(editable);
   },
 );
 onBeforeUnmount(() => {
+  if (editor.value) cancelEditorTableResize(editor.value);
   disposed = true;
   peopleRequest++;
   clearTimeout(peopleTimer);
@@ -1522,6 +1525,7 @@ onBeforeUnmount(() => {
         @link="openDocumentLink()"
         @comment="prepareComment"
       />
+      <EditorTableMenu :editor="editor" />
       <div
         v-show="formattingOpen && !readOnly"
         :id="formattingId"
@@ -1720,12 +1724,53 @@ onBeforeUnmount(() => {
 .block-editor .tiptap table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
+  margin: 0;
+}
+.block-editor .tiptap .tableWrapper {
+  overflow-x: auto;
+  margin: 1.1em 0;
+  max-width: 100%;
 }
 .block-editor .tiptap td,
 .block-editor .tiptap th {
   border: 1px solid var(--line);
-  padding: 0.5rem;
-  min-width: 3rem;
+  padding: 8px 12px;
+  min-width: 96px;
+  vertical-align: top;
+  position: relative;
+}
+.block-editor .tiptap th {
+  font-weight: 600;
+  text-align: left;
+  background: var(--surface);
+}
+.block-editor .tiptap :is(td, th) p {
+  margin: 0;
+  min-height: 1.6em;
+}
+.block-editor .tiptap .selectedCell::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: var(--accent-soft);
+  pointer-events: none;
+}
+.block-editor .tiptap :is(td, th) > .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--accent);
+  pointer-events: none;
+  z-index: 2;
+}
+.block-editor .tiptap.resize-cursor {
+  cursor: col-resize;
+}
+.block-editor .tiptap a[href] {
+  cursor: pointer;
 }
 .block-editor .tiptap ul[data-type="taskList"] {
   list-style: none;
@@ -1904,8 +1949,10 @@ button:disabled {
   margin: 0 0 0.5em;
   line-height: 1.6;
 }
-.block-editor .tiptap p:only-child:empty:before,
-.block-editor .tiptap p:only-child:has(> br:only-child):before {
+.block-editor .tiptap[contenteditable="true"] > p:only-child:empty:before,
+.block-editor
+  .tiptap[contenteditable="true"]
+  > p:only-child:has(> br:only-child):before {
   content: "Start writing, or type / to insert a block…";
   color: var(--faint);
   float: left;

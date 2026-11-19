@@ -21,14 +21,14 @@ async function toggle() {
   if (open.value) {
     await nextTick();
     panel.value
-      ?.querySelector<HTMLButtonElement>('[role="menuitem"]:not(:disabled)')
+      ?.querySelector<HTMLButtonElement>('[role^="menuitem"]:not(:disabled)')
       ?.focus();
   }
 }
 function keys(event: KeyboardEvent) {
   const items = [
       ...(panel.value?.querySelectorAll<HTMLButtonElement>(
-        '[role="menuitem"]:not(:disabled)',
+        '[role^="menuitem"]:not(:disabled)',
       ) || []),
     ],
     index = items.indexOf(document.activeElement as HTMLButtonElement);
@@ -88,7 +88,8 @@ onBeforeUnmount(() => {
         { left: align === 'left', up, 'space-options': wide },
       ]"
       @click="
-        ($event.target as HTMLElement).closest('[role=menuitem]') && close(true)
+        ($event.target as HTMLElement).closest('[role^=menuitem]') &&
+        close(true)
       "
     >
       <slot />

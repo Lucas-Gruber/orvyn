@@ -171,6 +171,7 @@ try {
           "tests/backlinks.test.mjs",
           "tests/editor-blocks.test.mjs",
           "tests/editor-ux.test.mjs",
+          "tests/editor-tables.test.mjs",
           "tests/editor-assets.test.mjs",
           "tests/page-previews.test.mjs",
           "tests/video-embeds.test.mjs",
