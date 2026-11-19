@@ -32,10 +32,15 @@ const { data, refresh } = await useAsyncData(
 );
 let poll: ReturnType<typeof setInterval> | undefined,
   checking = false,
+  checkAgain = false,
   alive = true;
 const controller = new AbortController();
 async function verify() {
-  if (checking || document.hidden || !data.value?.snapshot) return;
+  if (!alive || document.hidden || !data.value?.snapshot) return;
+  if (checking) {
+    checkAgain = true;
+    return;
+  }
   checking = true;
   try {
     const status = await $fetch<{ version: number }>(
@@ -57,6 +62,10 @@ async function verify() {
       };
   } finally {
     checking = false;
+    if (checkAgain && alive) {
+      checkAgain = false;
+      void verify();
+    }
   }
 }
 onMounted(() => {

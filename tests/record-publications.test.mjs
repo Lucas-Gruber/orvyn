@@ -455,10 +455,43 @@ test("Chromium: share a record directly, choose its properties, add a related re
     assert.ok(!(await reader.content()).includes("PRIVATE parent database"));
     assert.deepEqual(forbidden, []);
     assert.deepEqual(errors, []);
+    await expect(
+      reader
+        .getByRole("navigation", { name: "Published pages", exact: true })
+        .locator("details"),
+    ).not.toHaveAttribute("open");
+    await reader.bringToFront();
+    await reader.waitForFunction(() => document.visibilityState === "visible");
+    let releaseStatus;
+    const statusGate = new Promise((resolve) => (releaseStatus = resolve));
+    let startedResolve, startedTimer;
+    const started = new Promise((resolve, reject) => {
+      startedTimer = setTimeout(
+        () => reject(Error("Status check did not start")),
+        12000,
+      );
+      startedResolve = () => {
+        clearTimeout(startedTimer);
+        resolve();
+      };
+    });
+    let hold = true;
+    await reader.route("**/api/v1/publications/*/status", async (route) => {
+      const result = await route.fetch();
+      if (hold) {
+        hold = false;
+        startedResolve();
+        await statusGate;
+      }
+      await route.fulfill({ response: result });
+    });
+    await reader.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await started;
     await db.query("UPDATE pages SET visibility='restricted' WHERE id=$1", [
       f.id,
     ]);
     await reader.evaluate(() => window.dispatchEvent(new Event("focus")));
+    releaseStatus();
     await expect(
       reader.getByRole("heading", {
         name: "This link is unavailable",
