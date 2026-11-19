@@ -64,9 +64,10 @@ export async function publicationDatabases(
   actor: string,
   scope: PublicationScope,
 ) {
-  const selectedRecords = new Set(
-    scope.databases.flatMap((item) => item.recordIds),
-  );
+  const selectedRecords = new Set([
+    ...scope.databases.flatMap((item) => item.recordIds),
+    ...scope.records.map((item) => item.recordId),
+  ]);
   const projections = new Map<string, PublicDatabase>(),
     sourceIds = new Set<string>(),
     fingerprints: unknown[] = [],
@@ -75,11 +76,54 @@ export async function publicationDatabases(
   const recordsById = new Map<string, any>(),
     recordProperties = new Map<string, PublicProperty[]>(),
     fileFields = new Set<string>();
+  const recordDetails = new Map<
+    string,
+    { properties: PublicProperty[]; values: Record<string, PublicValue> }
+  >();
+  const choices = scope.databases.map((choice) => ({
+    ...choice,
+    direct: false,
+  }));
+  for (const record of scope.records) {
+    const source = (
+      await c.query(
+        "SELECT r.database_id FROM database_records r JOIN pages p ON p.id=r.page_id WHERE p.id=$1 AND orvyn_page_role(p.id,$2)>=40",
+        [record.recordId, actor],
+      )
+    ).rows[0];
+    if (!source)
+      fail(404, "A selected record page is unavailable or cannot be published");
+    choices.push({
+      databaseId: source.database_id,
+      viewId: "",
+      recordIds: [record.recordId],
+      propertyIds: record.propertyIds,
+      direct: true,
+    });
+  }
+  const catalogs = new Map<string, Awaited<ReturnType<typeof database>>>();
   let omittedRelations = 0;
-  for (const choice of scope.databases) {
-    const context = await database(c, actor, choice.databaseId, 40),
-      view =
-        context.views.find((item) => item.id === choice.viewId) ||
+  for (const choice of choices) {
+    let context = catalogs.get(choice.databaseId);
+    if (!context) {
+      context = await database(c, actor, choice.databaseId, 40);
+      catalogs.set(choice.databaseId, context);
+    }
+    const view = choice.direct
+      ? {
+          name: "Record properties",
+          type: "List",
+          id: undefined,
+          version: 0,
+          config: {
+            filters: [],
+            sorts: [],
+            visibleProperties: choice.propertyIds,
+            groupBy: null,
+            dateProperty: null,
+          },
+        }
+      : context.views.find((item) => item.id === choice.viewId) ||
         fail(404, "A selected database view is unavailable");
     const { config, properties: visible } = publicViewProperties(context, view);
     const title =
@@ -255,6 +299,11 @@ export async function publicationDatabases(
       };
     });
     for (const id of ids) recordProperties.set(id, publicProperties);
+    for (const record of records)
+      recordDetails.set(record.pageId, {
+        properties: publicProperties,
+        values: record.values,
+      });
     const projected: PublicDatabase = {
       properties: publicProperties,
       records,
@@ -274,7 +323,7 @@ export async function publicationDatabases(
         ),
       },
     };
-    projections.set(context.page.id, projected);
+    if (!choice.direct) projections.set(context.page.id, projected);
     sourceIds.add(context.page.id);
     fingerprints.push([
       context.page.id,
@@ -299,6 +348,7 @@ export async function publicationDatabases(
     fingerprints,
     recordsById,
     recordProperties,
+    recordDetails,
     recordOwners,
     wantedFiles,
     fileFields,

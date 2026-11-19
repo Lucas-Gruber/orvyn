@@ -258,12 +258,14 @@ watch(
 }
 .public-page-properties > div {
   display: grid;
-  grid-template-columns: 140px 1fr;
+  grid-template-columns: 140px minmax(0, 1fr);
   gap: 16px;
   padding: 8px 0;
   font-size: 13px;
 }
 .public-page-properties > div > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-size: 12px;
   color: var(--muted);
 }

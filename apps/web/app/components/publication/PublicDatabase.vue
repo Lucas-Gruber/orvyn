@@ -26,6 +26,18 @@ function open(id: string) {
       return;
     }
   }
+  const document = props.snapshot.pages.find(
+    (page) => page.id === id && page.record,
+  );
+  if (document?.record)
+    selected.value = {
+      record: {
+        pageId: document.id,
+        title: document.title,
+        values: document.record.values,
+      },
+      properties: document.record.properties,
+    };
 }
 const title = computed(() =>
   props.database.properties.find((p) => p.type === "Title"),
@@ -606,12 +618,14 @@ const undated = computed(() =>
 }
 .public-record-properties > div {
   display: grid;
-  grid-template-columns: 160px 1fr;
+  grid-template-columns: 160px minmax(0, 1fr);
   gap: 20px;
   padding: 10px 0;
   font-size: 13px;
 }
 .public-record-properties > div > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
   color: var(--muted);
   font-size: 12px;
 }
@@ -702,7 +716,7 @@ const undated = computed(() =>
 }
 @media (max-width: 600px) {
   .public-record-properties > div {
-    grid-template-columns: 100px 1fr;
+    grid-template-columns: 100px minmax(0, 1fr);
     gap: 12px;
   }
   .public-database-list-row {

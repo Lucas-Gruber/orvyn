@@ -21,10 +21,20 @@ const values = computed(() =>
 );
 const option = (id: string) =>
   props.property.options?.find((option) => option.id === id);
-const record = (id: string) =>
-  props.snapshot.pages
+const record = (id: string) => {
+  const document = props.snapshot.pages.find(
+    (page) => page.id === id && page.record,
+  );
+  if (document?.record)
+    return {
+      pageId: document.id,
+      title: document.title,
+      values: document.record.values,
+    };
+  return props.snapshot.pages
     .flatMap((page) => page.database?.records || [])
     .find((record) => record.pageId === id);
+};
 const recordHref = (id: string) => {
   if (props.snapshot.pages.some((page) => page.id === id)) return "?page=" + id;
   const owner = props.snapshot.pages.find((page) =>
@@ -126,6 +136,9 @@ const href = computed(() => {
   line-height: 1.6;
   font-size: 11px;
   white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--text);
 }
 .public-option-violet {

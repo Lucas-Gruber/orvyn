@@ -22,12 +22,20 @@ export const publicationDatabaseInput = z.strictObject({
   recordIds: ids(publicationLimits.records),
   propertyIds: ids(50),
 });
+export const publicationRecordInput = z.strictObject({
+  recordId: z.uuid(),
+  propertyIds: ids(50),
+});
 export const publicationScopeInput = z
   .strictObject({
     pageIds: ids(publicationLimits.pages),
     databases: z
       .array(publicationDatabaseInput)
       .max(publicationLimits.databases),
+    records: z
+      .array(publicationRecordInput)
+      .max(publicationLimits.pages)
+      .default([]),
     extraFileIds: ids(publicationLimits.files).default([]),
   })
   .superRefine((value, context) => {
@@ -40,8 +48,20 @@ export const publicationScopeInput = z
         path: ["databases"],
         message: "Choose one view per published database",
       });
-    const records = value.databases.flatMap((database) => database.recordIds);
-    if (records.length > publicationLimits.records)
+    if (
+      new Set(value.records.map((record) => record.recordId)).size !==
+      value.records.length
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["records"],
+        message: "Choose each record page once",
+      });
+    const records = new Set([
+      ...value.databases.flatMap((database) => database.recordIds),
+      ...value.records.map((record) => record.recordId),
+    ]);
+    if (records.size > publicationLimits.records)
       context.addIssue({
         code: "custom",
         path: ["databases"],

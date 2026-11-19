@@ -248,6 +248,13 @@ test("Chromium: lost publication responses retain the reviewed request through a
       { name: "orvyn_session", value: f.cookie.split("=")[1], url: base },
     ]);
     const page = await context.newPage();
+    let releaseChoices;
+    const choicesGate = new Promise((resolve) => (releaseChoices = resolve));
+    await page.route("**/api/v1/" + f.path + "/choices*", async (route) => {
+      const result = await route.fetch();
+      await choicesGate;
+      await route.fulfill({ response: result });
+    });
     const ids = [];
     let losses = 2;
     await page.route("**/api/v1/" + f.path, async (route) => {
@@ -274,6 +281,11 @@ test("Chromium: lost publication responses retain the reviewed request through a
       name: "Review publication",
       exact: true,
     });
+    await expect(review).toBeVisible();
+    releaseChoices();
+    await expect(
+      share.locator(".publish-choice").filter({ hasText: "Design" }),
+    ).toHaveCount(1);
     await expect(review).toBeVisible();
     await review
       .getByRole("button", { name: "Publish snapshot", exact: true })

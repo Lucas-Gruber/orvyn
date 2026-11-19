@@ -29,8 +29,41 @@ const links = ref<any[]>([]),
   previewOpen = ref(false);
 const databaseScopes = ref<PublicationInput["scope"]["databases"]>([]),
   scopeGeneration = ref(0);
-const totalRecords = computed(() =>
-  databaseScopes.value.reduce((sum, item) => sum + item.recordIds.length, 0),
+const recordScopes = ref<PublicationInput["scope"]["records"]>(
+  props.page.kind === "record"
+    ? [{ recordId: props.page.id, propertyIds: [] }]
+    : [],
+);
+function setRecord(value: PublicationInput["scope"]["records"][number]) {
+  recordScopes.value = recordScopes.value.map((scope) =>
+    scope.recordId === value.recordId ? value : scope,
+  );
+}
+function chooseRecordPage(page: any, checked: boolean) {
+  if (page.kind !== "record") return;
+  if (
+    checked &&
+    !recordScopes.value.some((scope) => scope.recordId === page.id)
+  )
+    recordScopes.value.push({ recordId: page.id, propertyIds: [] });
+  if (!checked)
+    recordScopes.value = recordScopes.value.filter(
+      (scope) => scope.recordId !== page.id,
+    );
+}
+watch(selected, () => {
+  recordScopes.value = recordScopes.value.filter(
+    (scope) =>
+      scope.recordId === props.page.id ||
+      selected.value.includes(scope.recordId),
+  );
+});
+const totalRecords = computed(
+  () =>
+    new Set([
+      ...databaseScopes.value.flatMap((scope) => scope.recordIds),
+      ...recordScopes.value.map((scope) => scope.recordId),
+    ]).size,
 );
 function syncDatabases() {
   const ids = new Set([
@@ -43,10 +76,19 @@ function syncDatabases() {
   ]);
   const removed = databaseScopes.value
     .filter((scope) => !ids.has(scope.databaseId))
-    .flatMap((scope) => scope.recordIds);
+    .flatMap((scope) => scope.recordIds)
+    .filter((id) => !recordScopes.value.some((scope) => scope.recordId === id));
   if (removed.some((id) => selected.value.includes(id)))
     selected.value = selected.value.filter((id) => !removed.includes(id));
-  databaseScopes.value = [...ids].map(
+  const orderedIds = [
+    ...databaseScopes.value
+      .filter((scope) => ids.has(scope.databaseId))
+      .map((scope) => scope.databaseId),
+    ...[...ids].filter(
+      (id) => !databaseScopes.value.some((scope) => scope.databaseId === id),
+    ),
+  ];
+  const next = orderedIds.map(
     (id) =>
       databaseScopes.value.find((scope) => scope.databaseId === id) || {
         databaseId: id,
@@ -55,6 +97,11 @@ function syncDatabases() {
         propertyIds: [],
       },
   );
+  if (
+    next.length !== databaseScopes.value.length ||
+    next.some((scope, index) => scope !== databaseScopes.value[index])
+  )
+    databaseScopes.value = next;
 }
 watch([selected, choices], syncDatabases, { immediate: true });
 function setDatabase(value: PublicationInput["scope"]["databases"][number]) {
@@ -77,6 +124,7 @@ watch(
   [
     selected,
     databaseScopes,
+    recordScopes,
     extras,
     label,
     protectedLink,
@@ -155,8 +203,13 @@ function edit(link: any) {
     ...new Set([
       ...link.scope.pageIds,
       ...link.scope.databases.map((scope: any) => scope.databaseId),
+      ...(link.scope.records || []).map((scope: any) => scope.recordId),
     ]),
   ];
+  recordScopes.value = (link.scope.records || []).map((scope: any) => ({
+    recordId: scope.recordId,
+    propertyIds: [...scope.propertyIds],
+  }));
   databaseScopes.value = link.scope.databases.map((scope: any) => ({
     ...scope,
     recordIds: [...scope.recordIds],
@@ -192,6 +245,10 @@ function fresh() {
   target.value = null;
   selected.value = [];
   databaseScopes.value = [];
+  recordScopes.value =
+    props.page.kind === "record"
+      ? [{ recordId: props.page.id, propertyIds: [] }]
+      : [];
   syncDatabases();
   scopeGeneration.value++;
   extras.value = [];
@@ -206,6 +263,10 @@ function input(): PublicationInput {
       databases: databaseScopes.value.map((scope) => ({
         ...scope,
         recordIds: [...scope.recordIds],
+        propertyIds: [...scope.propertyIds],
+      })),
+      records: recordScopes.value.map((scope) => ({
+        recordId: scope.recordId,
         propertyIds: [...scope.propertyIds],
       })),
       extraFileIds: extras.value,
@@ -424,7 +485,7 @@ const previewFile = (id: string) => "/api/v1/files/" + id + "/preview";
       <div class="publish-page-search">
         <AppIcon name="search" :size="15" /><input
           v-model="search"
-          placeholder="Find pages or whiteboards…"
+          placeholder="Find pages, items or whiteboards…"
           aria-label="Find pages to publish"
           :disabled="busy"
         />
@@ -446,12 +507,26 @@ const previewFile = (id: string) => "/api/v1/files/" + id + "/preview";
             v-model="selected"
             type="checkbox"
             :value="item.id"
+            @change="
+              chooseRecordPage(
+                item,
+                ($event.target as HTMLInputElement).checked,
+              )
+            "
             :disabled="busy || (!selected.includes(item.id) && count >= 100)"
           /><PageSymbol :kind="item.kind" :size="16" /><span
             >{{ item.title }}<small>{{ item.space_name }}</small></span
           ></label
         >
       </div>
+      <PublicationRecordScope
+        v-for="scope in recordScopes"
+        :key="scope.recordId + ':' + scopeGeneration"
+        :root-id="page.id"
+        :scope="scope"
+        :busy="busy"
+        @change="setRecord"
+      />
       <PublicationDatabaseScope
         v-for="scope in databaseScopes"
         :key="scope.databaseId + ':' + scopeGeneration"
@@ -530,7 +605,10 @@ const previewFile = (id: string) => "/api/v1/files/" + id + "/preview";
       <button
         class="primary publish-review"
         :disabled="
-          busy || !label.trim() || databaseScopes.some((scope) => !scope.viewId)
+          busy ||
+          !label.trim() ||
+          databaseScopes.some((scope) => !scope.viewId) ||
+          recordScopes.some((scope) => !scope.propertyIds.length)
         "
       >
         <AppIcon name="globe" :size="16" />{{

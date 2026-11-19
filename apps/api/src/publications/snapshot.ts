@@ -74,6 +74,7 @@ export async function publicationSnapshot(
     ...new Set([
       rootId,
       ...input.scope.pageIds,
+      ...input.scope.records.map((record) => record.recordId),
       ...input.scope.databases.map((item) => item.databaseId),
     ]),
   ];
@@ -118,7 +119,7 @@ export async function publicationSnapshot(
     if (page.kind === "record" && !databases.recordOwners.has(page.id))
       fail(
         400,
-        "A record page must also be selected in its published database view",
+        "Choose the properties for this record page or include it in a published database view",
       );
   }
   const rawDocuments = new Map<string, any>(),
@@ -258,6 +259,12 @@ export async function publicationSnapshot(
           record.values[property.id] = (
             record.values[property.id] as string[]
           ).filter((id) => useFile(id));
+  for (const detail of databases.recordDetails.values())
+    for (const property of detail.properties)
+      if (property.type === "Files")
+        detail.values[property.id] = (
+          detail.values[property.id] as string[]
+        ).filter((id) => useFile(id));
   const publicPages: PublicPage[] = pages.map((page) => {
     const board = rawBoards.get(page.id)?.scene;
     if (board)
@@ -296,12 +303,7 @@ export async function publicationSnapshot(
         : {}),
       ...(page.kind === "record"
         ? {
-            record: {
-              properties: databases.recordProperties.get(page.id)!,
-              values: databases.projections
-                .get(databases.recordOwners.get(page.id)!)!
-                .records.find((record) => record.pageId === page.id)!.values,
-            },
+            record: databases.recordDetails.get(page.id)!,
           }
         : {}),
     };

@@ -134,12 +134,42 @@ class Publications {
     const pages = (
       await db.query(
         `SELECT p.id,p.title,p.kind,p.parent_id,s.name AS space_name FROM pages p JOIN spaces s ON s.id=p.space_id
-   WHERE p.kind IN ('page','folder','whiteboard','database') AND orvyn_page_role(p.id,$1)>=40 AND ($2='' OR strpos(lower(p.title),lower($2))>0 OR p.id=ANY($4::uuid[]))
+   WHERE p.kind IN ('page','folder','whiteboard','database','record') AND orvyn_page_role(p.id,$1)>=40 AND ($2='' OR strpos(lower(p.title),lower($2))>0 OR p.id=ANY($4::uuid[]))
    ORDER BY (p.id::text=$3) DESC,(p.id=ANY($4::uuid[])) DESC,p.title,p.id LIMIT 200`,
         [uid, q.slice(0, 200), root, selected],
       )
     ).rows;
     return { pages };
+  }
+  @Get("records/:recordId") async recordChoices(
+    @Req() req: any,
+    @Param("root") root: string,
+    @Param("recordId") id: string,
+  ) {
+    const uid = await user(req);
+    return readSnapshot(async (c) => {
+      await pageAccess(c, uid, root, 40);
+      const page = await pageAccess(c, uid, id, 40);
+      const record = (
+        await c.query(
+          "SELECT database_id FROM database_records WHERE page_id=$1",
+          [page.id],
+        )
+      ).rows[0];
+      if (!record) fail(404, "Record page unavailable");
+      const context = await database(c, uid, record.database_id, 40);
+      return {
+        id: page.id,
+        title: page.title,
+        properties: context.properties.map((property) => ({
+          id: property.id,
+          name: property.name,
+          type: property.type,
+          required: property.type === "Title",
+          allowed: publicPropertyTypes.has(property.type),
+        })),
+      };
+    });
   }
   @Get("databases/:databaseId") async databaseChoices(
     @Req() req: any,
