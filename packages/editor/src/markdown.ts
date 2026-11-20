@@ -303,6 +303,12 @@ export function importMarkdown(source: string, options: MarkdownImportOptions) {
           token.type === "code"
             ? token.lang?.split(/\s+/)[0] || "plaintext"
             : "html";
+        // Marked includes the fence separator when a blank trailing line is
+        // present. The editor stores the code itself, without that separator.
+        const codeText =
+          token.type === "code" && token.codeBlockStyle !== "indented"
+            ? token.text.replace(/\n$/, "")
+            : token.text;
         return [
           {
             type: "codeBlock",
@@ -311,7 +317,7 @@ export function importMarkdown(source: string, options: MarkdownImportOptions) {
                 ? lang
                 : "plaintext",
             },
-            content: token.text ? [{ type: "text", text: token.text }] : [],
+            content: codeText ? [{ type: "text", text: codeText }] : [],
           },
         ];
       }

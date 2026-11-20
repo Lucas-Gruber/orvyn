@@ -182,6 +182,7 @@ try {
           "tests/public-rollups.test.mjs",
           "tests/public-people.test.mjs",
           "tests/markdown-import.test.mjs",
+          "tests/markdown-export.test.mjs",
           "tests/editor-assets.test.mjs",
           "tests/page-previews.test.mjs",
           "tests/video-embeds.test.mjs",

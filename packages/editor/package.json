@@ -55,6 +55,10 @@
     "./markdown": {
       "types": "./dist/markdown.d.ts",
       "default": "./dist/markdown.js"
+    },
+    "./markdown-export": {
+      "types": "./dist/markdown-export.d.ts",
+      "default": "./dist/markdown-export.js"
     }
   }
 }

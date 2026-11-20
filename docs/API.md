@@ -51,6 +51,8 @@ Page creation accepts parentId. Page listing accepts q, after and limit (1–200
 
 Markdown import: `POST /spaces/:space/imports/markdown/preview` accepts `{filename,markdown,title?,titleFromHeading?,parentId?}` and returns a signed review. `POST /spaces/:space/imports/markdown` accepts `{requestId,previewToken,input}` and atomically creates one page with recoverable retries. Both require current editor access and exact Origin. See MARKDOWN_IMPORT.md for limits, conversion rules and destination policy binding.
 
+Markdown export: authenticated `GET /pages/:id/export/markdown?includePeopleNames=false` returns reviewed file contents, filename, conversion notes and a digest. `GET /pages/:id/export.md` returns the current protected Markdown attachment; an optional `review=<digest>` requires exact reviewed output after current source/reference checks. Names are opt-in. See MARKDOWN_EXPORT.md for scope, limits and conversion rules.
+
 PATCH /pages/:id/title accepts title and titleVersion. REST content updates normalize legacy paragraph input but reject replacements once editor_documents contains a CRDT for the page. Use the authenticated collaboration service for subsequent content changes.
 
 File routes: GET /files/limits; GET/POST /pages/:id/files (POST is authenticated multipart/form-data with one file field, Origin required); GET /files/:id/download; GET /files/:id/preview for detected raster images; DELETE /files/:id with JSON body. All file resources inherit page permissions.

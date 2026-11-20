@@ -61,7 +61,8 @@ Work through these areas in order, preserving working features and committing/pu
    - [ ] Identity linking, OIDC group mapping, real-provider validation and ownership transfer.
 8. Import/export
    - [x] Single-page Markdown import with a complete preview, native editable blocks, permanent heading links, current destination checks and retry recovery.
-   - [ ] Markdown export, page hierarchies, attachment payloads and portable restore.
+   - [x] Reviewed Markdown document export with ordinary block conversion, optional current people names, protected reference/file links and fresh checked downloads.
+   - [ ] Larger Markdown imports, page hierarchies, attachment payloads and portable restore.
    - [ ] Faithful Notion import before claiming migration support.
 9. Desktop and operation
    - [ ] Tauri clients, releases, update distribution and signing.
