@@ -166,7 +166,9 @@ const undated = computed(() =>
         {{ database.records.length === 1 ? "shared item" : "shared items"
         }}<template
           v-if="
-            database.properties.some((property) => property.type === 'Formula')
+            database.properties.some((property) =>
+              ['Formula', 'Rollup'].includes(property.type),
+            )
           "
         >
           · Calculated from shared values</template

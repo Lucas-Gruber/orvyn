@@ -52,7 +52,8 @@ Work through these areas in order, preserving working features and committing/pu
    - [x] Hierarchical public navigation with local search, breadcrumbs, a mobile picker and retained automatic/manual publication retries.
    - [x] Direct record-page publishing with independent property selection and no implicit parent database or sibling publication.
    - [x] Public formulas recomputed from explicitly shared inputs, with hidden/identity dependencies blocked and no private graph reads.
-   - [ ] Public rollup/identity dependency policy.
+   - [x] Public rollup aggregates over explicitly shared records/fields, including two steps and dependent formulas.
+   - [ ] Public identity dependency policy.
    - [x] Revocable, expiring and optional password-protected links with current source checks and permanent revocation on source policy changes.
 7. Localization, branding and administration
    - [ ] Runtime German/English/system language and synchronized preferences.

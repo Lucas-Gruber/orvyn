@@ -6,6 +6,7 @@ import {
   formulaPropertyType,
   formulaType,
   FormulaError,
+  rollupAggregations,
 } from "@orvyn/shared";
 import { formulaSql } from "../databases/formula.js";
 import { fail } from "../runtime.js";
@@ -14,6 +15,24 @@ export function publicationFormulaDependencies(
   property: Property,
   properties: Property[],
 ): string[] {
+  if (property.type === "Rollup") {
+    const config = property.config.rollup,
+      relation = properties.find(
+        (candidate) =>
+          candidate.id === config?.relationId && candidate.type === "Relation",
+      );
+    if (
+      !config ||
+      !relation ||
+      !relation.config.databaseId ||
+      !rollupAggregations.includes(config.aggregation) ||
+      (config.aggregation === "count"
+        ? !!config.targetPropertyId
+        : !config.targetPropertyId)
+    )
+      throw new FormulaError("The rollup inputs are unavailable.");
+    return [relation.id];
+  }
   if (property.type !== "Formula") return [];
   const byId = new Map(properties.map((property) => [property.id, property])),
     dependencies = new Set<string>(),
@@ -92,12 +111,15 @@ export function checkPublicationFormulas(
 ) {
   const ids = new Set(selected.map((property) => property.id));
   for (const property of selected.filter(
-    (property) => property.type === "Formula",
+    (property) => property.type === "Formula" || property.type === "Rollup",
   )) {
     let dependencies: string[];
     try {
       dependencies = publicationFormulaDependencies(property, properties);
-      if (formulaType(property.config.expression!, properties) === "list")
+      if (
+        property.type === "Formula" &&
+        formulaType(property.config.expression!, properties) === "list"
+      )
         fail(400, "Publish a scalar formula result instead of a list.");
     } catch {
       return fail(
@@ -112,7 +134,7 @@ export function checkPublicationFormulas(
         400,
         "Select every input property for " +
           property.name +
-          " before publishing this formula.",
+          " before publishing this calculation.",
       );
   }
 }
@@ -123,11 +145,22 @@ export function checkPublicationFormulas(
 export async function computePublicationFormulas(
   c: PoolClient,
   contexts: PublicationFormulaContext[],
+  phase: "all" | "independent" | "dependent" = "all",
 ) {
   for (const context of contexts) {
-    const formulas = context.selected.filter(
-      (property) => property.type === "Formula",
-    );
+    const formulas = context.selected.filter((property) => {
+      if (property.type !== "Formula") return false;
+      if (phase === "all") return true;
+      const dependent = publicationFormulaDependencies(
+        property,
+        context.properties,
+      ).some(
+        (id) =>
+          context.properties.find((candidate) => candidate.id === id)?.type ===
+          "Rollup",
+      );
+      return phase === "dependent" ? dependent : !dependent;
+    });
     if (!formulas.length) continue;
     checkPublicationFormulas(context.selected, context.properties);
     const params: (string | null)[] = [],

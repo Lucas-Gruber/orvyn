@@ -134,8 +134,8 @@ watch(
       </div>
       <p
         v-if="
-          page.record?.properties.some(
-            (property) => property.type === 'Formula',
+          page.record?.properties.some((property) =>
+            ['Formula', 'Rollup'].includes(property.type),
           )
         "
         class="public-calculation-note"

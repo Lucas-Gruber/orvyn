@@ -14,14 +14,14 @@ import {
   querySql,
   valueFor,
 } from "../databases/model.js";
+import { checkPublicationFormulas } from "./formulas.js";
 import {
-  checkPublicationFormulas,
-  computePublicationFormulas,
-  type PublicationFormulaContext,
-} from "./formulas.js";
+  computePublicationCalculations,
+  type PublicationCalculationContext,
+} from "./rollups.js";
 import { fail } from "../runtime.js";
 
-// Public values are a deliberate projection. Identity and rollup fields
+// Public values are a deliberate projection. Identity fields
 // need their own public dependency model. Formula inputs are explicitly shared.
 export const publicPropertyTypes = new Set([
   "Title",
@@ -40,6 +40,7 @@ export const publicPropertyTypes = new Set([
   "CreatedTime",
   "LastEditedTime",
   "Formula",
+  "Rollup",
 ]);
 export function publicViewProperties(
   context: Awaited<ReturnType<typeof database>>,
@@ -108,7 +109,7 @@ export async function publicationDatabases(
       direct: true,
     });
   }
-  const formulaContexts: PublicationFormulaContext[] = [];
+  const formulaContexts: PublicationCalculationContext[] = [];
   const catalogs = new Map<string, Awaited<ReturnType<typeof database>>>();
   let omittedRelations = 0;
   for (const choice of choices) {
@@ -145,7 +146,7 @@ export async function publicationDatabases(
         fail(400, "Only visible properties can be published"),
     );
     if (properties.some((property) => !publicPropertyTypes.has(property.type)))
-      fail(400, "Identity and rollup properties cannot be published yet");
+      fail(400, "Identity properties cannot be published yet");
     for (const id of [
       view.type === "Board" ? config.groupBy : null,
       view.type === "Calendar" ? config.dateProperty : null,
@@ -244,6 +245,7 @@ export async function publicationDatabases(
         const raw = row.values[property.id];
         let value: PublicValue;
         switch (property.type) {
+          case "Rollup":
           case "Formula":
             value = null;
             break;
@@ -295,6 +297,7 @@ export async function publicationDatabases(
         values[property.id] = value;
       }
       formulaContexts.push({
+        databaseId: context.page.id,
         recordId: id,
         properties: context.properties,
         selected: ordered,
@@ -315,12 +318,16 @@ export async function publicationDatabases(
       const resultType =
         property.type === "Formula"
           ? formulaType(property.config.expression!, context.properties)
-          : undefined;
+          : property.type === "Rollup"
+            ? "number"
+            : undefined;
       return {
         id: property.id,
         name: property.name,
         type: property.type,
-        ...(property.type === "Formula" && resultType && resultType !== "list"
+        ...(["Formula", "Rollup"].includes(property.type) &&
+        resultType &&
+        resultType !== "list"
           ? { resultType }
           : {}),
         ...(options
@@ -378,7 +385,7 @@ export async function publicationDatabases(
         ]),
     ]);
   }
-  await computePublicationFormulas(c, formulaContexts);
+  await computePublicationCalculations(c, formulaContexts);
   return {
     projections,
     sourceIds,

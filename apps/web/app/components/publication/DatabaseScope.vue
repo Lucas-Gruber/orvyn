@@ -235,9 +235,9 @@ onBeforeUnmount(() => {
           /><span
             >{{ property.name
             }}<small v-if="!property.allowed">{{
-              property.type === "Formula"
+              ["Formula", "Rollup"].includes(property.type)
                 ? "Inputs kept private"
-                : "Identity or calculation · Kept private"
+                : "Identity · Kept private"
             }}</small
             ><small
               v-else-if="
@@ -298,7 +298,8 @@ onBeforeUnmount(() => {
       </div>
       <p class="database-scope-hint">
         Only checked items and properties will be published. Hidden properties
-        and future items stay private.
+        and future items stay private. Rollups use shared related items and
+        require their target fields to be selected too.
       </p>
       <label class="database-scope-body"
         ><input

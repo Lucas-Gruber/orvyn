@@ -96,9 +96,9 @@ onBeforeUnmount(() => (alive = false));
           >{{ property.name
           }}<small v-if="property.required">Page title · Required</small
           ><small v-else-if="!property.allowed">{{
-            property.type === "Formula"
+            ["Formula", "Rollup"].includes(property.type)
               ? "Inputs kept private"
-              : "Identity or calculation · Kept private"
+              : "Identity · Kept private"
           }}</small
           ><small
             v-else-if="
