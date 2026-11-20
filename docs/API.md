@@ -1,5 +1,5 @@
 # API v1
-All routes use /api/v1. Responses are JSON. Authentication uses the orvyn_session cookie. Mutating routes require Origin equal to ORVYN_ORIGIN and JSON unless a multipart upload is documented. Errors include a message and HTTP status. OpenAPI generation is not implemented yet.
+All routes use /api/v1. Responses are JSON unless a download is documented. Authentication uses the orvyn_session cookie. Mutating routes require Origin equal to ORVYN_ORIGIN and JSON unless a multipart upload is documented. Errors include a message and HTTP status. OpenAPI generation is not implemented yet.
 
 | Method | Route | Body / result |
 |---|---|---|
@@ -60,6 +60,8 @@ PATCH /pages/:id/title accepts title and titleVersion. REST content updates norm
 File routes: GET /files/limits; GET/POST /pages/:id/files (POST is authenticated multipart/form-data with one file field, Origin required); GET /files/:id/download; GET /files/:id/preview for detected raster images; DELETE /files/:id with JSON body. All file resources inherit page permissions.
 
 Database routes: GET/POST /spaces/:id/databases; GET /databases/:id; POST /databases/:id/properties; PATCH /databases/:id/properties/:property (name, schemaVersion); POST /databases/:id/views; PATCH /databases/:id/views/:view (version plus view settings); POST /databases/:id/query (200, typed filters/sorts/search/pagination); POST /databases/:id/records (title, values, optional visibility); PATCH /databases/:id/records/:record (version, partial values). Opening/editing record documents uses the ordinary page APIs. GET /spaces/:id/directory provides a member-scoped identity directory for account selectors.
+
+Scalar type history (current space owner): `GET /databases/:id/properties/:property/type-history/page?after=<change UUID>` returns `{changes,nextCursor,propertyType}` in batches of 20. The cursor must belong to this field and uses PostgreSQL's exact timestamp/ID order. The legacy `/type-history` route retains its latest-20 array response. See PROPERTY_CONVERSION.md for signed conversion/restore previews and current-data confirmation.
 
 Database transfer routes (all authenticated):
 - `POST /api/v1/databases/:id/import/csv/preview`: exact Origin, write access, multipart `file` and optional JSON `settings` (`mapping`, `allowNewOptions`). Returns headers, first 20 raw rows, mapping, proposed properties/options, validation errors and an actor-bound token if valid.

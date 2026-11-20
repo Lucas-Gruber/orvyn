@@ -6,6 +6,7 @@ import {
   Module,
   Param,
   Post,
+  Query,
   Req,
 } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
@@ -24,6 +25,51 @@ import {
 
 @Controller("api/v1/databases/:id/properties/:property")
 class PropertyConversionsController {
+  @Get("type-history/page") async historyPage(
+    @Req() req: any,
+    @Param("id") id: string,
+    @Param("property") property: string,
+    @Query() query: unknown,
+  ) {
+    const uid = await user(req),
+      input = parse<{ after?: string }>(
+        z.strictObject({ after: z.uuid().optional() }),
+        query,
+      );
+    return readSnapshot(async (c) => {
+      const context = await conversionContext(c, uid, id, property);
+      if (
+        input.after &&
+        !(
+          await c.query(
+            "SELECT id FROM database_property_changes WHERE property_id=$1 AND id=$2",
+            [context.property.id, input.after],
+          )
+        ).rowCount
+      )
+        return fail(
+          400,
+          "This history position is unavailable. Reload the field history.",
+        );
+      // Resolve the cursor timestamp in PostgreSQL to retain microsecond
+      // precision. The stable index order is newest date, then ascending ID.
+      const changes = (
+        await c.query(
+          `SELECT h.id,h.from_type AS "fromType",h.to_type AS "toType",h.total_records AS "totalRecords",h.changed_values AS "changedValues",h.cleared_values AS "clearedValues",h.created_at AS "createdAt",h.restored_from AS "restoredFrom",h.to_type=$2 AS "canReviewRestore"
+        FROM database_property_changes h WHERE h.property_id=$1 AND ($3::uuid IS NULL OR
+          h.created_at<(SELECT created_at FROM database_property_changes WHERE id=$3) OR
+          (h.created_at=(SELECT created_at FROM database_property_changes WHERE id=$3) AND h.id>$3))
+        ORDER BY h.created_at DESC,h.id LIMIT 21`,
+          [context.property.id, context.property.type, input.after || null],
+        )
+      ).rows;
+      return {
+        changes: changes.slice(0, 20),
+        nextCursor: changes.length > 20 ? changes[19].id : null,
+        propertyType: context.property.type,
+      };
+    });
+  }
   @Get("type-history") async history(
     @Req() req: any,
     @Param("id") id: string,
@@ -140,15 +186,13 @@ class PropertyConversionsController {
         ],
       );
       for (let offset = 0; offset < plan.items.length; offset += 250) {
-        const batch = plan.items
-          .slice(offset, offset + 250)
-          .map((item) => ({
-            id: item.row.id,
-            original_present: item.before.present,
-            original_value: item.before.value,
-            converted_present: item.after.present,
-            converted_value: item.after.value,
-          }));
+        const batch = plan.items.slice(offset, offset + 250).map((item) => ({
+          id: item.row.id,
+          original_present: item.before.present,
+          original_value: item.before.value,
+          converted_present: item.after.present,
+          converted_value: item.after.value,
+        }));
         await c.query(
           `INSERT INTO database_property_change_values(change_id,page_id,original_present,original_value,converted_present,converted_value)
            SELECT $1,x.id,x.original_present,coalesce(x.original_value,'null'::jsonb),x.converted_present,coalesce(x.converted_value,'null'::jsonb)
@@ -157,13 +201,11 @@ class PropertyConversionsController {
         );
       }
       for (let offset = 0; offset < plan.changed.length; offset += 250) {
-        const batch = plan.changed
-          .slice(offset, offset + 250)
-          .map((item) => ({
-            id: item.row.id,
-            present: item.after.present,
-            value: item.after.value,
-          }));
+        const batch = plan.changed.slice(offset, offset + 250).map((item) => ({
+          id: item.row.id,
+          present: item.after.present,
+          value: item.after.value,
+        }));
         await c.query(
           `UPDATE database_records record SET values=CASE WHEN x.present THEN jsonb_set(record.values,ARRAY[$1::text],coalesce(x.value,'null'::jsonb),true) ELSE record.values-$1::text END,version=version+1
            FROM jsonb_to_recordset($2::jsonb) AS x(id uuid,present boolean,value jsonb) WHERE record.page_id=x.id AND record.database_id=$3`,

@@ -6,7 +6,7 @@ Workspace search (`Ctrl/Cmd P`, or `Ctrl/Cmd K` outside the document editor) sea
 
 The sidebar shows favorites and recent pages. Only their IDs are stored in per-account device preferences; labels come from the current authorized page list. These preferences are not yet synchronized across devices. Pages outside the currently loaded sidebar batch can be found through search or by loading more pages.
 
-The document editor supports slash commands and internal links to documents and stable headings; Ctrl/Cmd K inside the editor opens the link picker (see DOCUMENT_LINKS.md). Page actions contain width, attachments, history, permissions, move and trash operations. New databases and spaces use dialogs. Database views retain real filters, sorting, property editing, pagination, live updates, record pages and imports/exports. Person, multi-select and attachment fields use searchable multiple-choice popovers. Board cards have both drag controls and a keyboard-accessible status selector.
+The document editor supports slash commands and internal links to documents and stable headings; Ctrl/Cmd K inside the editor opens the link picker (see DOCUMENT_LINKS.md). Page actions contain width, attachments, history, permissions, move, trash and reviewed Markdown exports. New databases and spaces use dialogs. Database views retain real filters, sorting, property editing, pagination, live updates, record pages and imports/exports. Person, multi-select and attachment fields use searchable multiple-choice popovers. Kanban cards offer scoped drag/drop and keyboard/menu movement.
 
 ## Design system
 
@@ -20,7 +20,7 @@ The document editor supports slash commands and internal links to documents and 
 
 `tests/ui-workflow.test.mjs` exercises creation, title autosave and conflict recovery, hierarchy navigation, moves, trash/restore, search, favorites, deep links, all seven themes and mobile navigation in Chromium. Existing browser tests cover account management, uploads, five database views, live Kanban, people/files properties, linked databases and CSV transfer. Screenshots are written to ignored `.local/ui-review/` during these tests.
 
-The interface is currently English. Full localization, synchronized preferences, whiteboards and public sharing remain unfinished product requirements. A complete assistive-technology and cross-browser audit is still required.
+The interface is currently English; full localization and synchronized preferences remain unfinished product requirements. Excalidraw whiteboards and reviewed public snapshot sharing are implemented with the boundaries documented in WHITEBOARDS.md and PUBLICATIONS.md. A complete assistive-technology and cross-browser audit is still required.
 
 ## Editor and database interaction
 

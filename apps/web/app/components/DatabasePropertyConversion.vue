@@ -19,6 +19,10 @@ const property = ref<Property>(),
   propertyId = ref("");
 const toType = ref<ConvertiblePropertyType | "">("");
 const history = ref<any[]>([]),
+  historyCursor = ref<string | null>(null),
+  historyLoading = ref(false),
+  historyError = ref(""),
+  historyStale = ref(false),
   restoreId = ref<string | null>(null),
   preview = ref<any>();
 const acceptEmpty = ref(false),
@@ -28,9 +32,15 @@ const id = useId();
 let generation = 0,
   disposed = false,
   requestId = "";
-const busy = computed(() => loading.value || reviewing.value || saving.value);
+const busy = computed(
+  () =>
+    loading.value || reviewing.value || saving.value || historyLoading.value,
+);
 const ready = computed(
-  () => !!preview.value && (!preview.value.clearedValues || acceptEmpty.value),
+  () =>
+    !!preview.value &&
+    !historyStale.value &&
+    (!preview.value.clearedValues || acceptEmpty.value),
 );
 async function api(path: string, method = "GET", body?: unknown) {
   return $fetch<any>(`/api/v1/databases/${props.databaseId}${path}`, {
@@ -42,16 +52,20 @@ function unavailable(e: any) {
   if (![401, 404].includes(e.statusCode || e.status)) return;
   property.value = undefined;
   history.value = [];
+  historyCursor.value = null;
   preview.value = undefined;
 }
 async function load() {
   const token = ++generation;
   loading.value = true;
+  historyLoading.value = false;
+  historyError.value = "";
+  historyStale.value = false;
   error.value = "";
   try {
     const [meta, changes] = await Promise.all([
       api(""),
-      api(`/properties/${propertyId.value}/type-history`),
+      api(`/properties/${propertyId.value}/type-history/page`),
     ]);
     if (disposed || token !== generation || !visible.value) return;
     const field = meta.properties.find(
@@ -62,8 +76,19 @@ async function load() {
         statusCode: 404,
         data: { message: "This field is unavailable." },
       };
+    if (field.type !== changes.propertyType) {
+      historyStale.value = true;
+      throw {
+        statusCode: 409,
+        data: {
+          message:
+            "The field type changed while loading its history. Reload the field.",
+        },
+      };
+    }
     property.value = field;
-    history.value = changes;
+    history.value = changes.changes;
+    historyCursor.value = changes.nextCursor;
   } catch (e: any) {
     if (token === generation && !disposed) {
       unavailable(e);
@@ -73,11 +98,61 @@ async function load() {
     if (token === generation) loading.value = false;
   }
 }
+async function older() {
+  if (
+    busy.value ||
+    !historyCursor.value ||
+    historyStale.value ||
+    !property.value
+  )
+    return;
+  const token = ++generation,
+    cursor = historyCursor.value;
+  historyLoading.value = true;
+  historyError.value = "";
+  try {
+    const result = await api(
+      `/properties/${propertyId.value}/type-history/page?after=${cursor}`,
+    );
+    if (disposed || token !== generation || !visible.value) return;
+    if (result.propertyType !== property.value.type) {
+      historyStale.value = true;
+      throw {
+        statusCode: 409,
+        data: {
+          message:
+            "The field type changed. Reload the field before reviewing older changes.",
+        },
+      };
+    }
+    const known = new Set(history.value.map((change) => change.id));
+    history.value.push(
+      ...result.changes.filter((change: any) => !known.has(change.id)),
+    );
+    historyCursor.value = result.nextCursor;
+  } catch (e: any) {
+    if (token === generation && !disposed && visible.value) {
+      if ((e.statusCode || e.status) === 400) historyStale.value = true;
+      unavailable(e);
+      const message =
+        e.data?.message ||
+        "Older changes could not be loaded. Retry to keep your place.";
+      if (!property.value) error.value = message;
+      else historyError.value = message;
+    }
+  } finally {
+    if (token === generation) historyLoading.value = false;
+  }
+}
 async function open(fieldId: string) {
   await props.beforeChange();
   propertyId.value = fieldId;
   property.value = undefined;
   history.value = [];
+  historyCursor.value = null;
+  historyLoading.value = false;
+  historyError.value = "";
+  historyStale.value = false;
   preview.value = undefined;
   toType.value = "";
   restoreId.value = null;
@@ -97,6 +172,10 @@ function close() {
   reviewing.value = false;
   property.value = undefined;
   history.value = [];
+  historyCursor.value = null;
+  historyLoading.value = false;
+  historyError.value = "";
+  historyStale.value = false;
   preview.value = undefined;
   emit("closed");
 }
@@ -111,7 +190,7 @@ function choose(event: Event) {
   requestId = "";
 }
 async function review(change?: any) {
-  if (busy.value || !property.value) return;
+  if (busy.value || historyStale.value || !property.value) return;
   if (change) {
     restoreId.value = change.id;
     toType.value = change.fromType;
@@ -390,7 +469,12 @@ defineExpose({ open });
         <button
           class="primary"
           type="submit"
-          :disabled="busy || (!preview && !toType) || (!!preview && !ready)"
+          :disabled="
+            busy ||
+            historyStale ||
+            (!preview && !toType) ||
+            (!!preview && !ready)
+          "
         >
           {{
             saving
@@ -422,17 +506,82 @@ defineExpose({ open });
             v-if="change.canReviewRestore"
             type="button"
             class="ghost"
-            :disabled="busy"
+            :disabled="busy || historyStale"
             @click="review(change)"
           >
             Review restore
           </button>
         </li>
       </ol>
+      <div class="history-pagination">
+        <span role="status"
+          >Showing {{ history.length }}
+          {{ history.length === 1 ? "change" : "changes" }}</span
+        >
+        <button
+          v-if="historyStale"
+          type="button"
+          class="ghost"
+          :disabled="busy"
+          @click="load"
+        >
+          <AppIcon name="refresh" :size="14" />Reload field
+        </button>
+        <button
+          v-else-if="historyCursor"
+          type="button"
+          class="ghost"
+          :disabled="busy"
+          @click="older"
+        >
+          <AppIcon name="chevronDown" :size="14" />{{
+            historyLoading
+              ? "Loading older changes…"
+              : historyError
+                ? "Retry older changes"
+                : "Load older changes"
+          }}
+        </button>
+        <span v-else class="history-complete">All changes loaded</span>
+      </div>
+      <p
+        v-if="historyError"
+        class="conversion-error history-error"
+        role="alert"
+      >
+        {{ historyError }}
+      </p>
     </details>
   </UiDialog>
 </template>
 <style scoped>
+.history-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+  margin-top: 12px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.history-pagination button {
+  font-size: 11px;
+}
+.history-complete {
+  font-size: 10px;
+}
+.history-error {
+  font-size: 12px;
+  line-height: 1.6;
+  margin-top: 9px;
+}
+@media (max-width: 600px) {
+  .history-pagination {
+    flex-wrap: wrap;
+  }
+}
 .conversion-form {
   display: grid;
   gap: 12px;
@@ -600,6 +749,9 @@ defineExpose({ open });
   transform: rotate(180deg);
 }
 .conversion-history ol {
+  max-height: min(320px, 40dvh);
+  overflow: auto;
+  overscroll-behavior: contain;
   padding: 0;
   margin: 12px 0 0;
   list-style: none;
