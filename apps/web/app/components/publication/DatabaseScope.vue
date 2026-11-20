@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import {
+  missingPublicationInputs,
+  retainPublicationFields,
+} from "../../utils/publicationFields";
 import type { PublicationScope } from "@orvyn/shared";
 type Selection = PublicationScope["databases"][number];
 const props = defineProps<{
@@ -86,9 +90,12 @@ function include(checked: boolean) {
 function chooseField(id: string, checked: boolean) {
   if (required.value.includes(id)) return;
   update({
-    propertyIds: checked
-      ? [...props.scope.propertyIds, id]
-      : props.scope.propertyIds.filter((value) => value !== id),
+    propertyIds: retainPublicationFields(
+      checked
+        ? [...props.scope.propertyIds, id]
+        : props.scope.propertyIds.filter((value) => value !== id),
+      view.value?.properties || [],
+    ),
   });
 }
 function chooseView(id: string) {
@@ -156,16 +163,19 @@ onMounted(async () => {
           propertyIds: [...initial.required],
         });
     } else {
-      const fields = [
-        ...new Set([
-          ...props.scope.propertyIds.filter((id) =>
-            current.properties.some(
-              (property: any) => property.id === id && property.allowed,
+      const fields = retainPublicationFields(
+        [
+          ...new Set([
+            ...props.scope.propertyIds.filter((id) =>
+              current.properties.some(
+                (property: any) => property.id === id && property.allowed,
+              ),
             ),
-          ),
-          ...current.required,
-        ]),
-      ];
+            ...current.required,
+          ]),
+        ],
+        current.properties,
+      );
       if (JSON.stringify(fields) !== JSON.stringify(props.scope.propertyIds))
         update({ propertyIds: fields });
       await load();
@@ -211,7 +221,10 @@ onBeforeUnmount(() => {
             type="checkbox"
             :checked="scope.propertyIds.includes(property.id)"
             :disabled="
-              busy || !property.allowed || required.includes(property.id)
+              busy ||
+              !property.allowed ||
+              required.includes(property.id) ||
+              missingPublicationInputs(property, scope.propertyIds).length > 0
             "
             @change="
               chooseField(
@@ -221,8 +234,22 @@ onBeforeUnmount(() => {
             "
           /><span
             >{{ property.name
-            }}<small v-if="!property.allowed"
-              >Identity or calculation · Kept private</small
+            }}<small v-if="!property.allowed">{{
+              property.type === "Formula"
+                ? "Inputs kept private"
+                : "Identity or calculation · Kept private"
+            }}</small
+            ><small
+              v-else-if="
+                missingPublicationInputs(property, scope.propertyIds).length
+              "
+              >Select
+              {{
+                missingPublicationInputs(property, scope.propertyIds)
+                  .map((input) => input.name)
+                  .join(", ")
+              }}
+              first</small
             ><small v-else-if="required.includes(property.id)"
               >Required by this view</small
             ></span

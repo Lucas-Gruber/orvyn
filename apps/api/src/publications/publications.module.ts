@@ -37,6 +37,7 @@ import { pageAccess, pageWrite } from "../permissions/access.js";
 import { storage, bucket, GetObjectCommand } from "../files/storage.js";
 import { database, querySql } from "../databases/model.js";
 import { publicViewProperties, publicPropertyTypes } from "./databases.js";
+import { publicationFormulaInputs } from "./formulas.js";
 import { publicationSnapshot } from "./snapshot.js";
 import {
   signPublicationPreview,
@@ -166,7 +167,12 @@ class Publications {
           name: property.name,
           type: property.type,
           required: property.type === "Title",
-          allowed: publicPropertyTypes.has(property.type),
+          ...publicationFormulaInputs(
+            property,
+            context.properties,
+            context.properties,
+            publicPropertyTypes,
+          ),
         })),
       };
     });
@@ -195,7 +201,12 @@ class Publications {
               id: property.id,
               name: property.name,
               type: property.type,
-              allowed: publicPropertyTypes.has(property.type),
+              ...publicationFormulaInputs(
+                property,
+                context.properties,
+                properties,
+                publicPropertyTypes,
+              ),
             })),
             required: properties
               .filter(

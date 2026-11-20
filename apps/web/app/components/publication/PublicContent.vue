@@ -132,6 +132,16 @@ watch(
           />
         </div>
       </div>
+      <p
+        v-if="
+          page.record?.properties.some(
+            (property) => property.type === 'Formula',
+          )
+        "
+        class="public-calculation-note"
+      >
+        Calculations use the shared properties and items.
+      </p>
       <PublicDocumentNode
         v-if="!page.whiteboard && !page.database"
         :node="page.document"
@@ -268,6 +278,11 @@ watch(
   overflow-wrap: anywhere;
   font-size: 12px;
   color: var(--muted);
+}
+.publication-content .public-calculation-note {
+  font-size: 11px;
+  color: var(--muted);
+  margin: -12px 0 28px;
 }
 .publication-content p {
   color: var(--text);

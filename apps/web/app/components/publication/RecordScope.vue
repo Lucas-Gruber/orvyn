@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import {
+  missingPublicationInputs,
+  retainPublicationFields,
+} from "../../utils/publicationFields";
 import type { PublicationInput } from "@orvyn/shared";
 type Selection = PublicationInput["scope"]["records"][number];
 const props = defineProps<{
@@ -17,9 +21,12 @@ function choose(id: string, checked: boolean) {
   if (!property?.allowed || property.required) return;
   emit("change", {
     recordId: props.scope.recordId,
-    propertyIds: checked
-      ? [...props.scope.propertyIds, id]
-      : props.scope.propertyIds.filter((value) => value !== id),
+    propertyIds: retainPublicationFields(
+      checked
+        ? [...props.scope.propertyIds, id]
+        : props.scope.propertyIds.filter((value) => value !== id),
+      catalog.value?.properties || [],
+    ),
   });
 }
 onMounted(async () => {
@@ -32,18 +39,21 @@ onMounted(async () => {
     );
     if (!alive) return;
     catalog.value = result;
-    const fields = [
-      ...new Set([
-        ...props.scope.propertyIds.filter((id) =>
-          result.properties.some(
-            (property: any) => property.id === id && property.allowed,
+    const fields = retainPublicationFields(
+      [
+        ...new Set([
+          ...props.scope.propertyIds.filter((id) =>
+            result.properties.some(
+              (property: any) => property.id === id && property.allowed,
+            ),
           ),
-        ),
-        ...result.properties
-          .filter((property: any) => property.required)
-          .map((property: any) => property.id),
-      ]),
-    ] as string[];
+          ...result.properties
+            .filter((property: any) => property.required)
+            .map((property: any) => property.id),
+        ]),
+      ] as string[],
+      result.properties,
+    );
     if (JSON.stringify(fields) !== JSON.stringify(props.scope.propertyIds))
       emit("change", { recordId: props.scope.recordId, propertyIds: fields });
   } catch (e: any) {
@@ -73,15 +83,34 @@ onBeforeUnmount(() => (alive = false));
         ><input
           type="checkbox"
           :checked="scope.propertyIds.includes(property.id)"
-          :disabled="busy || !property.allowed || property.required"
+          :disabled="
+            busy ||
+            !property.allowed ||
+            property.required ||
+            missingPublicationInputs(property, scope.propertyIds).length > 0
+          "
           @change="
             choose(property.id, ($event.target as HTMLInputElement).checked)
           "
         /><span
           >{{ property.name
           }}<small v-if="property.required">Page title · Required</small
-          ><small v-else-if="!property.allowed"
-            >Identity or calculation · Kept private</small
+          ><small v-else-if="!property.allowed">{{
+            property.type === "Formula"
+              ? "Inputs kept private"
+              : "Identity or calculation · Kept private"
+          }}</small
+          ><small
+            v-else-if="
+              missingPublicationInputs(property, scope.propertyIds).length
+            "
+            >Select
+            {{
+              missingPublicationInputs(property, scope.propertyIds)
+                .map((input) => input.name)
+                .join(", ")
+            }}
+            first</small
           ></span
         ></label
       >

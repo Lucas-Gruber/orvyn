@@ -163,9 +163,14 @@ const undated = computed(() =>
         />{{ database.view.name }}</span
       ><span
         >{{ database.records.length }}
-        {{
-          database.records.length === 1 ? "shared item" : "shared items"
-        }}</span
+        {{ database.records.length === 1 ? "shared item" : "shared items"
+        }}<template
+          v-if="
+            database.properties.some((property) => property.type === 'Formula')
+          "
+        >
+          · Calculated from shared values</template
+        ></span
       >
     </header>
     <div v-if="database.view.type === 'Table'" class="public-database-table">

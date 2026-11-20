@@ -77,7 +77,10 @@ const href = computed(() => {
     ></span
   >
   <span
-    v-else-if="property.type === 'Checkbox'"
+    v-else-if="
+      property.type === 'Checkbox' ||
+      (property.type === 'Formula' && property.resultType === 'boolean')
+    "
     class="public-value-check"
     :aria-label="value ? 'Checked' : 'Unchecked'"
     role="img"

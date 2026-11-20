@@ -178,6 +178,7 @@ try {
           "tests/database-publications.test.mjs",
           "tests/publication-navigation.test.mjs",
           "tests/record-publications.test.mjs",
+          "tests/public-formulas.test.mjs",
           "tests/editor-assets.test.mjs",
           "tests/page-previews.test.mjs",
           "tests/video-embeds.test.mjs",

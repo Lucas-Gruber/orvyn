@@ -119,6 +119,7 @@ export interface PublicProperty {
   name: string;
   type: string;
   options?: { id: string; label: string; color?: string }[];
+  resultType?: "number" | "text" | "boolean" | "null";
 }
 export interface PublicRecord {
   pageId: string;
