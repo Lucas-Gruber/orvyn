@@ -241,15 +241,18 @@ test("portable Markdown paths reject traversal/device names, deduplicate Unicode
     "C:\\escape/../CON",
     "con.txt",
     "NUL",
+    "COM¹.txt",
+    "con .txt",
     "a".repeat(47) + ".x",
     "<script>",
     "\u202eevil",
+    "\u200fevil\u061c",
     "😀".repeat(80),
   ]) {
     const value = bundleSegment(input);
-    assert.ok(value && !/[\\/:*?"<>|\u202e]/.test(value));
+    assert.ok(value && !/[\\/:*?"<>|\p{Bidi_Control}]/u.test(value));
     assert.ok(!/[. ]$/.test(value));
-    assert.ok(!/^(con|nul)(\.|$)/i.test(value));
+    assert.ok(!/^(con|nul|com[¹²³])(?: *\.|$)/i.test(value));
     assert.ok(!/[\uD800-\uDFFF]/u.test(value));
   }
   assert.equal(
@@ -289,6 +292,13 @@ test("portable Markdown paths reject traversal/device names, deduplicate Unicode
   assert.equal(uniqueSegment("guide.pdf", names, true), "guide - 2.pdf");
   assert.ok(
     uniqueSegment("a".repeat(80) + ".png", names, true).endsWith(".png"),
+  );
+  const greekNames = new Set(),
+    greek = ["Σ", "ς", "σ"].map((name) => uniqueSegment(name, greekNames));
+  assert.equal(new Set(greek.map((name) => name.toUpperCase())).size, 3);
+  assert.equal(
+    uniqueSegment("_attachments", new Set(["_ATTACHMENTS"])),
+    "_attachments - 2",
   );
   const result = exportMarkdown(
     normalizeDocument({
@@ -516,17 +526,34 @@ test("bundle paths remain distinct on case-insensitive filesystems, preserve sel
       two = await f.page("con", f.root.id),
       three = await f.page("../..", f.root.id),
       four = await f.page("<img src=x onerror=alert(1)>", f.root.id),
+      upper = await f.page("Σ", f.root.id),
+      final = await f.page("ς", f.root.id),
+      reserved = await f.page("_ATTACHMENTS", f.root.id),
       input = {
         ...f.input,
-        pageIds: [...f.ids, one.id, two.id, three.id, four.id],
+        pageIds: [
+          ...f.ids,
+          one.id,
+          two.id,
+          three.id,
+          four.id,
+          upper.id,
+          final.id,
+          reserved.id,
+        ],
       },
       result = await f.preview(input);
     assert.equal(result.response.status, 201, JSON.stringify(result.data));
+    assert.ok(
+      result.data.pages
+        .find((page) => page.id === reserved.id)
+        .path.includes("_ATTACHMENTS - 2/index.md"),
+    );
     const response = await f.download(result, input),
       zip = unzipSync(new Uint8Array(await response.arrayBuffer())),
       names = Object.keys(zip);
     assert.equal(
-      new Set(names.map((path) => path.toLowerCase())).size,
+      new Set(names.map((path) => path.toUpperCase())).size,
       names.length,
     );
     assert.ok(
@@ -535,6 +562,32 @@ test("bundle paths remain distinct on case-insensitive filesystems, preserve sel
       ),
     );
     assert.ok(!strFromU8(zip[result.data.pages[0].path]).includes("<img"));
+    for (const title of ["README.md", "manifest.JSON"]) {
+      await db.query("UPDATE pages SET title=$2 WHERE id=$1", [
+        f.root.id,
+        title,
+      ]);
+      const reviewed = await f.preview(),
+        downloaded = await f.download(reviewed),
+        archive = unzipSync(new Uint8Array(await downloaded.arrayBuffer())),
+        manifest = JSON.parse(strFromU8(archive["manifest.json"])),
+        entries = new Set(
+          Object.keys(archive).map((path) => path.toUpperCase()),
+        );
+      assert.ok(
+        !["README.MD", "MANIFEST.JSON"].includes(
+          manifest.root.split("/")[0].toUpperCase(),
+        ),
+      );
+      for (const path of Object.keys(archive)) {
+        const parts = path.split("/");
+        parts.pop();
+        while (parts.length) {
+          assert.ok(!entries.has(parts.join("/").toUpperCase()));
+          parts.pop();
+        }
+      }
+    }
     changedFile = f.file.id;
     await db.query("UPDATE files SET size=$2 WHERE id=$1", [
       f.file.id,

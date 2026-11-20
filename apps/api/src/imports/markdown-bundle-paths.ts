@@ -5,9 +5,7 @@ export function bundleSegment(value: string) {
   let name = [...value.normalize("NFC")]
     .filter(
       (character) =>
-        !/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/u.test(
-          character,
-        ),
+        !/[\u0000-\u001f\u007f-\u009f\p{Bidi_Control}]/u.test(character),
     )
     .join("")
     .replace(/[\\/:*?"<>|]/g, "_")
@@ -17,7 +15,10 @@ export function bundleSegment(value: string) {
     .slice(0, 48)
     .join("")
     .replace(/[. ]+$/g, "");
-  if (!name || /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(name))
+  if (
+    !name ||
+    /^(?:con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])(?: *\.|$)/i.test(name)
+  )
     name = "_" + (name || "page");
   return name;
 }
@@ -39,9 +40,9 @@ export function uniqueSegment(
   const stem = extension ? base.slice(0, -extension.length) : base;
   let candidate = base,
     index = 1;
-  while (used.has(candidate.toLowerCase()))
+  while (used.has(candidate.toUpperCase().normalize("NFC")))
     candidate = stem + " - " + ++index + extension;
-  used.add(candidate.toLowerCase());
+  used.add(candidate.toUpperCase().normalize("NFC"));
   return candidate;
 }
 export function bundleRelative(from: string, target: string) {

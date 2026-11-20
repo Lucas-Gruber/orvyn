@@ -467,6 +467,26 @@ test("Markdown downloads recheck reviewed bytes and access, sanitize filenames a
     assert.ok(!/[\\/\r\n]/.test(current.data.filename));
     assert.ok(file.response.headers.get("content-disposition").includes("%27"));
     assert.equal(file.data, current.data.markdown);
+    for (const title of ["a".repeat(119) + "😀 notes", "😀".repeat(149)]) {
+      await db.query("UPDATE pages SET title=$2 WHERE id=$1", [
+        f.source.id,
+        title,
+      ]);
+      const unicode = await f.preview(),
+        downloaded = await f.download(unicode);
+      assert.equal(
+        downloaded.response.status,
+        200,
+        JSON.stringify(downloaded.data),
+      );
+      assert.ok(!/[\uD800-\uDFFF]/u.test(unicode.data.filename));
+      assert.ok(Buffer.byteLength(unicode.data.filename) <= 243);
+      assert.ok(
+        downloaded.response.headers
+          .get("content-disposition")
+          .includes(encodeURIComponent(unicode.data.filename)),
+      );
+    }
     await db.query("UPDATE pages SET visibility='restricted' WHERE id=$1", [
       f.source.id,
     ]);

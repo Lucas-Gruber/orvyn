@@ -105,7 +105,13 @@ export async function bundlePlan(
       const parentPath = parent ? paths.get(parent)!.slice(0, -9) : "";
       let used = siblingNames.get(parentPath);
       if (!used)
-        siblingNames.set(parentPath, (used = new Set(["_attachments"])));
+        siblingNames.set(
+          parentPath,
+          (used = new Set([
+            "_ATTACHMENTS",
+            ...(parentPath ? [] : ["README.MD", "MANIFEST.JSON"]),
+          ])),
+        );
       const path =
         (parentPath ? parentPath + "/" : "") +
         uniqueSegment(page.title, used) +

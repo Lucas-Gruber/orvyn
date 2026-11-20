@@ -35,13 +35,21 @@ const imageTypes = new Set([
   "image/webp",
 ]);
 function filename(title: string) {
-  let value =
-    title
-      .replace(/[\\/:*?"<>|\u0000-\u001f\u007f]/g, "_")
-      .trim()
-      .replace(/[. ]+$/g, "")
-      .slice(0, 120) || "page";
-  if (/^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(value))
+  const clean = title
+    .replace(/[\\/:*?"<>|\u0000-\u001f\u007f]/g, "_")
+    .trim()
+    .replace(/[. ]+$/g, "");
+  let value = "";
+  for (const character of clean) {
+    if (
+      value.length + character.length > 120 ||
+      Buffer.byteLength(value + character) > 240
+    )
+      break;
+    value += character;
+  }
+  value = value.replace(/[. ]+$/g, "") || "page";
+  if (/^(?:con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])(?: *\.|$)/i.test(value))
     value = "_" + value;
   return value + ".md";
 }
