@@ -244,3 +244,7 @@ export {
   markdownImportCommitInput,
   type MarkdownImportInput,
 } from "./markdown-import.js";
+export {
+  markdownImportMaxBytes,
+  markdownImportSizeLabel,
+} from "./markdown-limits.js";

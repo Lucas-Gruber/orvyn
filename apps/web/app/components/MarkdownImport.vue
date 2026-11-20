@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import type { MarkdownImportInput, PublicationSnapshot } from "@orvyn/shared";
+import { markdownImportMaxBytes, markdownImportSizeLabel } from "@orvyn/shared";
+import { markdownUpload } from "../utils/markdownUpload";
 const props = defineProps<{
     space: any;
     pages: any[];
@@ -79,8 +81,12 @@ async function fileSelected(event: Event) {
   input.value = "";
   if (!file) return;
   error.value = "";
-  if (file.size > 32768 || !/\.(?:md|markdown)$/i.test(file.name)) {
-    error.value = "Choose a .md or .markdown file up to 32 KB.";
+  if (
+    file.size > markdownImportMaxBytes ||
+    !/\.(?:md|markdown)$/i.test(file.name)
+  ) {
+    error.value =
+      "Choose a .md or .markdown file up to " + markdownImportSizeLabel + ".";
     return;
   }
   loadingFile.value = true;
@@ -89,7 +95,7 @@ async function fileSelected(event: Event) {
       await file.arrayBuffer(),
     );
     if (!alive || epoch !== fileEpoch) return;
-    filename.value = file.name.slice(0, 160);
+    filename.value = file.name.slice(0, 160).replace(/[\uD800-\uDBFF]$/u, "");
     source.value = text;
     title.value = "";
     review.value = null;
@@ -113,9 +119,10 @@ async function prepare() {
   if (working.value) return;
   if (
     !source.value.trim() ||
-    new TextEncoder().encode(source.value).length > 32768
+    new TextEncoder().encode(source.value).length > markdownImportMaxBytes
   ) {
-    error.value = "Choose or paste Markdown up to 32 KB.";
+    error.value =
+      "Choose or paste Markdown up to " + markdownImportSizeLabel + ".";
     return;
   }
   busy.value = true;
@@ -126,7 +133,7 @@ async function prepare() {
     const value = input(),
       result = await $fetch<any>(path.value + "/preview", {
         method: "POST",
-        body: value,
+        body: markdownUpload(value),
         timeout: 15000,
       });
     if (alive)
@@ -149,11 +156,10 @@ async function create() {
   error.value = "";
   const reviewed = review.value;
   try {
-    const body = {
+    const body = markdownUpload(reviewed.input, {
       requestId: reviewed.requestId,
       previewToken: reviewed.previewToken,
-      input: reviewed.input,
-    };
+    });
     let result: any;
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
@@ -254,7 +260,10 @@ defineExpose({ open });
       <label class="markdown-file"
         ><AppIcon name="upload" :size="21" /><span
           ><strong>Choose a Markdown file</strong
-          ><small>.md or .markdown · UTF-8 · Up to 32 KB</small></span
+          ><small
+            >.md or .markdown · UTF-8 · Up to
+            {{ markdownImportSizeLabel }}</small
+          ></span
         ><input
           type="file"
           accept=".md,.markdown,text/markdown"

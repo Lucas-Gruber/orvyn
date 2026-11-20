@@ -1,5 +1,5 @@
 # API v1
-All routes use /api/v1. Responses are JSON. Authentication uses the orvyn_session cookie. POST/PUT require application/json and Origin equal to ORVYN_ORIGIN. Errors include a message and HTTP status. OpenAPI generation is not implemented yet.
+All routes use /api/v1. Responses are JSON. Authentication uses the orvyn_session cookie. Mutating routes require Origin equal to ORVYN_ORIGIN and JSON unless a multipart upload is documented. Errors include a message and HTTP status. OpenAPI generation is not implemented yet.
 
 | Method | Route | Body / result |
 |---|---|---|
@@ -49,7 +49,7 @@ Additional authenticated routes:
 
 Page creation accepts parentId. Page listing accepts q, after and limit (1–200) and exposes X-Next-Cursor when more records exist. Direct inaccessible resources return 404; stale versions return 409. See docs/PERMISSIONS.md for inheritance and conversion semantics.
 
-Markdown import: `POST /spaces/:space/imports/markdown/preview` accepts `{filename,markdown,title?,titleFromHeading?,parentId?}` and returns a signed review. `POST /spaces/:space/imports/markdown` accepts `{requestId,previewToken,input}` and atomically creates one page with recoverable retries. Both require current editor access and exact Origin. See MARKDOWN_IMPORT.md for limits, conversion rules and destination policy binding.
+Markdown import: `POST /spaces/:space/imports/markdown/preview` accepts `{filename,markdown,title?,titleFromHeading?,parentId?}` and returns a signed review. `POST /spaces/:space/imports/markdown` accepts `{requestId,previewToken,input}` and atomically creates one page with recoverable retries. Both require current editor access and exact Origin. Multipart requests carry a bounded UTF-8 file and JSON settings (preview metadata, or confirmation request/token/input metadata); the browser uses this transport for files/pasted text up to 96 KB. Authorization precedes file parsing. Small JSON requests remain compatible. See MARKDOWN_IMPORT.md for limits, conversion rules and destination policy binding.
 
 Markdown export: authenticated `GET /pages/:id/export/markdown?includePeopleNames=false` returns reviewed file contents, filename, conversion notes and a digest. `GET /pages/:id/export.md` returns the current protected Markdown attachment; an optional `review=<digest>` requires exact reviewed output after current source/reference checks. Names are opt-in. See MARKDOWN_EXPORT.md for scope, limits and conversion rules.
 

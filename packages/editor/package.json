@@ -8,6 +8,7 @@
     "build": "tsc"
   },
   "dependencies": {
+    "@orvyn/shared": "workspace:*",
     "@tiptap/core": "3.34.0",
     "@tiptap/extension-code-block-lowlight": "3.34.0",
     "@tiptap/extension-table": "3.34.0",

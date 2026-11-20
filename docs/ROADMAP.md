@@ -62,7 +62,8 @@ Work through these areas in order, preserving working features and committing/pu
 8. Import/export
    - [x] Single-page Markdown import with a complete preview, native editable blocks, permanent heading links, current destination checks and retry recovery.
    - [x] Reviewed Markdown document export with ordinary block conversion, optional current people names, protected reference/file links and fresh checked downloads.
-   - [ ] Larger Markdown imports, page hierarchies, attachment payloads and portable restore.
+   - [x] Bounded 96 KB UTF-8 Markdown file transport with pre-upload authorization, exact byte/Unicode checks and JSON compatibility.
+   - [ ] Page hierarchies, attachment payloads and portable restore.
    - [ ] Faithful Notion import before claiming migration support.
 9. Desktop and operation
    - [ ] Tauri clients, releases, update distribution and signing.

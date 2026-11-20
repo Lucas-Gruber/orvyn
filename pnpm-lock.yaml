@@ -219,6 +219,9 @@ importers:
 
   packages/editor:
     dependencies:
+      '@orvyn/shared':
+        specifier: workspace:*
+        version: link:../shared
       '@tiptap/core':
         specifier: 3.34.0
         version: 3.34.0(@tiptap/pm@3.34.0)

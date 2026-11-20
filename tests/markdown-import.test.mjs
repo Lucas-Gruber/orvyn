@@ -147,7 +147,7 @@ test("Markdown import preserves GFM structure, stable heading links, inline mark
     "Useful note",
   );
   assert.throws(() =>
-    importMarkdown("x".repeat(32769), {
+    importMarkdown("x".repeat(98305), {
       filename: "too-big.md",
       titleFromHeading: true,
     }),
@@ -231,7 +231,7 @@ test("Markdown imports recheck destination permissions and reject stale access, 
     assert.equal(
       (await f.commit(review, f.input, randomUUID(), viewer.cookie)).response
         .status,
-      400,
+      404,
     );
     assert.equal(
       (await f.commit(review, { ...f.input, markdown: markdown + "Changed" }))

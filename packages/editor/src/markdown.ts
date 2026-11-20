@@ -7,6 +7,10 @@ import {
 } from "marked";
 import { decodeHTML } from "entities";
 import { normalizeDocument } from "./index.js";
+import {
+  markdownImportMaxBytes,
+  markdownImportSizeLabel,
+} from "@orvyn/shared/markdown-limits";
 
 type Node = {
   type: string;
@@ -50,10 +54,15 @@ export function bindMarkdownDocument(document: unknown, pageId: string) {
 export function importMarkdown(source: string, options: MarkdownImportOptions) {
   if (
     !source.trim() ||
-    Buffer.byteLength(source, "utf8") > 32768 ||
+    Buffer.byteLength(source, "utf8") > markdownImportMaxBytes ||
+    /[\uD800-\uDFFF]/u.test(source) ||
     /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(source)
   )
-    throw Error("Choose a non-empty Markdown text file up to 32 KB.");
+    throw Error(
+      "Choose a non-empty UTF-8 Markdown text file up to " +
+        markdownImportSizeLabel +
+        ".",
+    );
   const warnings = new Set<string>(),
     tokens = lexer(source.replace(/^\uFEFF/, ""), { gfm: true }),
     ids = new WeakMap<Token, string>(),

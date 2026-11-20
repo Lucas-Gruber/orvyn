@@ -1,4 +1,14 @@
-import { Module, Controller, Post, Req, Param, Body } from "@nestjs/common";
+import {
+  Module,
+  Controller,
+  Post,
+  Req,
+  Param,
+  Body,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
+} from "@nestjs/common";
 import { createHmac, timingSafeEqual, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import {
@@ -14,7 +24,12 @@ import {
 } from "@orvyn/editor/markdown";
 import { documentSchemaVersion } from "@orvyn/editor";
 import { documentReferences } from "@orvyn/editor/links";
-import { user, mutation, hash, fail } from "../runtime.js";
+import { user, hash, fail } from "../runtime.js";
+import {
+  MarkdownImportGuard,
+  markdownFileInterceptor,
+  markdownRequestBody,
+} from "./markdown-upload.js";
 import {
   transaction,
   readSnapshot,
@@ -131,15 +146,18 @@ async function plan(
 }
 
 @Controller("api/v1/spaces/:space/imports/markdown")
+@UseGuards(MarkdownImportGuard)
 class MarkdownImports {
-  @Post("preview") async preview(
+  @Post("preview")
+  @UseInterceptors(markdownFileInterceptor())
+  async preview(
     @Req() req: any,
     @Param("space") spaceId: string,
     @Body() body: unknown,
+    @UploadedFile() file?: Express.Multer.File,
   ) {
-    mutation(req);
     const actor = await user(req),
-      input = parse(markdownImportInput, body);
+      input = parse(markdownImportInput, markdownRequestBody(req, body, file));
     return readSnapshot(async (c) => {
       const result = await plan(c, actor, spaceId, input);
       return {
@@ -157,14 +175,19 @@ class MarkdownImports {
       };
     });
   }
-  @Post() async commit(
+  @Post()
+  @UseInterceptors(markdownFileInterceptor())
+  async commit(
     @Req() req: any,
     @Param("space") spaceId: string,
     @Body() body: unknown,
+    @UploadedFile() file?: Express.Multer.File,
   ) {
-    mutation(req);
     const actor = await user(req),
-      request = parse(markdownImportCommitInput, body),
+      request = parse(
+        markdownImportCommitInput,
+        markdownRequestBody(req, body, file, true),
+      ),
       token = decode(request.previewToken);
     if (token.actor !== actor || token.space !== spaceId.toLowerCase())
       return fail(400, "The review belongs to another importer or space.");
@@ -245,5 +268,5 @@ class MarkdownImports {
     });
   }
 }
-@Module({ controllers: [MarkdownImports] })
+@Module({ controllers: [MarkdownImports], providers: [MarkdownImportGuard] })
 export class MarkdownImportsModule {}

@@ -6,15 +6,21 @@ The importer converts paragraphs, bold/italic/strikethrough/code, links, H1–H4
 
 The review lists adjustments: H5/H6 use H4, table alignment uses the editor default, unknown relative file/heading links become plain text, and HTML remains visible text/code. Images become text links rather than remote image embeds. Importing never fetches URLs, reads local files or grants access to attachments. Upload images/files separately after import. No scripts, HTML embeds, live people references or imported permissions are created from Markdown.
 
-Limits: one page per import, 32 KB UTF-8 source, the existing 100,000-character normalized document limit, 3,000 document nodes and bounded nesting/token work. Page titles support 300 characters. Page hierarchies, attachment payloads, portable restoration and faithful Notion migration remain separate work.
+Limits: one page per import, 96 KB UTF-8 source, the existing 100,000-character normalized document limit, 3,000 document nodes and bounded nesting/token work. Page titles support 300 characters. Page hierarchies, attachment payloads, portable restoration and faithful Notion migration remain separate work.
+
+The browser sends Markdown as a bounded multipart file, avoiding JSON escaping/CRLF transport overhead. Authorization and exact Origin checks run before the file interceptor. Uploads accept one file and one JSON `settings` field; the file is decoded strictly as UTF-8 in memory and never registered as an attachment. The shared 96 KB limit counts UTF-8 bytes, accepts the exact boundary, and does not relax the editor’s existing normalized structure limits. Invalid encoding, ambiguous settings, extra files/fields and invalid Unicode/NUL metadata are rejected before page creation. Small JSON clients remain supported. A file label comes from explicit UTF-8 metadata, preserving Unicode names independently of multipart filename encoding.
 
 The signed review expires after ten minutes and binds the exact input, normalized content, actor, space and destination ancestry/membership/permissions. Confirmation rechecks current write access and the destination’s audience under the space lock. A changed policy requires another review even if the importer remains an owner. Creation writes the page, initial history, search/reference projections and an import receipt in one transaction. Migration 44 adds `page_import_requests`.
 
 Retries use the same request ID and input, including after a lost response or review expiry when the page already exists. Concurrent confirmations return one page. A reused request ID with different input is rejected; a deleted result never creates a replacement silently. The UI retries a transient failure once and retains an uncertain review for manual retry.
 
-API (authenticated JSON, exact Origin):
+API (authenticated, exact Origin):
 
 - `POST /api/v1/spaces/:space/imports/markdown/preview`: `{filename,markdown,title?,titleFromHeading?,parentId?}` → title, normalized document, warnings, destination, preview token and a temporary review page ID.
 - `POST /api/v1/spaces/:space/imports/markdown`: `{requestId,previewToken,input}` → created authorized page plus `replayed`. Self-heading links are rebound from the temporary review ID to the created page ID.
+
+For multipart requests, use a `file` part and a JSON `settings` part. Preview settings contain `{filename,title?,titleFromHeading?,parentId?}`. Confirmation settings contain `{requestId,previewToken,input:{filename,title?,titleFromHeading?,parentId?}}`; source text comes only from the file. The browser uses multipart for selected files and pasted text, including exact retries. Existing JSON bodies below remain accepted within the HTTP JSON parser’s own size limit.
+
+`tests/markdown-upload.test.mjs` covers transport overhead above the JSON request limit, exact/over-limit byte bounds, UTF-8/Unicode metadata, authorization before parsing, content/actor/policy binding, no-write failures and a Chromium large-file preview→import→reload flow.
 
 `tests/markdown-import.test.mjs` covers conversion, stable links, current access and policy drift, idempotence/expiry, transactional rollback, URL/HTML isolation and a Chromium file→review→lost-response recovery→editable page→reload/mobile flow.

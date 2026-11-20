@@ -1,5 +1,9 @@
 import { normalizeDocument } from "./index.js";
 import { documentHeadings } from "./links.js";
+import {
+  markdownImportMaxBytes,
+  markdownImportSizeLabel,
+} from "@orvyn/shared/markdown-limits";
 
 interface Node {
   type: string;
@@ -421,9 +425,11 @@ export function exportMarkdown(input: unknown, context: MarkdownExportContext) {
   const bytes = Buffer.byteLength(markdown);
   if (bytes > 1024 * 1024)
     throw Error("This page is too large to export as Markdown.");
-  if (bytes > 32768)
+  if (bytes > markdownImportMaxBytes)
     warnings.add(
-      "This file exceeds Orvyn’s current 32 KB Markdown import limit. Use a Markdown editor or split the file before reimporting.",
+      "This file exceeds Orvyn’s current " +
+        markdownImportSizeLabel +
+        " Markdown import limit. Use a Markdown editor or split the file before reimporting.",
     );
   return { markdown, warnings: [...warnings] };
 }
