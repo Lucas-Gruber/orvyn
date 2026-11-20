@@ -301,6 +301,7 @@ test("database publication files require an explicitly selected field and relati
         { [files.id]: [file.id], [relation.id]: [f.b.pageId, f.hidden.pageId] },
       ],
     );
+    await db.query("SELECT orvyn_replace_record_relations($1)", [f.a.pageId]);
     const noFiles = await f.publish();
     assert.equal(
       (await request("publications/" + noFiles.token + "/files/" + file.id))
@@ -673,6 +674,95 @@ test("publication record scope paginates beyond 200 items, applies the saved fil
     assert.equal(choices.response.status, 201);
     assert.ok(!choices.data.records.some((record) => record.id === target));
     assert.equal(choices.data.selected.length, 0);
+  } finally {
+    await db.end();
+  }
+});
+
+test("publication relation projections reveal no inaccessible reference counts and honor the current target database", async () => {
+  const db = new Pool({ connectionString: process.env.DATABASE_URL });
+  try {
+    const f = await fixture(db),
+      relation = await f.property("Related", "Relation", {
+        relationDatabaseId: f.id,
+      });
+    await db.query(
+      "UPDATE database_records SET values=values||$2::jsonb WHERE page_id=$1",
+      [f.a.pageId, { [relation.id]: [f.b.pageId, f.hidden.pageId] }],
+    );
+    await db.query("SELECT orvyn_replace_record_relations($1)", [f.a.pageId]);
+    await db.query("UPDATE spaces SET kind='team' WHERE id=$1", [f.space.id]);
+    const registered = await request("auth/register", {
+        method: "POST",
+        body: { email: randomUUID() + "@example.test", password: randomUUID() },
+      }),
+      cookie = sessionCookie(registered.response),
+      admin = (await request("auth/me", { cookie })).data;
+    await db.query("INSERT INTO space_members VALUES($1,$2,'Admin')", [
+      f.space.id,
+      admin.id,
+    ]);
+    await db.query(
+      "UPDATE pages SET visibility='restricted' WHERE id=ANY($1::uuid[])",
+      [[f.b.pageId, f.hidden.pageId]],
+    );
+    assert.equal(
+      (
+        await request("databases/" + f.id + "/records/" + f.hidden.pageId, {
+          cookie,
+        })
+      ).response.status,
+      404,
+    );
+    const input = structuredClone(f.input);
+    input.scope.databases[0].recordIds = [f.a.pageId];
+    input.scope.databases[0].propertyIds.push(relation.id);
+    const hidden = await request(f.path + "/preview", {
+      method: "POST",
+      cookie,
+      body: input,
+    });
+    assert.equal(hidden.response.status, 201, JSON.stringify(hidden.data));
+    assert.equal(hidden.data.warnings.excludedRelations, 0);
+    assert.deepEqual(
+      hidden.data.snapshot.pages[0].database.records[0].values[relation.id],
+      [],
+    );
+    await db.query("UPDATE pages SET visibility='space' WHERE id=$1", [
+      f.b.pageId,
+    ]);
+    const visible = await request(f.path + "/preview", {
+      method: "POST",
+      cookie,
+      body: input,
+    });
+    assert.equal(visible.response.status, 201);
+    assert.equal(visible.data.warnings.excludedRelations, 1);
+    const target = await f.database("A different target");
+    await db.query(
+      "UPDATE database_properties SET config=jsonb_set(config,'{databaseId}',to_jsonb($2::text)) WHERE id=$1",
+      [relation.id, target.id],
+    );
+    await db.query(
+      "UPDATE databases SET schema_version=schema_version+1 WHERE page_id=$1",
+      [f.id],
+    );
+    input.scope.databases[0].recordIds = [f.a.pageId, f.b.pageId];
+    const retargeted = await f.preview(input);
+    assert.equal(
+      retargeted.response.status,
+      201,
+      JSON.stringify(retargeted.data),
+    );
+    assert.deepEqual(
+      retargeted.data.snapshot.pages
+        .find((page) => page.id === f.id)
+        .database.records.find((record) => record.pageId === f.a.pageId).values[
+        relation.id
+      ],
+      [],
+    );
+    assert.equal(retargeted.data.warnings.excludedRelations, 0);
   } finally {
     await db.end();
   }

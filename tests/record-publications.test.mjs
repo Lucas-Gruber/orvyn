@@ -264,6 +264,9 @@ test("direct record relations resolve only other approved records and exact owne
         },
       ],
     );
+    await db.query("SELECT orvyn_replace_record_relations($1)", [
+      f.root.pageId,
+    ]);
     const input = structuredClone(f.input);
     input.scope.records[0].propertyIds.push(relation.id, files.id);
     input.scope.records.push({

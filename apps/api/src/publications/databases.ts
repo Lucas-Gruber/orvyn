@@ -199,9 +199,18 @@ export async function publicationDatabases(
       );
     const rows = (
       await c.query(
-        `SELECT p.id,p.title,p.version AS page_version,p.title_version,p.appearance_version,p.document_schema_version,p.created_at,p.updated_at,r.version,r.values
+        `SELECT p.id,p.title,p.version AS page_version,p.title_version,p.appearance_version,p.document_schema_version,p.created_at,p.updated_at,r.version,r.values,
+        coalesce((SELECT jsonb_object_agg(dp.id,orvyn_record_relation_values(p.id,dp.id,$3)) FROM database_properties dp
+          WHERE dp.database_id=r.database_id AND dp.id=ANY($4::uuid[]) AND dp.type='Relation' AND dp.deleted_at IS NULL),'{}'::jsonb) AS relation_values
    FROM database_records r JOIN pages p ON p.id=r.page_id WHERE r.database_id=$1 AND p.id=ANY($2::uuid[]) AND orvyn_page_role(p.id,$3)>=40`,
-        [context.page.id, ids, actor],
+        [
+          context.page.id,
+          ids,
+          actor,
+          ordered
+            .filter((property) => property.type === "Relation")
+            .map((property) => property.id),
+        ],
       )
     ).rows;
     if (rows.length !== ids.length)
@@ -248,11 +257,13 @@ export async function publicationDatabases(
             value = new Date(row.updated_at).toISOString();
             break;
           case "Relation": {
-            const references = Array.isArray(raw) ? raw : [];
-            value = references.filter((target: string) =>
+            const references: string[] =
+              row.relation_values?.[property.id] || [];
+            const included = references.filter((target) =>
               selectedRecords.has(target),
             );
-            omittedRelations += references.length - value.length;
+            value = included;
+            omittedRelations += references.length - included.length;
             break;
           }
           case "Files": {
