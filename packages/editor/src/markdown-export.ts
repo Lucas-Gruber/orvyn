@@ -1,5 +1,6 @@
 import { normalizeDocument } from "./index.js";
 import { documentHeadings } from "./links.js";
+import { markdownSlugger } from "./markdown-anchors.js";
 import {
   markdownImportMaxBytes,
   markdownImportSizeLabel,
@@ -18,20 +19,48 @@ export interface MarkdownExportContext {
   page: (
     id: string,
     headingId?: string,
-  ) => { title: string; href: string } | undefined;
+  ) => { title: string; href: string; headingAvailable?: boolean } | undefined;
   file: (
     id: string,
     image?: boolean,
-  ) => { label: string; href: string } | undefined;
+  ) => { label: string; href: string; portable?: boolean } | undefined;
   person: (id: string) => string | undefined;
   includePeopleNames: boolean;
+}
+
+export function markdownHeadingAnchors(
+  input: unknown,
+  title: string,
+  person: (id: string) => string | undefined = () => undefined,
+) {
+  const document = normalizeDocument(input) as Node,
+    headings = documentHeadings(document),
+    slug = markdownSlugger(),
+    anchors = new Map<string, string>();
+  let index = 0;
+  function plain(node: Node): string {
+    if (node.type === "orvynPerson")
+      return "@" + (person(node.attrs?.userId) || "person");
+    return node.text || (node.content || []).map(plain).join("");
+  }
+  slug(title.replace(/[\t\r\n]+/g, " ").trim() || "Untitled");
+  function walk(node: Node) {
+    if (node.type === "heading") {
+      const heading = headings[index++];
+      if (heading) anchors.set(heading.id, slug(plain(node)));
+    }
+    node.content?.forEach(walk);
+  }
+  walk(document);
+  return anchors;
 }
 
 export function exportMarkdown(input: unknown, context: MarkdownExportContext) {
   const document = normalizeDocument(input) as Node,
     warnings = new Set<string>(),
-    slugs = new Map<string, number>(),
-    headingSlugs = new Map<string, string>(),
+    headingSlugs = markdownHeadingAnchors(document, context.title, (id) =>
+      context.includePeopleNames ? context.person(id) : undefined,
+    ),
     headings = documentHeadings(document),
     pageUrl = new URL(context.pageUrl);
   const exportTitle =
@@ -40,7 +69,6 @@ export function exportMarkdown(input: unknown, context: MarkdownExportContext) {
     warnings.add(
       "Line breaks or tabs in the page title use spaces in Markdown.",
     );
-  let headingIndex = 0;
   function person(id: string) {
     const label = context.includePeopleNames ? context.person(id) : undefined;
     if (!label)
@@ -49,29 +77,6 @@ export function exportMarkdown(input: unknown, context: MarkdownExportContext) {
       );
     return "@" + (label || "person");
   }
-  function plain(node: Node): string {
-    if (node.type === "orvynPerson") return person(node.attrs?.userId);
-    return node.text || (node.content || []).map(plain).join("");
-  }
-  function slug(text: string) {
-    const base = text
-        .toLowerCase()
-        .replace(/[^\p{L}\p{N}\s_-]/gu, "")
-        .trim()
-        .replace(/\s+/g, "-"),
-      count = slugs.get(base) || 0;
-    slugs.set(base, count + 1);
-    return base + (count ? "-" + count : "");
-  }
-  slug(exportTitle);
-  function collect(node: Node) {
-    if (node.type === "heading") {
-      const heading = headings[headingIndex++];
-      if (heading) headingSlugs.set(heading.id, slug(plain(node)));
-    }
-    node.content?.forEach(collect);
-  }
-  collect(document);
   function text(value: string) {
     return value
       .replace(/[\\`*_[\]{}!#~|]/g, "\\$&")
@@ -117,7 +122,12 @@ export function exportMarkdown(input: unknown, context: MarkdownExportContext) {
           );
           return;
         }
-        if (heading && new URL(target.href).hash !== url.hash)
+        if (
+          heading &&
+          (target.headingAvailable === false ||
+            (target.headingAvailable === undefined &&
+              new URL(target.href, pageUrl).hash !== url.hash))
+        )
           warnings.add(
             "An unavailable heading link points to its page instead.",
           );
@@ -334,9 +344,10 @@ export function exportMarkdown(input: unknown, context: MarkdownExportContext) {
             ? "Image unavailable"
             : "Attachment unavailable";
         }
-        warnings.add(
-          "Attachment links require current access and a sign-in to Orvyn; file bytes are separate.",
-        );
+        if (!file.portable)
+          warnings.add(
+            "Attachment links require current access and a sign-in to Orvyn; file bytes are separate.",
+          );
         const label = text(node.attrs?.label || file.label);
         return (node.type === "orvynImage" ? "!" : "") + link(label, file.href);
       }
@@ -347,7 +358,7 @@ export function exportMarkdown(input: unknown, context: MarkdownExportContext) {
           node.attrs?.pageId || node.attrs?.databaseId,
           node.attrs?.headingId,
         );
-        if (page && node.attrs?.headingId && !new URL(page.href).hash)
+        if (page && node.attrs?.headingId && !new URL(page.href, pageUrl).hash)
           warnings.add(
             "An unavailable heading link points to its page instead.",
           );
@@ -355,7 +366,12 @@ export function exportMarkdown(input: unknown, context: MarkdownExportContext) {
           "Linked page, database and whiteboard blocks become links without copying their content.",
         );
         return page
-          ? link(text(page.title), href(page.href) || page.href)
+          ? link(
+              text(page.title),
+              /^[a-z][a-z\d+.-]*:|^\//i.test(page.href)
+                ? href(page.href) || page.href
+                : page.href,
+            )
           : "Linked content unavailable";
       }
       case "orvynVideo": {

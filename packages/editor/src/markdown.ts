@@ -7,6 +7,7 @@ import {
 } from "marked";
 import { decodeHTML } from "entities";
 import { normalizeDocument } from "./index.js";
+import { markdownSlugger } from "./markdown-anchors.js";
 import {
   markdownImportMaxBytes,
   markdownImportSizeLabel,
@@ -67,7 +68,7 @@ export function importMarkdown(source: string, options: MarkdownImportOptions) {
     tokens = lexer(source.replace(/^\uFEFF/, ""), { gfm: true }),
     ids = new WeakMap<Token, string>(),
     anchors = new Map<string, string>(),
-    slugs = new Map<string, number>();
+    slugFor = markdownSlugger();
   let remaining = 6000,
     headingIndex = 0;
   const first = tokens.find((token) => token.type !== "space");
@@ -98,18 +99,11 @@ export function importMarkdown(source: string, options: MarkdownImportOptions) {
       const token = raw as KnownToken;
       if (token.type === "heading") {
         const text = plain(token.tokens),
-          base = text
-            .toLowerCase()
-            .replace(/[^\p{L}\p{N}\s_-]/gu, "")
-            .trim()
-            .replace(/\s+/g, "-"),
-          count = slugs.get(base) || 0,
-          slug = base + (count ? "-" + count : ""),
+          slug = slugFor(text),
           hex = createHash("sha256")
             .update(source + "\0" + headingIndex++)
             .digest("hex"),
           id = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
-        slugs.set(base, count + 1);
         ids.set(token, id);
         anchors.set(
           slug,

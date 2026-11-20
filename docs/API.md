@@ -53,6 +53,8 @@ Markdown import: `POST /spaces/:space/imports/markdown/preview` accepts `{filena
 
 Markdown export: authenticated `GET /pages/:id/export/markdown?includePeopleNames=false` returns reviewed file contents, filename, conversion notes and a digest. `GET /pages/:id/export.md` returns the current protected Markdown attachment; an optional `review=<digest>` requires exact reviewed output after current source/reference checks. Names are opt-in. See MARKDOWN_EXPORT.md for scope, limits and conversion rules.
 
+Hierarchy ZIP export: `GET /pages/:id/export/tree` lists readable document/folder candidates. JSON `POST /pages/:id/export/bundle/preview` reviews explicit `{pageIds,includeAttachments?,includePeopleNames?}`. `POST /pages/:id/export/bundle` adds required `review:<digest>` and returns a checked ZIP with relative page/heading links and optional embedded attachment copies. Names/copies default to false for API clients. Limits: 100 pages, 100 files, 32 MiB uncompressed; source and independent attachment access are checked again after storage reads. See MARKDOWN_BUNDLES.md.
+
 PATCH /pages/:id/title accepts title and titleVersion. REST content updates normalize legacy paragraph input but reject replacements once editor_documents contains a CRDT for the page. Use the authenticated collaboration service for subsequent content changes.
 
 File routes: GET /files/limits; GET/POST /pages/:id/files (POST is authenticated multipart/form-data with one file field, Origin required); GET /files/:id/download; GET /files/:id/preview for detected raster images; DELETE /files/:id with JSON body. All file resources inherit page permissions.

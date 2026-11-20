@@ -21,6 +21,7 @@ import { CommentsModule } from "./comments.module.js";
 import { PublicationsModule } from "./publications/publications.module.js";
 import { MarkdownImportsModule } from "./imports/markdown.module.js";
 import { MarkdownExportsModule } from "./imports/markdown-export.module.js";
+import { MarkdownBundlesModule } from "./imports/markdown-bundle.module.js";
 import { WhiteboardsModule } from "./whiteboards.module.js";
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { WhiteboardsModule } from "./whiteboards.module.js";
     PublicationsModule,
     MarkdownImportsModule,
     MarkdownExportsModule,
+    MarkdownBundlesModule,
   ],
 })
 class App {}

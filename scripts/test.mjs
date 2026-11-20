@@ -184,6 +184,8 @@ try {
           "tests/markdown-import.test.mjs",
           "tests/markdown-export.test.mjs",
           "tests/markdown-upload.test.mjs",
+          "tests/markdown-bundle.test.mjs",
+          "tests/markdown-bundle-storage.test.mjs",
           "tests/editor-assets.test.mjs",
           "tests/page-previews.test.mjs",
           "tests/video-embeds.test.mjs",

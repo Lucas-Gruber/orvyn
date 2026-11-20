@@ -248,3 +248,4 @@ export {
   markdownImportMaxBytes,
   markdownImportSizeLabel,
 } from "./markdown-limits.js";
+export * from "./markdown-bundle.js";

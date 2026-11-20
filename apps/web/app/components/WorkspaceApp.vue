@@ -56,6 +56,7 @@ const shortcutHelp = ref<{ open: () => void }>();
 const databaseTemplates = ref<{ open: () => void }>();
 const markdownImport = ref<{ open: (parentId?: string) => void }>();
 const markdownExport = ref<{ open: () => void }>();
+const markdownBundle = ref<{ open: () => void }>();
 const sidebarMenu = ref<any>(),
   sidebarTarget = ref<any>();
 const sidebarActions = computed(() => [
@@ -1608,6 +1609,12 @@ onBeforeUnmount(() => {
             ></button
           ><UiMenu label="Page actions"
             ><button
+              v-if="['page', 'folder'].includes(page.kind)"
+              role="menuitem"
+              @click="markdownBundle?.open()"
+            >
+              <AppIcon name="folder" :size="16" />Export pages as ZIP</button
+            ><button
               v-if="['page', 'record'].includes(page.kind)"
               role="menuitem"
               @click="markdownExport?.open()"
@@ -2369,6 +2376,13 @@ onBeforeUnmount(() => {
     v-if="page && ['page', 'record'].includes(page.kind)"
     :key="'markdown-export-' + page.id"
     ref="markdownExport"
+    :page-id="page.id"
+    :before-export="flushCurrentDocument"
+  />
+  <MarkdownBundle
+    v-if="page && ['page', 'folder'].includes(page.kind)"
+    :key="'markdown-bundle-' + page.id"
+    ref="markdownBundle"
     :page-id="page.id"
     :before-export="flushCurrentDocument"
   />

@@ -10,7 +10,7 @@ People become `@person` unless names are explicitly enabled. Enabled names resol
 
 The preview uses a repeatable read and returns a digest of the exact output/options. Download independently rechecks source/reference access and recomputes the file; a supplied review digest must still match or it returns 409. This avoids downloading a different file after a concurrent edit, target/access change or altered name selection. No durable export grant is created. An authorized programmatic download without a digest exports the current snapshot directly. Responses use private/no-store caching, safe UTF-8 attachment filenames and `text/markdown`.
 
-Output is bounded to 1 MB; a note identifies files exceeding the current 96 KB single-file Markdown import limit. Complete hierarchy/attachment bundles, portable restoration and faithful Notion migration remain separate work. This export is an editable Markdown representation with reviewed conversions, not a full database/whiteboard/archive backup.
+Output is bounded to 1 MB; a note identifies files exceeding the current 96 KB single-file Markdown import limit. Selected document/folder hierarchies and copied embedded attachments can also use the reviewed ZIP flow described in MARKDOWN_BUNDLES.md. Portable restoration and faithful Notion migration remain separate work. These exports are editable Markdown representations with reviewed conversions, not full database/whiteboard/archive backups.
 
 API (authenticated read access):
 
