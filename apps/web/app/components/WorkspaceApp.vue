@@ -54,6 +54,7 @@ const peekId = ref(""),
 let peekReturnFocus: HTMLElement | undefined;
 const shortcutHelp = ref<{ open: () => void }>();
 const databaseTemplates = ref<{ open: () => void }>();
+const markdownImport = ref<{ open: (parentId?: string) => void }>();
 const sidebarMenu = ref<any>(),
   sidebarTarget = ref<any>();
 const sidebarActions = computed(() => [
@@ -1412,6 +1413,10 @@ onBeforeUnmount(() => {
                 @click="navigate(() => createPage(null, 'folder'))"
               >
                 <AppIcon name="folder" :size="16" />New folder
+              </button>
+              <hr />
+              <button role="menuitem" @click="markdownImport?.open()">
+                <AppIcon name="upload" :size="16" />Import Markdown
               </button></UiMenu
             >
           </div>
@@ -1601,6 +1606,16 @@ onBeforeUnmount(() => {
               >Comments</span
             ></button
           ><UiMenu label="Page actions"
+            ><button
+              v-if="
+                canCreate &&
+                ['page', 'folder'].includes(page.kind) &&
+                page.access_rank >= 30
+              "
+              role="menuitem"
+              @click="markdownImport?.open(page.id)"
+            >
+              <AppIcon name="upload" :size="16" />Import Markdown as subpage</button
             ><button role="menuitem" @click="openActivity(true)">
               <AppIcon name="history" :size="16" />Page activity</button
             ><button
@@ -2343,6 +2358,21 @@ onBeforeUnmount(() => {
     @saved="notice = 'Template saved'"
   />
   <KeyboardShortcuts ref="shortcutHelp" />
+  <MarkdownImport
+    v-if="space && canCreate"
+    :key="'markdown-' + space.id"
+    ref="markdownImport"
+    :space="space"
+    :pages="pages"
+    :before-import="flushCurrentDocument"
+    @created="
+      (id) =>
+        navigate(async () => {
+          await loadPages();
+          await openPage(id);
+        })
+    "
+  />
   <UiContextMenu
     ref="sidebarMenu"
     label="Page actions"

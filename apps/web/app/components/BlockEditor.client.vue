@@ -1789,6 +1789,9 @@ onBeforeUnmount(() => {
   margin: 1.1em 0;
   max-width: 100%;
 }
+.block-editor .tiptap[contenteditable="true"] .tableWrapper {
+  margin-top: 52px;
+}
 .block-editor .tiptap td,
 .block-editor .tiptap th {
   border: 1px solid var(--line);
@@ -1835,17 +1838,41 @@ onBeforeUnmount(() => {
 }
 .block-editor .tiptap li[data-type="taskItem"] {
   display: flex;
-  gap: 0.6rem;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 4px 0;
 }
 .block-editor .tiptap li[data-type="taskItem"] > label {
   display: flex;
   align-items: center;
+  flex: 0 0 16px;
+  margin: 0;
+  padding-top: 5px;
+  cursor: pointer;
 }
 .block-editor .tiptap li[data-type="taskItem"] > div {
   flex: 1;
+  min-width: 0;
+}
+.block-editor
+  .tiptap
+  li[data-type="taskItem"][data-checked="true"]
+  > div
+  > p:first-child {
+  color: var(--muted);
+  text-decoration: line-through;
 }
 .block-editor .tiptap input[type="checkbox"] {
-  width: auto;
+  width: 14px;
+  height: 14px;
+  min-height: 14px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--accent);
+}
+.block-editor .tiptap input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 .block-editor .collaboration-carets__caret {
   border-left: 1px solid;

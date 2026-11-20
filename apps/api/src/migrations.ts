@@ -9,6 +9,7 @@ import { propertySearchMigration } from "./property-search-migration.js";
 import { propertyConversionMigration } from "./databases/conversion-migration.js";
 import { whiteboardMigration } from "./whiteboard-migration.js";
 import { publicationMigration } from "./publications/migration.js";
+import { pageImportMigration } from "./imports/migration.js";
 export const migrations = [
   {
     version: 1,
@@ -639,6 +640,7 @@ END $$;`,
   },
   { version: 42, sql: whiteboardMigration },
   { version: 43, sql: publicationMigration },
+  { version: 44, sql: pageImportMigration },
 ] as const;
 
 export async function migrate(pool: Pool, target = migrations.at(-1)!.version) {

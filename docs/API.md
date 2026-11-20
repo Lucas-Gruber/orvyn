@@ -13,7 +13,7 @@ All routes use /api/v1. Responses are JSON. Authentication uses the orvyn_sessio
 | POST | /spaces/:id/pages | title; creates paragraph document |
 | PUT | /pages/:id | title, document, version; updates and increments version |
 
-Unavailable or stale writes return 409; reload and reconcile before retrying. No public access or team permissions exist.
+Inaccessible resources return 404; stale writes return 409. Team permissions and explicit public snapshot links are documented below and in PERMISSIONS.md/PUBLICATIONS.md.
 
 Additional authenticated routes:
 
@@ -48,6 +48,8 @@ Additional authenticated routes:
 | GET | /pages/:id/history/:version | Authorized saved revision |
 
 Page creation accepts parentId. Page listing accepts q, after and limit (1–200) and exposes X-Next-Cursor when more records exist. Direct inaccessible resources return 404; stale versions return 409. See docs/PERMISSIONS.md for inheritance and conversion semantics.
+
+Markdown import: `POST /spaces/:space/imports/markdown/preview` accepts `{filename,markdown,title?,titleFromHeading?,parentId?}` and returns a signed review. `POST /spaces/:space/imports/markdown` accepts `{requestId,previewToken,input}` and atomically creates one page with recoverable retries. Both require current editor access and exact Origin. See MARKDOWN_IMPORT.md for limits, conversion rules and destination policy binding.
 
 PATCH /pages/:id/title accepts title and titleVersion. REST content updates normalize legacy paragraph input but reject replacements once editor_documents contains a CRDT for the page. Use the authenticated collaboration service for subsequent content changes.
 

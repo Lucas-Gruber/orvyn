@@ -1,0 +1,20 @@
+# Markdown import
+
+Use **Create in this space → Import Markdown** for a top-level page, or **Page actions → Import Markdown as subpage** for the current page/folder. Choose a UTF-8 `.md`/`.markdown` file or paste Markdown, select the destination, optionally override the title, and preview the complete document before creating it. The first H1 can become the page title instead of being duplicated in the document.
+
+The importer converts paragraphs, bold/italic/strikethrough/code, links, H1–H4, quotes, numbered/bullet/task lists, nested lists, fenced/indented code, horizontal rules and GFM tables to ordinary editable blocks. Headings retain stable identifiers. Markdown heading fragments resolve in the review and become permanent links to the new page’s headings after creation. Review navigation stays inside its own content, even when the underlying editor contains identical heading identifiers. Task markers become native checklist state.
+
+The review lists adjustments: H5/H6 use H4, table alignment uses the editor default, unknown relative file/heading links become plain text, and HTML remains visible text/code. Images become text links rather than remote image embeds. Importing never fetches URLs, reads local files or grants access to attachments. Upload images/files separately after import. No scripts, HTML embeds, live people references or imported permissions are created from Markdown.
+
+Limits: one page per import, 32 KB UTF-8 source, the existing 100,000-character normalized document limit, 3,000 document nodes and bounded nesting/token work. Page titles support 300 characters. Page hierarchies, attachment payloads, portable restoration and faithful Notion migration remain separate work.
+
+The signed review expires after ten minutes and binds the exact input, normalized content, actor, space and destination ancestry/membership/permissions. Confirmation rechecks current write access and the destination’s audience under the space lock. A changed policy requires another review even if the importer remains an owner. Creation writes the page, initial history, search/reference projections and an import receipt in one transaction. Migration 44 adds `page_import_requests`.
+
+Retries use the same request ID and input, including after a lost response or review expiry when the page already exists. Concurrent confirmations return one page. A reused request ID with different input is rejected; a deleted result never creates a replacement silently. The UI retries a transient failure once and retains an uncertain review for manual retry.
+
+API (authenticated JSON, exact Origin):
+
+- `POST /api/v1/spaces/:space/imports/markdown/preview`: `{filename,markdown,title?,titleFromHeading?,parentId?}` → title, normalized document, warnings, destination, preview token and a temporary review page ID.
+- `POST /api/v1/spaces/:space/imports/markdown`: `{requestId,previewToken,input}` → created authorized page plus `replayed`. Self-heading links are rebound from the temporary review ID to the created page ID.
+
+`tests/markdown-import.test.mjs` covers conversion, stable links, current access and policy drift, idempotence/expiry, transactional rollback, URL/HTML isolation and a Chromium file→review→lost-response recovery→editable page→reload/mobile flow.

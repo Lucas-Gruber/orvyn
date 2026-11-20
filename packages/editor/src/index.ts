@@ -40,7 +40,10 @@ export function editorExtensions(collaborative = false): AnyExtension[] {
       link: { openOnClick: false, defaultProtocol: "https" },
     }),
     TaskList,
-    TaskItem.configure({ nested: true }),
+    TaskItem.configure({
+      nested: true,
+      HTMLAttributes: { "data-type": "taskItem" },
+    }),
     TableKit.configure({ table: { resizable: false, cellMinWidth: 96 } }),
     EditorTables,
     DatabaseBlock,

@@ -11,6 +11,7 @@ const props = defineProps<{
   preview?: boolean;
 }>();
 const selected = ref("");
+const content = ref<HTMLElement>();
 function navigatePreview(event: MouseEvent) {
   if (!props.preview || !(event.target instanceof Element)) return;
   const anchor = event.target.closest("a[href]");
@@ -23,10 +24,10 @@ function navigatePreview(event: MouseEvent) {
   event.stopPropagation();
   selected.value = id!;
   void nextTick(() => {
-    if (url.hash)
-      document
-        .getElementById(url.hash.slice(1))
-        ?.scrollIntoView({ block: "start" });
+    const target = url.hash
+      ? content.value?.querySelector("#" + CSS.escape(url.hash.slice(1)))
+      : content.value?.querySelector(".publication-title");
+    target?.scrollIntoView({ block: "start" });
   });
 }
 const page = computed(() =>
@@ -61,6 +62,7 @@ watch(
 </script>
 <template>
   <div
+    ref="content"
     class="publication-content"
     :class="{ 'has-sidebar': !preview && snapshot.pages.length > 1 }"
     @click.capture="navigatePreview"
@@ -414,13 +416,27 @@ watch(
 .public-task {
   display: flex;
   gap: 10px;
-  align-items: baseline;
+  align-items: flex-start;
   list-style: none;
+  margin: 4px 0;
+}
+.publication-content .public-task-list {
+  list-style: none;
+  padding-left: 0;
+}
+.public-task > input {
+  width: 14px;
+  height: 14px;
+  min-height: 14px;
+  padding: 0;
+  margin: 5px 0 0;
+  accent-color: var(--accent);
+  flex: 0 0 14px;
 }
 .public-task > div {
   min-width: 0;
 }
-.public-task input:checked + div {
+.public-task > input:checked + div > p:first-child {
   text-decoration: line-through;
   color: var(--muted);
 }

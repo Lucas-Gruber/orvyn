@@ -156,6 +156,7 @@ test("linked database blocks persist independent views and never grant access to
       page.getByRole("button", { name: "Back to database", exact: true }),
     ).toBeVisible();
     await page
+      .getByRole("dialog", { name: "Actual linked record", exact: true })
       .getByRole("textbox", { name: "Document", exact: true })
       .fill("Record notes stay on the original record page.");
     await expect(

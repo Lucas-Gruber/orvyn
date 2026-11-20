@@ -240,6 +240,7 @@ const widths = computed(() => {
       )[node.type] || 'div'
     "
     v-else
+    :class="{ 'public-task-list': node.type === 'taskList' }"
     :start="node.type === 'orderedList' ? node.attrs?.start : undefined"
     ><PublicDocumentNode
       v-for="(child, i) in node.content"
