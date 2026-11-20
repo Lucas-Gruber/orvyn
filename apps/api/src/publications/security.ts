@@ -72,6 +72,10 @@ export function publicationDigest(
     .digest("hex");
 }
 export const publicToken = (value: string) => /^[A-Za-z0-9_-]{43}$/.test(value);
+export const publicPersonId = (root: string, userId: string) =>
+  createHmac("sha256", key("person-alias"))
+    .update(root + ":" + userId)
+    .digest("base64url");
 export const publicURL = (token: string) =>
   new URL("/s/" + token, origin()).toString();
 const gate = z.strictObject({

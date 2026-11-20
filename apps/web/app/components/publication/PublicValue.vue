@@ -67,13 +67,26 @@ const href = computed(() => {
 </script>
 <template>
   <span
-    v-if="['Select', 'MultiSelect', 'Status'].includes(property.type)"
+    v-if="
+      [
+        'Select',
+        'MultiSelect',
+        'Status',
+        'Person',
+        'CreatedBy',
+        'LastEditedBy',
+      ].includes(property.type)
+    "
     class="public-value-tags"
     ><span
       v-for="id in values.filter((id) => option(String(id)))"
       :key="String(id)"
       :class="'public-option public-option-' + option(String(id))?.color"
-      >{{ option(String(id))?.label }}</span
+      ><AppIcon
+        v-if="['Person', 'CreatedBy', 'LastEditedBy'].includes(property.type)"
+        name="users"
+        :size="12"
+      />{{ option(String(id))?.label }}</span
     ></span
   >
   <span
@@ -143,6 +156,10 @@ const href = computed(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   color: var(--text);
+}
+.public-option svg {
+  vertical-align: -2px;
+  margin-right: 4px;
 }
 .public-option-violet {
   background: #eae3f4;

@@ -120,7 +120,9 @@ export async function computePublicationCalculations(
                 new Set([...path, property.id]),
               )
             : (candidate.values[field.id] ?? null);
-        if (field.type === "Select" || field.type === "Status")
+        if (
+          ["Select", "Status", "CreatedBy", "LastEditedBy"].includes(field.type)
+        )
           value =
             field.config.options?.find((option) => option.id === value)
               ?.label ?? null;

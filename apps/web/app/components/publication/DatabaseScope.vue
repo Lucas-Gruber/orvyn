@@ -237,7 +237,7 @@ onBeforeUnmount(() => {
             }}<small v-if="!property.allowed">{{
               ["Formula", "Rollup"].includes(property.type)
                 ? "Inputs kept private"
-                : "Identity · Kept private"
+                : "Unavailable inputs"
             }}</small
             ><small
               v-else-if="
@@ -252,6 +252,11 @@ onBeforeUnmount(() => {
               first</small
             ><small v-else-if="required.includes(property.id)"
               >Required by this view</small
+            ><small
+              v-else-if="
+                ['Person', 'CreatedBy', 'LastEditedBy'].includes(property.type)
+              "
+              >Uses your chosen public names</small
             ></span
           ></label
         >

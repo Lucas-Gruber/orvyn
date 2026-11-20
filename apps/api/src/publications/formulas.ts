@@ -179,7 +179,11 @@ export async function computePublicationFormulas(
       const known = fields.get(property.id);
       if (known) return known;
       let value: PublicValue = context.values[property.id] ?? null;
-      if (property.type === "Select" || property.type === "Status")
+      if (
+        ["Select", "Status", "CreatedBy", "LastEditedBy"].includes(
+          property.type,
+        )
+      )
         value =
           property.config.options?.find((option) => option.id === value)
             ?.label ?? null;

@@ -51,9 +51,9 @@ Work through these areas in order, preserving working features and committing/pu
    - [x] Database saved-view, explicit record and visible-property publication scope, optional record bodies and five isolated public read-only views.
    - [x] Hierarchical public navigation with local search, breadcrumbs, a mobile picker and retained automatic/manual publication retries.
    - [x] Direct record-page publishing with independent property selection and no implicit parent database or sibling publication.
-   - [x] Public formulas recomputed from explicitly shared inputs, with hidden/identity dependencies blocked and no private graph reads.
+   - [x] Public formulas recomputed from explicitly shared inputs, with hidden inputs blocked and identity inputs explicitly named and no private graph reads.
    - [x] Public rollup aggregates over explicitly shared records/fields, including two steps and dependent formulas.
-   - [ ] Public identity dependency policy.
+   - [x] Public people/creator/editor fields and mentions with explicit public names, root-scoped opaque IDs and alias-only formula/rollup dependencies.
    - [x] Revocable, expiring and optional password-protected links with current source checks and permanent revocation on source policy changes.
 7. Localization, branding and administration
    - [ ] Runtime German/English/system language and synchronized preferences.

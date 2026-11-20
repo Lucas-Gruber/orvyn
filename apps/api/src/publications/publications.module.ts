@@ -21,6 +21,7 @@ import {
   publicationPreviewInput,
   publicationCommitInput,
   publicationChangeInput,
+  publicationScopeInput,
   queryInput,
   type PublicationInput,
 } from "@orvyn/shared";
@@ -283,6 +284,29 @@ class Publications {
           .map((row) => ({ id: row.id, title: row.title })),
         nextOffset: rows.length > 100 ? input.offset + 100 : null,
       };
+    });
+  }
+  @Post("people") async people(
+    @Req() req: any,
+    @Param("root") root: string,
+    @Body() body: unknown,
+  ) {
+    mutation(req);
+    const uid = await user(req),
+      scope = parse(publicationScopeInput, body);
+    return readSnapshot(async (c) => {
+      await pageAccess(c, uid, root, 40);
+      const plan = await publicationSnapshot(c, uid, root, {
+        scope,
+        target: null,
+        settings: {
+          label: "Public names review",
+          passwordProtected: false,
+          indexable: false,
+          expiresAt: null,
+        },
+      });
+      return { people: await plan.people.choices(c) };
     });
   }
   @Post("preview") async preview(

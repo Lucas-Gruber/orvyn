@@ -28,6 +28,8 @@ const links = ref<any[]>([]),
   } | null>(null),
   previewOpen = ref(false);
 const databaseScopes = ref<PublicationInput["scope"]["databases"]>([]),
+  publicPeople = ref<PublicationInput["scope"]["people"]>([]),
+  publicationScope = computed(() => scopeInput()),
   scopeGeneration = ref(0);
 const recordScopes = ref<PublicationInput["scope"]["records"]>(
   props.page.kind === "record"
@@ -125,6 +127,7 @@ watch(
     selected,
     databaseScopes,
     recordScopes,
+    publicPeople,
     extras,
     label,
     protectedLink,
@@ -217,6 +220,9 @@ function edit(link: any) {
   }));
   scopeGeneration.value++;
   extras.value = [...link.scope.extraFileIds];
+  publicPeople.value = (link.scope.people || []).map((person: any) => ({
+    ...person,
+  }));
   label.value = link.label;
   protectedLink.value = link.passwordProtected;
   password.value = "";
@@ -252,25 +258,30 @@ function fresh() {
   syncDatabases();
   scopeGeneration.value++;
   extras.value = [];
+  publicPeople.value = [];
   password.value = "";
   review.value = null;
   notice.value = "";
 }
+function scopeInput(): PublicationInput["scope"] {
+  return {
+    pageIds: selected.value.filter((id) => id !== props.page.id),
+    databases: databaseScopes.value.map((scope) => ({
+      ...scope,
+      recordIds: [...scope.recordIds],
+      propertyIds: [...scope.propertyIds],
+    })),
+    records: recordScopes.value.map((scope) => ({
+      recordId: scope.recordId,
+      propertyIds: [...scope.propertyIds],
+    })),
+    extraFileIds: extras.value,
+    people: publicPeople.value.map((person) => ({ ...person })),
+  };
+}
 function input(): PublicationInput {
   return {
-    scope: {
-      pageIds: selected.value.filter((id) => id !== props.page.id),
-      databases: databaseScopes.value.map((scope) => ({
-        ...scope,
-        recordIds: [...scope.recordIds],
-        propertyIds: [...scope.propertyIds],
-      })),
-      records: recordScopes.value.map((scope) => ({
-        recordId: scope.recordId,
-        propertyIds: [...scope.propertyIds],
-      })),
-      extraFileIds: extras.value,
-    },
+    scope: scopeInput(),
     settings: {
       label: label.value.trim(),
       passwordProtected: protectedLink.value,
@@ -544,6 +555,12 @@ const previewFile = (id: string) => "/api/v1/files/" + id + "/preview";
         attached to selected pages are included; unrelated attachments stay
         private.
       </p>
+      <PublicationPeopleScope
+        :root-id="page.id"
+        :scope="publicationScope"
+        :busy="busy"
+        @change="publicPeople = $event"
+      />
       <details v-if="files.length" class="publish-extra">
         <summary>
           Additional attachments
@@ -655,17 +672,31 @@ const previewFile = (id: string) => "/api/v1/files/" + id + "/preview";
             review.warnings.excludedBlocks ||
             review.warnings.excludedFiles ||
             review.warnings.anonymousMentions ||
+            review.warnings.omittedPeople ||
             review.warnings.excludedRelations
           "
           class="publish-review-warning"
         >
-          <AppIcon name="info" :size="16" /><span
-            >{{ review.warnings.excludedBlocks }} linked blocks and
-            {{ review.warnings.excludedFiles }} files excluded.
-            {{ review.warnings.anonymousMentions }} person mentions anonymized.
-            {{ review.warnings.excludedRelations || 0 }} links to unselected
-            records excluded.</span
-          >
+          <AppIcon name="info" :size="16" /><span>
+            <span v-if="review.warnings.excludedBlocks"
+              >{{ review.warnings.excludedBlocks }} linked blocks excluded.
+            </span>
+            <span v-if="review.warnings.excludedFiles"
+              >{{ review.warnings.excludedFiles }} files excluded.
+            </span>
+            <span v-if="review.warnings.anonymousMentions"
+              >{{ review.warnings.anonymousMentions }} person mentions
+              anonymized.
+            </span>
+            <span v-if="review.warnings.omittedPeople"
+              >{{ review.warnings.omittedPeople }} people without public names
+              omitted.
+            </span>
+            <span v-if="review.warnings.excludedRelations"
+              >{{ review.warnings.excludedRelations }} links to unselected
+              records excluded.</span
+            >
+          </span>
         </div>
         <div class="publication-review-document">
           <PublicationPublicContent

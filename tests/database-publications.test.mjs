@@ -192,7 +192,7 @@ test("database publications project only selected view fields and records, witho
     await db.end();
   }
 });
-test("database publication reviews reject hidden and identity fields, mismatched rows/views, stale schema/record revisions and later record policy changes", async () => {
+test("database publication reviews reject hidden fields, keep unlabelled people anonymous, reject mismatched rows/views, stale schema/record revisions and later record policy changes", async () => {
   const db = new Pool({ connectionString: process.env.DATABASE_URL });
   try {
     const f = await fixture(db),
@@ -210,7 +210,16 @@ test("database publication reviews reject hidden and identity fields, mismatched
     assert.equal((await f.preview(hidden)).response.status, 400);
     const identity = structuredClone(f.input);
     identity.scope.databases[0].propertyIds.push(person.id);
-    assert.equal((await f.preview(identity)).response.status, 400);
+    const anonymousIdentity = await f.preview(identity);
+    assert.equal(
+      anonymousIdentity.response.status,
+      201,
+      JSON.stringify(anonymousIdentity.data),
+    );
+    for (const row of anonymousIdentity.data.snapshot.pages.find(
+      (page) => page.id === f.id,
+    ).database.records)
+      assert.deepEqual(row.values[person.id], []);
     const other = await f.database("Another database"),
       wrong = structuredClone(f.input);
     wrong.scope.databases[0].viewId = other.views[0].id;

@@ -98,7 +98,7 @@ onBeforeUnmount(() => (alive = false));
           ><small v-else-if="!property.allowed">{{
             ["Formula", "Rollup"].includes(property.type)
               ? "Inputs kept private"
-              : "Identity · Kept private"
+              : "Unavailable inputs"
           }}</small
           ><small
             v-else-if="
@@ -111,6 +111,11 @@ onBeforeUnmount(() => (alive = false));
                 .join(", ")
             }}
             first</small
+          ><small
+            v-else-if="
+              ['Person', 'CreatedBy', 'LastEditedBy'].includes(property.type)
+            "
+            >Uses your chosen public names</small
           ></span
         ></label
       >

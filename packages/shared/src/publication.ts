@@ -36,9 +36,32 @@ export const publicationScopeInput = z
       .array(publicationRecordInput)
       .max(publicationLimits.pages)
       .default([]),
+    people: z
+      .array(
+        z.strictObject({
+          userId: z.uuid().transform((id) => id.toLowerCase()),
+          label: z
+            .string()
+            .trim()
+            .min(1)
+            .max(80)
+            .regex(/^[^\u0000-\u001f\u007f]+$/),
+        }),
+      )
+      .max(100)
+      .default([]),
     extraFileIds: ids(publicationLimits.files).default([]),
   })
   .superRefine((value, context) => {
+    if (
+      new Set(value.people.map((person) => person.userId)).size !==
+      value.people.length
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["people"],
+        message: "Choose one public name per person",
+      });
     if (
       new Set(value.databases.map((database) => database.databaseId)).size !==
       value.databases.length

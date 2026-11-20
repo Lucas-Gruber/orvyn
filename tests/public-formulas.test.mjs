@@ -198,7 +198,7 @@ test("public formulas recompute only approved scalar/list inputs and ignore priv
     await db.end();
   }
 });
-test("public formula selection requires every visible input and rejects hidden or identity dependencies before publishing", async () => {
+test("public formula selection requires every visible input and rejects hidden dependencies before publishing", async () => {
   const db = new Pool({ connectionString: process.env.DATABASE_URL });
   try {
     const f = await fixture(db),

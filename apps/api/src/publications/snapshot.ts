@@ -18,6 +18,7 @@ import {
 } from "@orvyn/editor/whiteboards";
 import { publicationDatabases } from "./databases.js";
 import { publicWhiteboardElement } from "./whiteboard.js";
+import { PublicationPeople } from "./people.js";
 import { origin } from "../auth/security.js";
 import { fail } from "../runtime.js";
 
@@ -108,7 +109,8 @@ export async function publicationSnapshot(
     fail(400, "Choose supported pages for this publication");
   const root =
     pages.find((page) => page.id === rootId) || fail(404, "Page not found");
-  const databases = await publicationDatabases(c, actor, input.scope);
+  const people = new PublicationPeople(rootId, input.scope);
+  const databases = await publicationDatabases(c, actor, input.scope, people);
   for (const id of databases.sourceIds) sourceIds.add(id);
   for (const page of pages) {
     if (page.kind === "database" && !databases.projections.has(page.id))
@@ -198,6 +200,7 @@ export async function publicationSnapshot(
       excludedBlocks: 0,
       excludedFiles: 0,
       anonymousMentions: 0,
+      omittedPeople: 0,
       excludedRelations: databases.omittedRelations,
     };
   function useFile(id: unknown, image = false) {
@@ -208,8 +211,11 @@ export async function publicationSnapshot(
     sourceIds.add(file.page_id);
     return true;
   }
-  function documentNode(node: any): any {
+  function documentNode(node: any, pageId: string): any {
     if (node.type === "orvynPerson") {
+      const reference = people.reference(node.attrs?.userId, pageId);
+      const label = reference && people.label(node.attrs?.userId);
+      if (label) return { type: "text", text: "@" + label };
       warnings.anonymousMentions++;
       return { type: "text", text: "@person" };
     }
@@ -249,7 +255,10 @@ export async function publicationSnapshot(
         const href = publicHref(mark.attrs?.href, publishedIds);
         return href ? [{ type: "link", attrs: { href } }] : [];
       });
-    if (result.content) result.content = result.content.map(documentNode);
+    if (result.content)
+      result.content = result.content.map((child: any) =>
+        documentNode(child, pageId),
+      );
     return result;
   }
   for (const projection of databases.projections.values())
@@ -296,7 +305,7 @@ export async function publicationSnapshot(
       coverFileId: useFile(page.cover_file_id, true)
         ? page.cover_file_id
         : null,
-      document: documentNode(rawDocuments.get(page.id)),
+      document: documentNode(rawDocuments.get(page.id), page.id),
       ...(board ? { whiteboard: board } : {}),
       ...(databases.projections.has(page.id)
         ? { database: databases.projections.get(page.id)! }
@@ -333,6 +342,7 @@ export async function publicationSnapshot(
     files: fileMetadata,
     attachmentIds: [...extras].filter((id) => usedFiles.has(id)).sort(),
   };
+  warnings.omittedPeople = people.omitted;
   if (
     Buffer.byteLength(JSON.stringify(snapshot)) >
     publicationLimits.snapshotBytes
@@ -342,6 +352,7 @@ export async function publicationSnapshot(
     root,
     snapshot,
     warnings,
+    people,
     sourceIds: [...sourceIds].sort(),
     fileIds: [...usedFiles].sort(),
     fingerprint: {

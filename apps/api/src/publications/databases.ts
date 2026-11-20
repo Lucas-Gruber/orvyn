@@ -20,9 +20,10 @@ import {
   type PublicationCalculationContext,
 } from "./rollups.js";
 import { fail } from "../runtime.js";
+import { PublicationPeople, publicIdentityTypes } from "./people.js";
 
-// Public values are a deliberate projection. Identity fields
-// need their own public dependency model. Formula inputs are explicitly shared.
+// Public values are a deliberate projection. Inputs and public identity labels
+// are explicitly selected; private cached calculations are never copied.
 export const publicPropertyTypes = new Set([
   "Title",
   "Text",
@@ -41,6 +42,9 @@ export const publicPropertyTypes = new Set([
   "LastEditedTime",
   "Formula",
   "Rollup",
+  "Person",
+  "CreatedBy",
+  "LastEditedBy",
 ]);
 export function publicViewProperties(
   context: Awaited<ReturnType<typeof database>>,
@@ -71,6 +75,7 @@ export async function publicationDatabases(
   c: PoolClient,
   actor: string,
   scope: PublicationScope,
+  people: PublicationPeople,
 ) {
   const selectedRecords = new Set([
     ...scope.databases.flatMap((item) => item.recordIds),
@@ -146,7 +151,7 @@ export async function publicationDatabases(
         fail(400, "Only visible properties can be published"),
     );
     if (properties.some((property) => !publicPropertyTypes.has(property.type)))
-      fail(400, "Identity properties cannot be published yet");
+      fail(400, "Choose supported properties for this publication");
     for (const id of [
       view.type === "Board" ? config.groupBy : null,
       view.type === "Calendar" ? config.dateProperty : null,
@@ -200,7 +205,7 @@ export async function publicationDatabases(
       );
     const rows = (
       await c.query(
-        `SELECT p.id,p.title,p.version AS page_version,p.title_version,p.appearance_version,p.document_schema_version,p.created_at,p.updated_at,r.version,r.values,
+        `SELECT p.id,p.title,p.version AS page_version,p.title_version,p.appearance_version,p.document_schema_version,p.created_at,p.updated_at,p.created_by,p.last_edited_by,r.version,r.values,
         coalesce((SELECT jsonb_object_agg(dp.id,orvyn_record_relation_values(p.id,dp.id,$3)) FROM database_properties dp
           WHERE dp.database_id=r.database_id AND dp.id=ANY($4::uuid[]) AND dp.type='Relation' AND dp.deleted_at IS NULL),'{}'::jsonb) AS relation_values
    FROM database_records r JOIN pages p ON p.id=r.page_id WHERE r.database_id=$1 AND p.id=ANY($2::uuid[]) AND orvyn_page_role(p.id,$3)>=40`,
@@ -258,6 +263,24 @@ export async function publicationDatabases(
           case "LastEditedTime":
             value = new Date(row.updated_at).toISOString();
             break;
+          case "Person":
+            value = [
+              ...new Set(
+                (Array.isArray(raw) ? raw : []).flatMap(
+                  (userId: string) => people.reference(userId, id) || [],
+                ),
+              ),
+            ];
+            break;
+          case "CreatedBy":
+          case "LastEditedBy":
+            value = people.reference(
+              property.type === "CreatedBy"
+                ? row.created_by
+                : row.last_edited_by,
+              id,
+            );
+            break;
           case "Relation": {
             const references: string[] =
               row.relation_values?.[property.id] || [];
@@ -296,17 +319,30 @@ export async function publicationDatabases(
         }
         values[property.id] = value;
       }
+      const projectedProperties = context.properties.map((property) =>
+        publicIdentityTypes.has(property.type)
+          ? { ...property, config: { options: people.options } }
+          : property,
+      );
       formulaContexts.push({
         databaseId: context.page.id,
         recordId: id,
-        properties: context.properties,
-        selected: ordered,
+        properties: projectedProperties,
+        selected: ordered.map((property) =>
+          projectedProperties.find(
+            (candidate) => candidate.id === property.id,
+          )!,
+        ),
         values,
       });
       return { pageId: id, title: row.title, values };
     });
     const publicProperties: PublicProperty[] = ordered.map((property) => {
-      const options = property.config.options?.filter((option) =>
+      const options = (
+        publicIdentityTypes.has(property.type)
+          ? people.options
+          : property.config.options
+      )?.filter((option) =>
         records.some((record) => {
           const value = record.values[property.id];
           return (

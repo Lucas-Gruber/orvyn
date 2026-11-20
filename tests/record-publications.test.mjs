@@ -171,7 +171,7 @@ test("direct record snapshots publish selected properties and body without the p
     await db.end();
   }
 });
-test("direct record properties are independent of saved filters, reject identity/unknown fields and bind schema, row and page revisions", async () => {
+test("direct record properties are independent of saved filters, keep unlabelled people anonymous, reject unknown fields and bind schema, row and page revisions", async () => {
   const db = new Pool({ connectionString: process.env.DATABASE_URL });
   try {
     const f = await fixture(db),
@@ -188,7 +188,18 @@ test("direct record properties are independent of saved filters, reject identity
     assert.equal((await f.preview()).response.status, 201);
     const identity = structuredClone(f.input);
     identity.scope.records[0].propertyIds.push(person.id);
-    assert.equal((await f.preview(identity)).response.status, 400);
+    const anonymousIdentity = await f.preview(identity);
+    assert.equal(
+      anonymousIdentity.response.status,
+      201,
+      JSON.stringify(anonymousIdentity.data),
+    );
+    assert.deepEqual(
+      anonymousIdentity.data.snapshot.pages.find(
+        (page) => page.id === f.root.pageId,
+      ).record.values[person.id],
+      [],
+    );
     const unknown = structuredClone(f.input);
     unknown.scope.records[0].propertyIds.push(randomUUID());
     assert.equal((await f.preview(unknown)).response.status, 400);
@@ -224,7 +235,7 @@ test("direct record properties are independent of saved filters, reject identity
     );
     assert.equal(
       metadata.data.properties.find((p) => p.id === person.id).allowed,
-      false,
+      true,
     );
   } finally {
     await db.end();
