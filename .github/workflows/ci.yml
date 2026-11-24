@@ -35,8 +35,19 @@ jobs:
         run: |
           pnpm setup:local
           if ! docker compose --env-file .env -f infrastructure/compose/compose.yaml -f infrastructure/compose/ci.yaml up -d --wait > infrastructure-startup.txt 2>&1; then
-            cat infrastructure-startup.txt
-            node -e 'const fs=require("node:fs");const message=fs.readFileSync("infrastructure-startup.txt","utf8").split("\n").slice(-50).join("\n").slice(-12000).replace(/%/g,"%25").replace(/\r/g,"%0D").replace(/\n/g,"%0A");console.log("::error title=Test infrastructure startup failed::"+message)'
+            docker compose --env-file .env -f infrastructure/compose/compose.yaml -f infrastructure/compose/ci.yaml logs --no-color --tail 80 storage >> infrastructure-startup.txt 2>&1 || true
+            node <<'NODE'
+          const fs = require('node:fs');
+          const { parseEnv } = require('node:util');
+          let report = fs.readFileSync('infrastructure-startup.txt', 'utf8');
+          for (const value of Object.values(parseEnv(fs.readFileSync('.env', 'utf8'))).filter(value => value.length >= 8).sort((a, b) => b.length - a.length)) {
+            report = report.replaceAll(value, '[redacted]');
+          }
+          fs.writeFileSync('infrastructure-startup.txt', report);
+          console.log(report);
+          const message = report.split('\n').slice(-80).join('\n').slice(-12000).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
+          console.log('::error title=Test infrastructure startup failed::' + message);
+          NODE
             exit 1
           fi
           cat infrastructure-startup.txt
