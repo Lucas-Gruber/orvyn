@@ -393,12 +393,13 @@ hr {
   place-items: center;
   width: 28px;
   height: 28px;
-  background: var(--accent-soft);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  color: var(--accent);
-  font-size: 1.25rem;
-  font-weight: 750;
+  flex-shrink: 0;
+}
+.brand-mark img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 .brand-word {
   font-size: 1.2rem;

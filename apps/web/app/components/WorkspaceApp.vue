@@ -1109,13 +1109,20 @@ onBeforeUnmount(() => {
 </script>
 <template>
   <div v-if="booting" class="startup-screen">
-    <div class="brand-mark">o.</div>
+    <div class="brand-mark">
+      <img src="/branding/icon-192.png" alt="" width="28" height="28" />
+    </div>
     <p>Opening your workspace…</p>
   </div>
   <div v-else-if="!signedIn || linkAction" class="auth-shell">
     <div class="auth-story">
       <a class="auth-brand" href="/"
-        ><span class="brand-mark">o.</span
+        ><span class="brand-mark"
+          ><img
+            src="/branding/icon-192.png"
+            alt=""
+            width="28"
+            height="28" /></span
         ><span class="brand-word">orvyn<span>.</span></span></a
       >
       <div class="auth-story-copy">
@@ -1306,7 +1313,12 @@ onBeforeUnmount(() => {
       aria-label="Workspace navigation"
     >
       <div class="sidebar-brand">
-        <span class="brand-mark">o.</span
+        <span class="brand-mark"
+          ><img
+            src="/branding/icon-192.png"
+            alt=""
+            width="28"
+            height="28" /></span
         ><a class="brand-word" href="/" @click.prevent="navigate(home)"
           >orvyn<span>.</span></a
         ><button

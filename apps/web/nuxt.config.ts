@@ -9,6 +9,19 @@ export default defineNuxtConfig({
   app: {
     head: {
       title: "Orvyn — Your knowledge. Organized.",
+      link: [
+        {
+          rel: "icon",
+          type: "image/png",
+          sizes: "32x32",
+          href: "/branding/favicon-32.png",
+        },
+        {
+          rel: "apple-touch-icon",
+          sizes: "180x180",
+          href: "/branding/apple-touch-icon.png",
+        },
+      ],
       meta: [
         {
           name: "description",
