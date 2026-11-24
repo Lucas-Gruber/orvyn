@@ -110,12 +110,12 @@ spec:
               {{- include "orvyn.reference" (dict "root" $ "name" $settings.auth.existingSecret "key" (ternary $settings.auth.secretKey "VALKEY_PASSWORD" (ne $settings.auth.existingSecret ""))) | nindent 14 }}
           startupProbe:
             exec:
-              command: [sh, -ec, 'VALKEYCLI_AUTH="$VALKEY_PASSWORD" valkey-cli ping | grep -q PONG']
+              command: [sh, -ec, 'REDISCLI_AUTH="$VALKEY_PASSWORD" valkey-cli ping | grep -q PONG']
             failureThreshold: 90
             periodSeconds: 2
           readinessProbe:
             exec:
-              command: [sh, -ec, 'VALKEYCLI_AUTH="$VALKEY_PASSWORD" valkey-cli ping | grep -q PONG']
+              command: [sh, -ec, 'REDISCLI_AUTH="$VALKEY_PASSWORD" valkey-cli ping | grep -q PONG']
             periodSeconds: 5
           livenessProbe:
             tcpSocket:

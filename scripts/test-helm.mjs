@@ -3,6 +3,7 @@ import { mkdtemp, readFile, writeFile, rm, cp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import YAML from "yaml";
 import { checkVersions, root } from "./release.mjs";
 import { helmImage, kubeconformImage } from "./helm-tools.mjs";
@@ -486,6 +487,96 @@ try {
   ]);
   assert.equal(validation.status, 0, validation.stdout + validation.stderr);
   console.log(validation.stdout.trim());
+  const valkeyPod = internal.find(
+    (r) => r.kind === "StatefulSet" && r.metadata.name.endsWith("-valkey"),
+  ).spec.template.spec;
+  const valkey = valkeyPod.containers[0];
+  const secret = internal.find(
+    (r) =>
+      r.kind === "Secret" &&
+      r.metadata.name === valkey.env[0].valueFrom.secretKeyRef.name,
+  );
+  const password = secret.stringData[valkey.env[0].valueFrom.secretKeyRef.key];
+  await writeFile(
+    join(temp, "valkey.env"),
+    "VALKEY_PASSWORD=" + password + "\n",
+    { mode: 0o600 },
+  );
+  const name = "orvyn-chart-probe-" + randomBytes(6).toString("hex");
+  try {
+    const started = spawnSync(
+      "docker",
+      [
+        "run",
+        "--rm",
+        "-d",
+        "--name",
+        name,
+        "--user",
+        `${valkeyPod.securityContext.runAsUser}:${valkeyPod.securityContext.runAsGroup}`,
+        "--read-only",
+        "--cap-drop",
+        "ALL",
+        "--security-opt",
+        "no-new-privileges:true",
+        "--env-file",
+        join(temp, "valkey.env"),
+        "--tmpfs",
+        "/data:rw,uid=999,gid=999,mode=0700",
+        "--tmpfs",
+        "/tmp:rw,mode=1777",
+        "--entrypoint",
+        valkey.command[0],
+        valkey.image,
+        ...valkey.command.slice(1),
+        ...valkey.args,
+      ],
+      { encoding: "utf8", timeout: 120000 },
+    );
+    assert.equal(started.status, 0, started.stderr);
+    const deadline = Date.now() + 30000;
+    let ready = false;
+    while (Date.now() < deadline) {
+      const probe = spawnSync(
+        "docker",
+        ["exec", name, ...valkey.startupProbe.exec.command],
+        { encoding: "utf8", timeout: 5000 },
+      );
+      if (probe.status === 0) {
+        ready = true;
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    assert.ok(
+      ready,
+      "The rendered Valkey startup probe must authenticate against the pinned official container",
+    );
+    const readiness = spawnSync(
+      "docker",
+      ["exec", name, ...valkey.readinessProbe.exec.command],
+      { encoding: "utf8", timeout: 5000 },
+    );
+    assert.equal(readiness.status, 0, "Rendered Valkey readiness probe failed");
+    const anonymous = spawnSync(
+      "docker",
+      ["exec", name, "valkey-cli", "ping"],
+      { encoding: "utf8", timeout: 5000 },
+    );
+    assert.match(
+      anonymous.stdout,
+      /NOAUTH/,
+      "Valkey must reject unauthenticated clients",
+    );
+    console.log(
+      "PASS real Valkey container: rendered startup/readiness authentication, UID 999, writable storage and anonymous rejection",
+    );
+  } finally {
+    spawnSync("docker", ["rm", "-fv", name], {
+      encoding: "utf8",
+      timeout: 30000,
+    });
+  }
   console.log(
     `PASS ${questions.length} Rancher questions, ${cases.length} deployment modes, ${invalid.length} negative cases; app/chart ${version}`,
   );
