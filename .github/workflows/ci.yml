@@ -34,7 +34,12 @@ jobs:
       - name: Prepare disposable local infrastructure
         run: |
           pnpm setup:local
-          docker compose --env-file .env -f infrastructure/compose/compose.yaml -f infrastructure/compose/ci.yaml up -d --wait
+          if ! docker compose --env-file .env -f infrastructure/compose/compose.yaml -f infrastructure/compose/ci.yaml up -d --wait > infrastructure-startup.txt 2>&1; then
+            cat infrastructure-startup.txt
+            node -e 'const fs=require("node:fs");const message=fs.readFileSync("infrastructure-startup.txt","utf8").split("\n").slice(-50).join("\n").slice(-12000).replace(/%/g,"%25").replace(/\r/g,"%0D").replace(/\n/g,"%0A");console.log("::error title=Test infrastructure startup failed::"+message)'
+            exit 1
+          fi
+          cat infrastructure-startup.txt
       - name: Build and check types
         run: |
           pnpm build
@@ -61,6 +66,7 @@ jobs:
         with:
           name: test-results-${{ github.run_attempt }}
           path: |
+            infrastructure-startup.txt
             test-results.txt
             .local/ui-review/*.png
           include-hidden-files: true
