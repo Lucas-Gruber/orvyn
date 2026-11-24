@@ -1,7 +1,7 @@
 {
   "name": "orvyn",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "engines": {
     "node": ">=22.12"
   },
@@ -24,7 +24,7 @@
     "preview:local": "node scripts/preview-local.mjs",
     "release:version": "node scripts/release.mjs version",
     "release:check": "node scripts/release.mjs check",
-    "test:release": "node --test tests/release.test.mjs",
+    "test:release": "node --test tests/release.test.mjs tests/release-platforms.test.mjs",
     "test:images": "node --env-file=.env scripts/test-images.mjs"
   },
   "devDependencies": {

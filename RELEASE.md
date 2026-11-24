@@ -1,10 +1,10 @@
 # Releases
 
-Server CI and release automation are configured. Version `0.1.0` still denotes an incomplete development baseline, not a production-readiness claim. Do not create tags or publish releases without explicit authorization. The version command never commits, tags, pushes or publishes anything.
+Server CI and release automation are configured. Version `0.1.1` still denotes an incomplete development baseline, not a production-readiness claim. Do not create tags or publish releases without explicit authorization. The version command never commits, tags, pushes or publishes anything.
 
 ## Checks on pushes and pull requests
 
-`.github/workflows/ci.yml` runs on pushes to `main`, pull requests, manual dispatch and calls from the release workflow. It installs the pinned PNPM version on Node 24, verifies manifest versions, builds the application, checks TypeScript/Vue types and runs the release-policy and complete application integration tests. PostgreSQL, Redis, SeaweedFS and Mailpit are disposable local services on the GitHub runner. Chromium exercises real browser flows. Only test output and explicitly selected screenshots are retained as artifacts; environment files and storage credentials are excluded.
+`.github/workflows/ci.yml` runs on pushes to `main`, pull requests, manual dispatch and calls from the release workflow. It installs the pinned PNPM version on Node 24, verifies manifest versions, builds the application, checks TypeScript/Vue types and runs the release-policy and complete application integration tests. PostgreSQL, Redis, SeaweedFS and Mailpit are disposable local services on the GitHub runner. Chromium exercises real browser flows. Only test output, redacted infrastructure startup diagnostics and explicitly selected screenshots are retained as artifacts; environment files and storage credentials are excluded.
 
 The same workflow builds production images for **web**, **api**, **collaboration** and **worker**, then runs them together over a local HTTPS proxy. The test checks non-root execution, secure cookies, anonymous access rejection, attachment integrity, durable collaboration through the public WebSocket route and actual worker email delivery to local Mailpit. Its database, bucket, containers and TLS key are private disposable test resources. Existing developer infrastructure/data is preserved by the image-test command.
 
@@ -27,7 +27,7 @@ There is no desktop application yet. Checks deliberately reject a newly added de
 
 Only a pushed `v<SemVer>` tag starts `.github/workflows/release.yml`. The tag must match all manifests, and its commit must belong to `main`. The release reruns the complete CI checks before building/pushing candidates. The actual remote tag is checked again before publishing; both lightweight and annotated tags resolve to the validated commit.
 
-Candidate images are built for `linux/amd64` and `linux/arm64`, with SBOM and provenance attestations, under unique run/attempt tags. Their exact index digests are passed between jobs as immutable artifacts. The publisher verifies that all four records belong to this repository/version/commit and that every image contains both promised architectures. Only then does it reserve a draft release, sign/verify image digests and the checksum manifest using GitHub OIDC/Cosign, and promote version aliases.
+Eight candidate builds run on native `ubuntu-24.04` (AMD64) and `ubuntu-24.04-arm` runners, with SBOM and provenance attestations and separate caches. Their exact platform-index digests are passed as immutable artifacts. The publisher checks all eight records against this repository/version/commit and the registry bytes, verifies each architecture and its attached attestation, then combines each pair into one component index. It verifies that the combined index retains every platform and attestation descriptor. Only then does it reserve a draft release, sign/verify image digests and the checksum manifest using GitHub OIDC/Cosign, and promote version aliases. Registry digests are calculated from exact raw manifest bytes; no human-readable Buildx formatter is used.
 
 For this repository the image names are:
 
@@ -50,7 +50,7 @@ Use the manifest's digest references for a complete deployment. A registry canno
 
 GitHub Actions must be enabled. The release jobs use the repository `GITHUB_TOKEN` with only their required permissions: package writing for builds; contents/package writing and OIDC token issuance for publication. No personal access token or stored signing private key is required by this workflow. Organization/package policies must permit those operations. Package visibility/access remains under the repository owner's control; check it after the first authorized publication if others should be able to pull the images.
 
-Test results and image-record artifacts have distinct attempt names, so failed-job retries do not collide with earlier uploads. The publisher chooses the newest successfully uploaded record for each component, then validates its source/version/digest. An interrupted publication retains its matching draft and completed assets. **Rerun failed jobs** while the original image-record artifacts are retained (seven days); the publisher resumes those exact digests and verifies/reuses its checksum bundle and assets. Rebuilding all candidates can produce different provenance digests and is not a request to replace an existing version. Use a new version when the immutable content no longer matches. Candidate tags are retained; no automatic package deletion is configured.
+Test results and platform-record artifacts have distinct attempt names, so failed-job retries do not collide with earlier uploads. The publisher chooses the newest successfully uploaded record for each component/architecture pair, then validates its source/version/digest. An interrupted publication retains its matching draft and completed assets. **Rerun failed jobs** while the original platform-record artifacts are retained (seven days); the publisher reproducibly combines those exact digests and resumes the resulting component indexes and verifies/reuses its checksum bundle and assets. Rebuilding all candidates can produce different provenance digests and is not a request to replace an existing version. Use a new version when the immutable content no longer matches. Candidate tags are retained; no automatic package deletion is configured.
 
 Verify downloaded assets with `sha256sum -c SHA256SUMS`, then:
 
@@ -77,6 +77,10 @@ pnpm test:images
 pnpm test:release
 ```
 
+Builds without an explicit `VERSION` argument carry the `development` label; CI and releases always supply the checked manifest version.
+
 For a corporate/session HTTPS proxy CA, add `--secret id=build_ca,src=/path/to/ca.pem` to the build. It is mounted only in dependency-install steps and is not copied into image layers. TLS verification stays enabled. Runtime credentials are supplied separately; development `.env` files and signing-key formats are excluded from the build context.
 
-Local validation covers the actual four Linux/amd64 images, application/browser integration, release policy and retry orchestration, and workflow syntax with Actionlint. ARM64 builds and real GitHub OIDC/registry publication are configured but have not been executed here. An actual release/tag/signing run still requires the user's explicit release instruction.
+Local validation covers the actual four Linux/amd64 images, application/browser integration, native-platform metadata validation/merging, release policy and retry orchestration, and workflow syntax with Actionlint. Actual Buildx raw-manifest hashing and dry-run descriptor preservation are also checked against registry images. A complete native ARM64 and OIDC/signing publication remains pending until the authorized release workflow finishes.
+
+The initial `v0.1.0` tag contains a Buildx scalar-formatting assumption that cannot complete publication. `v0.1.1` corrects that verification and replaces emulated builds with native runners. Existing source tags are preserved.

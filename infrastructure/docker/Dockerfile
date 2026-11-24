@@ -23,7 +23,7 @@ RUN --mount=type=cache,id=orvyn-pnpm,target=/pnpm/store --mount=type=secret,id=b
     pnpm --store-dir /pnpm/store --filter @orvyn/collaboration deploy --prod --frozen-lockfile /opt/collaboration
 
 FROM node:24-bookworm-slim@sha256:dc26ae92c9fb15cf6b1d63e20f0944b2efe0f115b20e00be48fb23fceb061c54 AS runtime
-ARG VERSION=0.1.0
+ARG VERSION=development
 ARG REVISION=unknown
 ARG SOURCE=https://github.com/Lucas-Gruber/orvyn
 LABEL org.opencontainers.image.title="Orvyn" org.opencontainers.image.version=$VERSION org.opencontainers.image.revision=$REVISION org.opencontainers.image.source=$SOURCE

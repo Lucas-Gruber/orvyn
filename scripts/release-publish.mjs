@@ -5,6 +5,11 @@ import { fileURLToPath } from "node:url";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import {
+  inspectManifest,
+  readPlatformRecords,
+  mergePlatformImages,
+} from "./release-platforms.mjs";
+import {
   releasePlan,
   components,
   compareVersions,
@@ -12,6 +17,27 @@ import {
 } from "./release.mjs";
 const execute = promisify(execFile),
   hash = (value) => createHash("sha256").update(value).digest("hex");
+export function safeReleaseError(message, bindings = process.env) {
+  let value = String(message);
+  for (const name of [
+    "GH_TOKEN",
+    "GITHUB_TOKEN",
+    "ACTIONS_RUNTIME_TOKEN",
+    "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
+  ])
+    if (bindings[name]) value = value.replaceAll(bindings[name], "[redacted]");
+  return value
+    .replace(/Bearer\s+[^\s"']+/gi, "Bearer [redacted]")
+    .replace(
+      /eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,
+      "[redacted JWT]",
+    )
+    .replace(
+      /([?&](?:token|signature|sig|X-Amz-(?:Signature|Credential|Security-Token))=)[^&\s]+/gi,
+      "$1[redacted]",
+    )
+    .slice(-3500);
+}
 export function imageRecords(plan, commit, values) {
   if (
     commit?.length !== 40 ||
@@ -145,7 +171,7 @@ export class GitHub {
     if (!response.ok) {
       await response.body?.cancel();
       throw Error(
-        `GitHub request failed (${response.status}); no existing artifact was overwritten.`,
+        `GitHub request failed (${response.status}) at ${method} ${url.pathname}; no existing artifact was overwritten.`,
       );
     }
     return raw
@@ -306,14 +332,9 @@ export async function publish({ api, plan, commit, records, directory, run }) {
     ];
   // The registry index itself must contain both promised architectures.
   for (const record of records) {
-    const value = JSON.parse(
-        await run("docker", [
-          "buildx",
-          "imagetools",
-          "inspect",
-          record.image + "@" + record.digest,
-          "--raw",
-        ]),
+    const { manifest: value, digest } = await inspectManifest(
+        run,
+        record.image + "@" + record.digest,
       ),
       platforms = new Set(
         value.manifests?.map(
@@ -326,6 +347,8 @@ export async function publish({ api, plan, commit, records, directory, run }) {
       )
     )
       throw Error("A release image is missing a promised architecture.");
+    if (digest !== record.digest)
+      throw Error("Release candidate bytes do not match the checked digest.");
   }
   let release = checked.release;
   if (!release) {
@@ -421,16 +444,10 @@ export async function publish({ api, plan, commit, records, directory, run }) {
         record.image + ":" + plan.imageTag,
         record.image + "@" + record.digest,
       ]);
-    const digest = (
-      await run("docker", [
-        "buildx",
-        "imagetools",
-        "inspect",
-        "--format",
-        "{{.Manifest.Digest}}",
-        record.image + ":" + plan.imageTag,
-      ])
-    ).trim();
+    const { digest } = await inspectManifest(
+      run,
+      record.image + ":" + plan.imageTag,
+    );
     if (digest !== record.digest)
       throw Error("Promoted image digest did not match the tested release.");
   }
@@ -445,16 +462,8 @@ export async function publish({ api, plan, commit, records, directory, run }) {
         record.image + "@" + record.digest,
       ]);
       if (
-        (
-          await run("docker", [
-            "buildx",
-            "imagetools",
-            "inspect",
-            "--format",
-            "{{.Manifest.Digest}}",
-            record.image + ":latest",
-          ])
-        ).trim() !== record.digest
+        (await inspectManifest(run, record.image + ":latest")).digest !==
+        record.digest
       )
         throw Error("Latest image digest did not match the checked release.");
     }
@@ -474,13 +483,34 @@ async function main() {
       process.env.GITHUB_REPOSITORY,
     ),
     commit = process.env.RELEASE_COMMIT,
-    directory = resolve(process.env.RELEASE_RECORDS || "artifacts"),
-    values = await readImageRecords(directory);
+    directory = resolve(process.env.RELEASE_RECORDS || "artifacts");
   if ((await execute("git", ["rev-parse", "HEAD"])).stdout.trim() !== commit)
     throw Error(
       "Publisher checkout does not match the validated release commit.",
     );
-  const records = imageRecords(plan, commit, values),
+  const run = async (command, args) => {
+    try {
+      return (await execute(command, args, { maxBuffer: 8 * 1024 * 1024 }))
+        .stdout;
+    } catch (error) {
+      throw Error(
+        safeReleaseError(
+          command +
+            " failed during release publication: " +
+            (error.stderr || error.message) +
+            ". The draft and completed immutable artifacts are retained for review/retry.",
+        ),
+      );
+    }
+  };
+  const values = await readPlatformRecords(directory),
+    records = await mergePlatformImages({
+      plan,
+      commit,
+      values,
+      candidateTag: `build-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}`,
+      run,
+    }),
     api = new GitHub({
       repository: plan.repository,
       token: process.env.GH_TOKEN,
@@ -492,19 +522,7 @@ async function main() {
     commit,
     records,
     directory: resolve(".local/release-output", plan.tag),
-    run: async (command, args) => {
-      try {
-        const result = await execute(command, args, {
-          maxBuffer: 8 * 1024 * 1024,
-        });
-        return result.stdout;
-      } catch {
-        throw Error(
-          command +
-            " failed during release publication. The draft and completed immutable artifacts are retained for review/retry.",
-        );
-      }
-    },
+    run,
   });
   console.log(JSON.stringify(result));
 }
@@ -513,6 +531,15 @@ if (
   resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 )
   main().catch((error) => {
-    console.error(error.message);
+    const message = safeReleaseError(error.message);
+    console.error(message);
+    if (process.env.GITHUB_ACTIONS === "true")
+      console.error(
+        "::error title=Server release failed::" +
+          message
+            .replace(/%/g, "%25")
+            .replace(/\r/g, "%0D")
+            .replace(/\n/g, "%0A"),
+      );
     process.exitCode = 1;
   });

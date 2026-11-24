@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "node:http";
 import { once } from "node:events";
+import { manifestDigest } from "../scripts/release-platforms.mjs";
 import {
   semver,
   compareVersions,
@@ -27,6 +28,7 @@ import {
   preflight,
   publish,
   GitHub,
+  safeReleaseError,
 } from "../scripts/release-publish.mjs";
 async function fixture(version = "1.2.3") {
   const directory = await mkdtemp(join(tmpdir(), "orvyn-release-"));
@@ -52,6 +54,21 @@ async function fixture(version = "1.2.3") {
     dispose: () => rm(directory, { recursive: true, force: true }),
   };
 }
+test("public release diagnostics remove credential bindings, bearer tokens and signed URL credentials", () => {
+  const message = safeReleaseError(
+    "Failure with repo-secret and id-secret Bearer bearer-secret eyJhbGciOiJFUzI1NiJ9.cGF5bG9hZA.c2lnbmF0dXJl https://example.invalid/?X-Amz-Signature=url-secret&name=file",
+    { GH_TOKEN: "repo-secret", ACTIONS_ID_TOKEN_REQUEST_TOKEN: "id-secret" },
+  );
+  for (const value of [
+    "repo-secret",
+    "id-secret",
+    "bearer-secret",
+    "eyJhbGci",
+    "url-secret",
+  ])
+    assert.ok(!message.includes(value));
+  assert.ok(message.includes("&name=file"));
+});
 test("release versions follow SemVer precedence, numeric prereleases and stable finalization", async () => {
   for (const invalid of [
     "v1.2.3",
@@ -171,7 +188,14 @@ test("release plans reject mismatched tags and repositories, separate prerelease
   }
 });
 const commit = "a".repeat(40),
-  digest = "sha256:" + "b".repeat(64);
+  digest = manifestDigest(
+    JSON.stringify({
+      manifests: [
+        { platform: { os: "linux", architecture: "amd64" } },
+        { platform: { os: "linux", architecture: "arm64" } },
+      ],
+    }),
+  );
 function plan(version = "1.2.3") {
   return {
     tag: "v" + version,
@@ -388,7 +412,6 @@ test("publication signs checked digests and checksum assets before promotion, an
           );
           return "";
         }
-        if (args.includes("--format")) return digest;
         return "";
       },
     });
@@ -486,7 +509,7 @@ test("prerelease publication never changes latest, and signature failures never 
         args[args.indexOf("--bundle") + 1],
         "Verified test bundle",
       );
-    return args.includes("--format") ? digest : "";
+    return "";
   };
   try {
     const p = plan("2.0.0-rc.1"),
@@ -542,13 +565,15 @@ test("a failed publishing job resumes the same draft and assets without replacin
     promoted = new Set();
   let fail = true;
   async function run(command, args) {
-    if (args.includes("--raw"))
+    if (args.includes("--raw")) {
+      if (!args.at(-1).includes("@")) assert.ok(promoted.has(args.at(-1)));
       return JSON.stringify({
         manifests: [
           { platform: { os: "linux", architecture: "amd64" } },
           { platform: { os: "linux", architecture: "arm64" } },
         ],
       });
+    }
     if (args[0] === "sign-blob") {
       await writeFile(
         args[args.indexOf("--bundle") + 1],
@@ -561,10 +586,6 @@ test("a failed publishing job resumes the same draft and assets without replacin
       if (fail && reference === p.images.api + ":" + p.imageTag)
         throw Error("Interrupted promotion");
       promoted.add(reference);
-    }
-    if (args.includes("--format")) {
-      assert.ok(promoted.has(args.at(-1)));
-      return digest;
     }
     return "";
   }

@@ -39,8 +39,9 @@ jobs:
       contents: read
   images:
     needs: [validate, checks]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    name: ${{ matrix.component }} (${{ matrix.platform.arch }})
+    runs-on: ${{ matrix.platform.runner }}
+    timeout-minutes: 30
     permissions:
       contents: read
       packages: write
@@ -48,11 +49,15 @@ jobs:
       fail-fast: false
       matrix:
         component: [web, api, collaboration, worker]
+        platform:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6, node24
         with:
           persist-credentials: false
-      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4, node24
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4, node24
       - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4, node24
         with:
@@ -63,10 +68,11 @@ jobs:
         id: image
         env:
           COMPONENT: ${{ matrix.component }}
+          ARCH: ${{ matrix.platform.arch }}
         run: |
           image="ghcr.io/${GITHUB_REPOSITORY,,}-$COMPONENT"
           echo "name=$image" >> "$GITHUB_OUTPUT"
-          echo "candidate=$image:build-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
+          echo "candidate=$image:build-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$ARCH" >> "$GITHUB_OUTPUT"
       - name: Build candidate with SBOM and provenance
         id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7, node24
@@ -74,7 +80,7 @@ jobs:
           context: .
           file: infrastructure/docker/Dockerfile
           target: ${{ matrix.component }}
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/${{ matrix.platform.arch }}
           push: true
           tags: ${{ steps.image.outputs.candidate }}
           build-args: |
@@ -83,8 +89,8 @@ jobs:
             SOURCE=${{ github.server_url }}/${{ github.repository }}
           provenance: mode=max
           sbom: true
-          cache-from: type=gha,scope=release-${{ matrix.component }}
-          cache-to: type=gha,mode=max,scope=release-${{ matrix.component }}
+          cache-from: type=gha,scope=release-${{ matrix.component }}-${{ matrix.platform.arch }}
+          cache-to: type=gha,mode=max,scope=release-${{ matrix.component }}-${{ matrix.platform.arch }}
       - name: Record immutable candidate digest
         env:
           COMPONENT: ${{ matrix.component }}
@@ -92,12 +98,13 @@ jobs:
           DIGEST: ${{ steps.build.outputs.digest }}
           VERSION: ${{ needs.validate.outputs.version }}
           RELEASE_COMMIT: ${{ needs.validate.outputs.commit }}
+          ARCH: ${{ matrix.platform.arch }}
         run: |
           mkdir -p image-record
-          node -e 'const e=process.env;require("node:fs").writeFileSync("image-record/"+e.COMPONENT+".json",JSON.stringify({component:e.COMPONENT,image:e.IMAGE,digest:e.DIGEST,version:e.VERSION,commit:e.RELEASE_COMMIT}))'
+          node -e 'const e=process.env;require("node:fs").writeFileSync("image-record/"+e.COMPONENT+"-"+e.ARCH+".json",JSON.stringify({component:e.COMPONENT,platform:"linux/"+e.ARCH,image:e.IMAGE,digest:e.DIGEST,version:e.VERSION,commit:e.RELEASE_COMMIT}))'
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7, node24
         with:
-          name: image-${{ matrix.component }}-${{ github.run_attempt }}
+          name: platform-${{ matrix.component }}-${{ matrix.platform.arch }}-${{ github.run_attempt }}
           path: image-record/*.json
           retention-days: 7
           if-no-files-found: error
@@ -127,7 +134,7 @@ jobs:
           cosign-release: v2.5.2
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8, node24
         with:
-          pattern: image-*
+          pattern: platform-*
           path: artifacts
           merge-multiple: false
       - name: Sign, promote immutable versions and publish release
