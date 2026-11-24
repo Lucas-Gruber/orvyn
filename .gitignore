@@ -7,3 +7,5 @@ dist/
 .local/
 apps/web/public/excalidraw-assets/
 backups/
+artifacts/
+test-results.txt

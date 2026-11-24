@@ -61,5 +61,8 @@
       "types": "./dist/markdown-export.d.ts",
       "default": "./dist/markdown-export.js"
     }
-  }
+  },
+  "files": [
+    "dist"
+  ]
 }

@@ -68,6 +68,7 @@ Work through these areas in order, preserving working features and committing/pu
    - [ ] Hierarchy/attachment import and portable native restore.
    - [ ] Faithful Notion import before claiming migration support.
 9. Desktop and operation
+   - [x] Server CI, four production images with HTTPS integration checks, synchronized Node manifest versioning and a tag-triggered signed release pipeline.
    - [ ] Tauri clients, releases, update distribution and signing.
    - [ ] Kubernetes/Helm, observability, automated backup scheduling and production recovery.
    - [ ] Load testing, object-store deployment policies, accessibility and broader browser validation.

@@ -1,0 +1,8 @@
+# Only the local test infrastructure: no application credentials or images.
+services:
+  storage:
+    environment:
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
+      ALL_PROXY: ""
+      NO_PROXY: localhost,127.0.0.1,storage,postgres,redis,mailpit

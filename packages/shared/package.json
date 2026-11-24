@@ -23,5 +23,8 @@
       "types": "./dist/markdown-limits.d.ts",
       "default": "./dist/markdown-limits.js"
     }
-  }
+  },
+  "files": [
+    "dist"
+  ]
 }

@@ -12,6 +12,8 @@ To view it **on your own computer**, install Node >=22.12, pnpm and Docker Deskt
 
 Start with [DEVELOPMENT.md](DEVELOPMENT.md). See [docs/STATUS.md](docs/STATUS.md) for the implementation boundary.
 
+Server CI, production container checks, versioning and the tag-triggered release workflow: [RELEASE.md](RELEASE.md). Preparing the pipeline does not create a tag or publish a release.
+
 Authentication and remaining provider limitations: [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md).
 
 Permission rules and current limits: [docs/PERMISSIONS.md](docs/PERMISSIONS.md).

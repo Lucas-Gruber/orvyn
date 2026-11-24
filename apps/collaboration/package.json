@@ -22,5 +22,9 @@
     "tsx": "^4.23.15",
     "typescript": "^5.9.3"
   },
-  "type": "module"
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "dist"
+  ]
 }

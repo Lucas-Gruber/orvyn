@@ -1,0 +1,71 @@
+name: Checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+permissions:
+  contents: read
+concurrency:
+  group: checks-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  checks:
+    name: Build, types, integration tests and production images
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6, node24
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6, node24
+        with:
+          node-version: "24"
+      - name: Install pinned package manager and dependencies
+        run: |
+          npm install --global pnpm@11.25.0
+          pnpm install --frozen-lockfile
+          pnpm release:check
+      - name: Install Chromium
+        run: |
+          pnpm exec playwright install --with-deps chromium
+          node -e 'console.log("CHROMIUM_PATH="+require("@playwright/test").chromium.executablePath())' >> "$GITHUB_ENV"
+      - name: Prepare disposable local infrastructure
+        run: |
+          pnpm setup:local
+          docker compose --env-file .env -f infrastructure/compose/compose.yaml -f infrastructure/compose/ci.yaml up -d --wait
+      - name: Build and check types
+        run: |
+          pnpm build
+          pnpm typecheck
+      - name: Test release tools
+        run: pnpm test:release
+      - name: Run complete integration suite
+        run: node --env-file=.env scripts/test.mjs 2>&1 | tee test-results.txt
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4, node24
+      - name: Build the four production images
+        run: |
+          version=$(node -p 'require("./package.json").version')
+          for component in web api collaboration worker; do
+            docker buildx build --load --target "$component" --tag "orvyn/$component:ci" \
+              --build-arg "VERSION=$version" --build-arg "REVISION=$GITHUB_SHA" \
+              --build-arg "SOURCE=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+              --file infrastructure/docker/Dockerfile .
+          done
+      - name: Exercise production containers over HTTPS
+        run: pnpm test:images
+      - name: Keep test output and UI screenshots
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7, node24
+        with:
+          name: test-results-${{ github.run_attempt }}
+          path: |
+            test-results.txt
+            .local/ui-review/*.png
+          include-hidden-files: true
+          retention-days: 7
+          if-no-files-found: ignore
+      - name: Remove only this runner's disposable infrastructure
+        if: ${{ always() }}
+        run: docker compose --env-file .env -f infrastructure/compose/compose.yaml -f infrastructure/compose/ci.yaml down --volumes --remove-orphans

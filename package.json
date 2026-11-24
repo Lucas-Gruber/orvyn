@@ -21,7 +21,11 @@
     "storage:init": "node --env-file=.env scripts/storage-init.mjs",
     "backup:db": "node --env-file=.env scripts/db-backup.mjs",
     "restore:db": "node --env-file=.env scripts/db-restore.mjs",
-    "preview:local": "node scripts/preview-local.mjs"
+    "preview:local": "node scripts/preview-local.mjs",
+    "release:version": "node scripts/release.mjs version",
+    "release:check": "node scripts/release.mjs check",
+    "test:release": "node --test tests/release.test.mjs",
+    "test:images": "node --env-file=.env scripts/test-images.mjs"
   },
   "devDependencies": {
     "@hocuspocus/provider": "4.8.0",
@@ -29,5 +33,6 @@
     "prettier": "^3.10.1",
     "ws": "^8.23.0",
     "yjs": "13.6.33"
-  }
+  },
+  "packageManager": "pnpm@11.25.0"
 }
