@@ -219,7 +219,7 @@ function walk(value, path = []) {
 }
 walk(values);
 const text =
-  "# Field types verified against rancher/dashboard df071f35b5da8c21e35b134fa72a03159058c01e101 (Questions components).\n" +
+  "# Field types verified against rancher/dashboard df071f35b5da8c21e35b134fa72a03159058c01c (Questions components).\n" +
   YAML.stringify({ questions });
 if (process.argv.includes("--check")) {
   if ((await readFile(new URL("questions.yaml", dir), "utf8")) !== text)

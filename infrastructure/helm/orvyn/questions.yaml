@@ -1,4 +1,4 @@
-# Field types verified against rancher/dashboard df071f35b5da8c21e35b134fa72a03159058c01e101 (Questions components).
+# Field types verified against rancher/dashboard df071f35b5da8c21e35b134fa72a03159058c01c (Questions components).
 questions:
   - variable: global.showAdvanced
     label: Global / show Advanced
