@@ -57,7 +57,7 @@ spec:
         - name: private-s3-configuration
           image: {{ include "orvyn.image" (dict "root" $ "image" $.Values.api.image) | quote }}
           imagePullPolicy: {{ $.Values.api.image.pullPolicy }}
-          securityContext: {{- toYaml $.Values.api.securityContext | nindent 12 }}
+          securityContext: {{- toYaml $settings.securityContext | nindent 12 }}
           resources: {{- toYaml $.Values.configuration.resources | nindent 12 }}
           command: [node, -e]
           args:

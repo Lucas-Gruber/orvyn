@@ -13,11 +13,9 @@ kind: PersistentVolumeClaim
 metadata:
   name: {{ include "orvyn.claimName" (dict "root" $ "component" $claim.component "persistence" $p) }}
   labels: {{- include "orvyn.labels" $ | nindent 4 }}
-  annotations:
-    {{- with $p.annotations }}{{ toYaml . | nindent 4 }}{{ end }}
-    {{- if $p.retain }}
-    helm.sh/resource-policy: keep
-    {{- end }}
+  {{- $annotations := deepCopy $p.annotations }}
+  {{- if $p.retain }}{{- $_ := set $annotations "helm.sh/resource-policy" "keep" }}{{- end }}
+  annotations: {{- toYaml $annotations | nindent 4 }}
 spec:
   accessModes: [{{ $p.accessMode | quote }}]
   {{- $class := default $.Values.global.storageClass $p.storageClass }}

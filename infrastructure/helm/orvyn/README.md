@@ -2,7 +2,7 @@
 
 This chart runs Web, API, email/attachment Worker, and Collaboration. PostgreSQL, authenticated Valkey, and private SeaweedFS can run inside the release or be replaced independently. Native filesystem attachments are also supported. Only Web is exposed through ingress; its Nuxt routes proxy `/api` and `/collaboration` to ClusterIP services. Worker has no Service. This is a single-instance internal infrastructure topology, **not a verified HA configuration**.
 
-Chart `version`, `appVersion`, and all owned Node package versions are synchronized by `pnpm release:version`. An empty application image tag resolves to the exact `appVersion`; a digest takes precedence. Published charts never resolve application images to `latest`. The current source prepares **0.2.0**; an OCI version becomes installable only after its release workflow finishes.
+Chart `version`, `appVersion`, and all owned Node package versions are synchronized by `pnpm release:version`. An empty application image tag resolves to the exact `appVersion`; a digest takes precedence. SemVer build metadata (`+build`) maps to `_build` in Docker tags while the chart/package version retains the original SemVer. Published charts never resolve application images to `latest`. The current source prepares **0.2.0**; an OCI version becomes installable only after its release workflow finishes.
 
 ## Requirements and first installation
 

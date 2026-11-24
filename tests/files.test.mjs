@@ -1,28 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { createRequire } from "node:module";
 import { request, sessionCookie, Pool, base } from "./helpers.mjs";
-const require = createRequire(
-  new URL("../apps/api/package.json", import.meta.url),
-);
-const {
-  S3Client,
-  GetObjectCommand,
-  PutObjectCommand,
-} = require("@aws-sdk/client-s3");
-test("private S3 attachments enforce page access, inline MIME policy, upload limits and cleanup", async () => {
+import { attachments } from "../apps/api/dist/files/storage.js";
+test(`private ${attachments().driver} attachments enforce page access, inline MIME policy, upload limits and cleanup`, async () => {
   const db = new Pool({ connectionString: process.env.DATABASE_URL }),
-    s3 = new S3Client({
-      endpoint: process.env.S3_ENDPOINT,
-      region: process.env.S3_REGION,
-      forcePathStyle: true,
-      credentials: {
-        accessKeyId: process.env.S3_ACCESS_KEY_ID,
-        secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
-      },
-    }),
-    bucket = process.env.S3_BUCKET;
+    store = attachments();
   const account = async () => {
     const r = await request("auth/register", {
       method: "POST",
@@ -103,9 +86,13 @@ test("private S3 attachments enforce page access, inline MIME policy, upload lim
     const direct = await db.query("SELECT object_key FROM files WHERE id=$1", [
       file.data.id,
     ]);
-    const anonymous = new URL(process.env.S3_ENDPOINT);
-    anonymous.pathname = "/" + bucket + "/" + direct.rows[0].object_key;
-    assert.equal((await fetch(anonymous)).status, 403);
+    assert.equal(await store.exists(direct.rows[0].object_key), true);
+    if (store.driver === "s3") {
+      const anonymous = new URL(process.env.S3_ENDPOINT);
+      anonymous.pathname =
+        "/" + process.env.S3_BUCKET + "/" + direct.rows[0].object_key;
+      assert.equal((await fetch(anonymous)).status, 403);
+    }
     let response = await fetch(
       base + "/api/v1/files/" + file.data.id + "/download",
       { headers: { Cookie: viewer.cookie } },
@@ -240,15 +227,7 @@ test("private S3 attachments enforce page access, inline MIME policy, upload lim
         .rowCount,
       0,
     );
-    await assert.rejects(
-      s3.send(
-        new GetObjectCommand({
-          Bucket: bucket,
-          Key: direct.rows[0].object_key,
-        }),
-      ),
-      (e) => e.$metadata?.httpStatusCode === 404,
-    );
+    assert.equal(await store.exists(direct.rows[0].object_key), false);
     await request(`spaces/${space.id}/members/${viewer.id}`, {
       method: "DELETE",
       cookie: owner.cookie,
@@ -268,9 +247,8 @@ test("private S3 attachments enforce page access, inline MIME policy, upload lim
       404,
     );
     const key = "orphan-test/" + randomUUID();
-    await s3.send(
-      new PutObjectCommand({ Bucket: bucket, Key: key, Body: "orphan" }),
-    );
+    await store.put(key, { body: Buffer.from("orphan"), size: 6 });
+    assert.equal(await store.exists(key), true);
     const orphan = (
       await db.query(
         "INSERT INTO files(page_id,object_key,filename,media_type,size,uploaded_by,created_at) VALUES($1,$2,'orphan','application/octet-stream',6,$3,now()-interval '2 hours') RETURNING id",
@@ -287,12 +265,9 @@ test("private S3 attachments enforce page access, inline MIME policy, upload lim
       (await db.query("SELECT id FROM files WHERE id=$1", [orphan])).rowCount,
       0,
     );
-    await assert.rejects(
-      s3.send(new GetObjectCommand({ Bucket: bucket, Key: key })),
-      (e) => e.$metadata?.httpStatusCode === 404,
-    );
+    assert.equal(await store.exists(key), false);
   } finally {
-    s3.destroy();
+    store.close();
     await db.end();
   }
 });

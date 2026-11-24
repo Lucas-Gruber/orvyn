@@ -89,6 +89,11 @@
         },
         "secretRevision": {
           "type": "string"
+        },
+        "cattle": {
+          "type": "object",
+          "description": "Rancher-managed catalog metadata; not application credentials.",
+          "additionalProperties": true
         }
       }
     },

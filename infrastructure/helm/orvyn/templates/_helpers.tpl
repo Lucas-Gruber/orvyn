@@ -5,9 +5,9 @@
 {{- define "orvyn.labels" -}}
 app.kubernetes.io/name: {{ include "orvyn.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
-app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+app.kubernetes.io/version: {{ regexReplaceAll "[-_.]+$" (.Chart.AppVersion | replace "+" "_" | trunc 63) "" | quote }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
-helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | quote }}
+helm.sh/chart: {{ regexReplaceAll "[-_.]+$" (printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63) "" | quote }}
 {{- end }}
 {{- define "orvyn.selector" -}}
 app.kubernetes.io/name: {{ include "orvyn.name" .root }}
@@ -20,7 +20,7 @@ app.kubernetes.io/component: {{ .component }}
 {{- $repository = printf "%s/%s" .root.Values.global.imageRegistry $repository -}}
 {{- end -}}
 {{- if .image.digest -}}{{ printf "%s@%s" $repository .image.digest }}
-{{- else -}}{{ printf "%s:%s" $repository (default .root.Chart.AppVersion .image.tag) }}{{- end -}}
+{{- else -}}{{ printf "%s:%s" $repository (default .root.Chart.AppVersion .image.tag | replace "+" "_") }}{{- end -}}
 {{- end }}
 {{- define "orvyn.secretName" -}}{{ include "orvyn.fullname" . }}-secrets{{- end }}
 {{- define "orvyn.serviceAccount" -}}{{ default (printf "%s-app" (include "orvyn.fullname" .)) .Values.serviceAccount.name }}{{- end }}
@@ -126,6 +126,16 @@ valueFrom:
 {{- if hasSuffix "/" .Values.global.origin }}{{ fail "global.origin must not have a trailing slash" }}{{ end -}}
 {{- if and .Values.ingress.tls.enabled (ne $origin.scheme "https") }}{{ fail "TLS ingress requires an HTTPS global.origin" }}{{ end -}}
 {{- if and .Values.sso.oidc.enabled (ne $origin.scheme "https") }}{{ fail "OIDC requires an HTTPS global.origin" }}{{ end -}}
+{{- if eq .Values.storage.driver "local" -}}
+{{- $apiUid := default 1000 (default .Values.api.podSecurityContext.runAsUser .Values.api.securityContext.runAsUser) -}}
+{{- $workerPodUid := ternary .Values.api.podSecurityContext.runAsUser .Values.worker.podSecurityContext.runAsUser (not .Values.storage.local.persistence.enabled) -}}
+{{- $workerUid := default 1000 (default $workerPodUid .Values.worker.securityContext.runAsUser) -}}
+{{- if ne (int $apiUid) (int $workerUid) }}{{ fail "Local attachment storage requires API and worker to run with the same UID" }}{{ end -}}
+{{- end -}}
+{{- if and (eq .Values.storage.driver "s3") (not .Values.storage.s3.internal.enabled) -}}
+{{- $endpoint := urlParse .Values.storage.s3.external.endpoint -}}
+{{- if or $endpoint.userinfo $endpoint.query $endpoint.fragment }}{{ fail "S3 endpoint must not contain credentials, query tokens or fragments; use its credential Secret" }}{{ end -}}
+{{- end -}}
 {{- if and (eq .Values.storage.driver "local") (not .Values.storage.local.persistence.enabled) (or (ne (int .Values.api.replicaCount) 1) (ne (int .Values.worker.replicaCount) 1)) }}{{ fail "Ephemeral local storage runs a worker sidecar and requires one API and one worker replica" }}{{ end -}}
 {{- if and (eq .Values.storage.driver "local") .Values.storage.local.persistence.enabled (eq .Values.storage.local.persistence.accessMode "ReadWriteOnce") (or (gt (int .Values.api.replicaCount) 1) (gt (int .Values.worker.replicaCount) 1)) }}{{ fail "Multiple local-storage replicas require ReadWriteMany; ReadWriteOnce is restricted to one API and one worker on the same node" }}{{ end -}}
 {{- if and .Values.ingress.tls.issuer (not .Values.ingress.tls.enabled) }}{{ fail "A cert-manager issuer requires ingress.tls.enabled" }}{{ end -}}

@@ -1,12 +1,12 @@
 # Private files and object storage
 
-Attachments are uploaded to an S3-compatible object store with random server-generated keys. The API records page ownership, media type detected from bytes, size, uploader and lifecycle state. It never returns a public bucket URL. Every list, download and preview checks the page's inherited permissions; trashing a parent also hides attachments below it. Revoking membership blocks subsequent attachment requests.
+Attachments use a typed backend with random server-generated keys. The default remains S3-compatible storage; native private filesystem storage is selected explicitly with ORVYN_STORAGE_DRIVER=local. See [STORAGE.md](STORAGE.md) for shared volumes, permissions, streaming and migration. The API records page ownership, media type detected from bytes, size, uploader and lifecycle state. It never returns a public bucket URL. Every list, download and preview checks the page's inherited permissions; trashing a parent also hides attachments below it. Revoking membership blocks subsequent attachment requests.
 
 Uploads require an authenticated editor, the configured Origin and multipart/form-data. Authentication/authorization runs before multipart buffering. MAX_UPLOAD_BYTES defaults to 10 MiB and may be configured from 1 byte to 100 MiB. The API exposes the limit to the UI. Each account is also subject to an upload request limit. Uploaded filenames are normalized and escaped for download headers, and are never used as filesystem or object keys.
 
 Opaque files download as application/octet-stream with Content-Disposition: attachment and nosniff. PNG/JPEG/GIF/WebP signatures permit authenticated image previews; SVG/HTML are never rendered inline. Advanced image validation/optimization, malware scanning and office/PDF rendering remain outstanding. Client-supplied MIME types cannot force HTML execution.
 
-A pending database record is created before S3 transfer and authorized again before becoming ready. Failed uploads attempt immediate cleanup; a worker removes pending uploads older than one hour. Removing a ready attachment immediately revokes application access but retains its object for 30 days, then the worker purges it. This retention helps backups but is not a complete point-in-time recovery policy. No attachment restore UI is implemented yet.
+A pending database record is created before storage transfer and authorized again before becoming ready. Failed uploads attempt immediate cleanup; a worker removes pending uploads older than one hour. Removing a ready attachment immediately revokes application access but retains its object for 30 days, then the worker purges it. This retention helps backups but is not a complete point-in-time recovery policy. No attachment restore UI is implemented yet.
 
 ## Local S3 service
 
@@ -22,6 +22,8 @@ Production can use another S3-compatible service via environment variables. Supp
 
 ## Validation
 
-Integration tests use isolated S3 buckets, verify unauthorized/read-only/CSRF rejection, byte-based preview MIME policy, non-ASCII filenames, download disposition, size limits, parent trash/restore, membership revocation, orphan cleanup and retention cleanup. Chromium uploads/downloads a real attachment. The runner removes only its own newly-created test buckets and removes empty prefix directories retained by SeaweedFS without disabling its protection against deleting nonempty buckets.
+Integration tests use isolated S3 buckets and private filesystem directories, verify unauthorized/read-only/CSRF rejection, byte-based preview MIME policy, non-ASCII filenames, download disposition, size limits, parent trash/restore, membership revocation, orphan cleanup and retention cleanup. Chromium uploads/downloads a real attachment. The runner removes only its own newly-created test buckets and removes empty prefix directories retained by SeaweedFS without disabling its protection against deleting nonempty buckets.
 
 Mail delivery, authentication expiry cleanup and attachment retention run as independent worker loops. A slow SMTP batch cannot postpone attachment cleanup; failures are logged by maintenance category without payloads or credentials. Each loop retries after one second and stops between batches on shutdown.
+
+The same private-file API tests run against both drivers, including upload limits, inherited authorization, revocation, expired pending uploads and 30-day retention deletion. Filesystem tests additionally exercise atomic replacement, interrupted writes, traversal/symlink rejection, private file permissions and concurrent writers in independent processes. Helm configuration and SSO deployment are documented in the [chart README](../infrastructure/helm/orvyn/README.md).

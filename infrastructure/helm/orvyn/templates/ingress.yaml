@@ -6,11 +6,13 @@ kind: Ingress
 metadata:
   name: {{ include "orvyn.fullname" . }}
   labels: {{- include "orvyn.labels" . | nindent 4 }}
-  annotations:
-    {{- if .Values.ingress.tls.issuer }}
-    {{ ternary "cert-manager.io/cluster-issuer" "cert-manager.io/issuer" (eq .Values.ingress.tls.issuerKind "ClusterIssuer") }}: {{ .Values.ingress.tls.issuer | quote }}
-    {{- end }}
-    {{- with .Values.ingress.annotations }}{{ toYaml . | nindent 4 }}{{ end }}
+  {{- $annotations := deepCopy .Values.ingress.annotations }}
+  {{- if .Values.ingress.tls.issuer }}
+  {{- $_ := unset $annotations "cert-manager.io/issuer" }}
+  {{- $_ := unset $annotations "cert-manager.io/cluster-issuer" }}
+  {{- $_ := set $annotations (ternary "cert-manager.io/cluster-issuer" "cert-manager.io/issuer" (eq .Values.ingress.tls.issuerKind "ClusterIssuer")) .Values.ingress.tls.issuer }}
+  {{- end }}
+  annotations: {{- toYaml $annotations | nindent 4 }}
 spec:
   {{- with .Values.ingress.className }}
   ingressClassName: {{ . | quote }}

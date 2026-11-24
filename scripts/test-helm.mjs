@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile, rm, cp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -165,6 +165,76 @@ try {
     ],
   ];
   const manifestFiles = [];
+  await cp(join(root, chart), join(temp, "metadata-chart"), {
+    recursive: true,
+  });
+  const metadataPath = join(temp, "metadata-chart", "Chart.yaml");
+  const metadata = YAML.parse(await readFile(metadataPath, "utf8"));
+  metadata.version = metadata.appVersion = "1.2.3+build." + "x".repeat(70);
+  await writeFile(metadataPath, YAML.stringify(metadata));
+  await writeFile(
+    join(temp, "metadata-overlay.yaml"),
+    YAML.stringify({
+      global: {
+        cattle: {
+          clusterId: "c-test",
+          clusterName: "chart-tests",
+          systemDefaultRegistry: "",
+        },
+      },
+      fullnameOverride: "orvyn-" + "x".repeat(39),
+      smtp: { existingSecret: "mail" },
+      ingress: {
+        tls: { issuer: "company" },
+        annotations: {
+          "cert-manager.io/cluster-issuer": "old",
+          "cert-manager.io/issuer": "old",
+        },
+      },
+    }),
+  );
+  const metadataRender = docker(helmImage, [
+    "template",
+    "metadata",
+    "/checks/metadata-chart",
+    "-f",
+    "/checks/metadata-overlay.yaml",
+  ]);
+  assert.equal(metadataRender.status, 0, metadataRender.stderr);
+  for (const resource of docs(metadataRender.stdout).filter(
+    (r) => r.kind === "Deployment",
+  ))
+    for (const container of resource.spec.template.spec.containers)
+      assert.ok(
+        container.image.endsWith(":" + metadata.appVersion.replace("+", "_")),
+        "Docker image tags must escape SemVer build metadata",
+      );
+  for (const resource of docs(metadataRender.stdout)) {
+    assert.ok(
+      resource.metadata.name.length <= 63,
+      "Resource names must fit Kubernetes Job/service limits",
+    );
+    for (const value of Object.values(resource.metadata.labels || {}))
+      assert.ok(
+        value.length <= 63 &&
+          /^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$/.test(value),
+        "Long SemVer metadata must produce valid Kubernetes labels",
+      );
+  }
+  const metadataIngress = docs(metadataRender.stdout).find(
+    (r) => r.kind === "Ingress",
+  );
+  assert.equal(
+    metadataIngress.metadata.annotations["cert-manager.io/cluster-issuer"],
+    "company",
+  );
+  assert.equal(
+    metadataIngress.metadata.annotations["cert-manager.io/issuer"],
+    undefined,
+  );
+  console.log(
+    "PASS chart SemVer build metadata and cert-manager annotation precedence",
+  );
   let internal;
   for (const [name, overlay, example] of cases) {
     await writeFile(join(temp, "overlay.yaml"), YAML.stringify(overlay), {
@@ -283,6 +353,27 @@ try {
     );
   }
   const invalid = [
+    [
+      "different local worker UID",
+      {
+        smtp: { existingSecret: "mail" },
+        storage: { driver: "local" },
+        worker: { podSecurityContext: { runAsUser: 2000 } },
+      },
+    ],
+    [
+      "S3 endpoint with embedded credentials",
+      {
+        smtp: { existingSecret: "mail" },
+        storage: {
+          s3: {
+            internal: { enabled: false },
+            existingSecret: "objects",
+            external: { endpoint: "https://user:password@s3.example.org" },
+          },
+        },
+      },
+    ],
     ["missing SMTP", {}],
     [
       "bad encryption",

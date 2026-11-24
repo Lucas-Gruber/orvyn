@@ -5,7 +5,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ include "orvyn.fullname" $ }}-{{ $purpose }}{{ if eq $purpose "storage-init" }}-{{ toJson (dict "storage" $.Values.storage.s3 "api" $.Values.api "configuration" $.Values.configuration "global" $.Values.global "version" $.Chart.AppVersion) | sha256sum | trunc 10 }}{{ end }}
+  name: {{ if eq $purpose "storage-init" }}{{ include "orvyn.fullname" $ | trunc 39 | trimSuffix "-" }}{{ else }}{{ include "orvyn.fullname" $ }}{{ end }}-{{ $purpose }}{{ if eq $purpose "storage-init" }}-{{ toJson (dict "fullname" (include "orvyn.fullname" $) "storage" $.Values.storage.s3 "api" $.Values.api "configuration" $.Values.configuration "global" $.Values.global "version" $.Chart.AppVersion) | sha256sum | trunc 10 }}{{ end }}
   labels: {{- include "orvyn.labels" $ | nindent 4 }}
   {{- if eq $purpose "configuration" }}
   annotations:

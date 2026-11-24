@@ -11,6 +11,16 @@ const cluster = "orvyn-chart-" + process.pid,
   node = cluster + "-control-plane",
   namespace = "orvyn-chart";
 let created = false;
+let diagnosticTimer,
+  diagnosticWork = Promise.resolve(),
+  diagnosticBusy = false;
+const diagnostics = new Map();
+let redactions = [];
+const redact = (value) => {
+  let text = String(value);
+  for (const secret of redactions) text = text.replaceAll(secret, "[redacted]");
+  return text;
+};
 async function run(command, args, input) {
   // execFile has no stdin option; write through its pipe without shell interpolation.
   return new Promise((resolve, reject) => {
@@ -65,6 +75,81 @@ const helm = (args) =>
     ...args,
   ]);
 const fingerprint = (value) => createHash("sha256").update(value).digest("hex");
+async function observeStartup() {
+  const secrets = JSON.parse(
+    await kubectl(["-n", namespace, "get", "secrets", "-o", "json"]),
+  );
+  redactions = [
+    ...new Set([
+      ...redactions,
+      ...secrets.items
+        .flatMap((item) =>
+          Object.values(item.data || {}).map((value) =>
+            Buffer.from(value, "base64").toString(),
+          ),
+        )
+        .filter((value) => value.length >= 8),
+    ]),
+  ];
+  const pods = JSON.parse(
+    await kubectl(["-n", namespace, "get", "pods", "-o", "json"]),
+  );
+  for (const pod of pods.items) {
+    if (pod.metadata.deletionTimestamp) continue;
+    const prefix = pod.metadata.name + "/";
+    for (const container of [
+      ...(pod.status.initContainerStatuses || []),
+      ...(pod.status.containerStatuses || []),
+    ]) {
+      const key = prefix + container.name;
+      if (container.ready || container.state?.terminated?.exitCode === 0) {
+        diagnostics.delete(key);
+        continue;
+      }
+      const condition = pod.status.conditions?.find(
+        (value) => value.reason === "Unschedulable",
+      );
+      const state =
+        container.state?.waiting ||
+        container.lastState?.terminated ||
+        container.state?.terminated;
+      let detail = [
+        key,
+        pod.status.phase,
+        condition?.message,
+        state?.reason,
+        state?.message,
+      ]
+        .filter(Boolean)
+        .join(" ");
+      if (container.state?.running || container.lastState?.terminated) {
+        try {
+          detail +=
+            "\n" +
+            (await kubectl([
+              "-n",
+              namespace,
+              "logs",
+              pod.metadata.name,
+              "-c",
+              container.name,
+              "--tail=12",
+            ]));
+        } catch {}
+      }
+      diagnostics.set(key, redact(detail).slice(-1500));
+      if (diagnostics.size > 12)
+        diagnostics.delete(diagnostics.keys().next().value);
+    }
+    if (!pod.status.containerStatuses?.length) {
+      const condition = pod.status.conditions?.find(
+        (value) => value.reason === "Unschedulable",
+      );
+      if (condition)
+        diagnostics.set(prefix + "scheduling", redact(condition.message));
+    }
+  }
+}
 const smoke = async (release, state) => {
   const code = `import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';
     const origin='https://orvyn.example.test'; const previous=${JSON.stringify(state || null)};
@@ -204,6 +289,17 @@ try {
     "-f",
     "/checks/values.yaml",
   ];
+  // Capture before --atomic can remove failed Pods; retain no raw credential logs.
+  diagnosticTimer = setInterval(() => {
+    if (diagnosticBusy) return;
+    diagnosticBusy = true;
+    diagnosticWork = observeStartup()
+      .catch(() => {})
+      .finally(() => {
+        diagnosticBusy = false;
+      });
+  }, 3000);
+  diagnosticTimer.unref();
   await helm([
     "upgrade",
     "--install",
@@ -336,6 +432,8 @@ try {
     "PASS Kubernetes: shared local PVC, UID permissions, colocated API/worker, upgrade and preserved attachment",
   );
 } catch (error) {
+  clearInterval(diagnosticTimer);
+  await diagnosticWork;
   if (created) {
     try {
       console.error(await kubectl(["-n", namespace, "get", "pods"]));
@@ -350,9 +448,23 @@ try {
       );
     } catch {}
   }
-  console.error(error.message);
+  const message = redact(
+    error.message + "\n" + [...diagnostics.values()].join("\n"),
+  );
+  console.error(message);
+  if (process.env.GITHUB_ACTIONS === "true")
+    console.error(
+      "::error title=Kubernetes install or upgrade failed::" +
+        message
+          .slice(-3500)
+          .replace(/%/g, "%25")
+          .replace(/\r/g, "%0D")
+          .replace(/\n/g, "%0A"),
+    );
   process.exitCode = 1;
 } finally {
+  clearInterval(diagnosticTimer);
+  await diagnosticWork;
   if (created) {
     const kind = process.env.KIND_BIN || join(temp, "kind");
     await run(kind, ["delete", "cluster", "--name", cluster]);

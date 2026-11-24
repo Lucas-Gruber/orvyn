@@ -169,10 +169,14 @@ function walk(value, path = []) {
   if (map) type = "map[string]";
   if (array) type = name === "imagePullSecrets" ? "yaml" : "array[string]";
   if (
-    /password|encryptionKey|clientSecret|secretAccessKey|accessKeyId|\.url$/i.test(
-      variable,
-    ) &&
-    !/^global.origin$/.test(variable)
+    [
+      "password",
+      "encryptionKey",
+      "clientSecret",
+      "secretAccessKey",
+      "accessKeyId",
+    ].includes(name) ||
+    variable.endsWith(".url")
   )
     type = "password";
   if (["existingSecret", "existingEncryptionSecret"].includes(name))

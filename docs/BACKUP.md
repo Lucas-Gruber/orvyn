@@ -26,3 +26,7 @@ For recovery into a new installation: restore PostgreSQL, restore the correspond
 An integration test exports PostgreSQL, restores into a new database, copies the restored metadata's retained object keys into an independent S3 bucket, starts another API process, and verifies page content, exact attachment bytes and unauthenticated denial. It also verifies refusal to overwrite an existing database. Another test loads a persisted Yjs document in a new collaboration process with an independent Redis namespace.
 
 This validates an isolated recovery path on Linux. Scheduled backups, encrypted offsite archives, production point-in-time recovery, large-data restore timing, object-store-native restore and a Kubernetes disaster-recovery exercise remain outstanding. No RPO/RTO is promised.
+
+## Native filesystem attachments
+
+Database-only development dump/restore commands remain unchanged. For native local attachment storage, back up the entire private `orvyn-objects` directory or its PVC together with a coordinated PostgreSQL backup and the persistent encryption key. Preserve ownership and mode bits, restore into an empty private directory, and mount the same restored data into API and Worker. Validate authenticated downloads, template copies, exports and retention on a restored staging instance before allowing writes. See [STORAGE.md](STORAGE.md) and the [Helm operational notes](../infrastructure/helm/orvyn/README.md). Switching the driver is not a data migration.

@@ -545,7 +545,14 @@ async function main() {
       );
     }
   };
-  const values = await readPlatformRecords(directory),
+  const chart = plan.chart
+      ? await readChartArtifact(
+          resolve(process.env.RELEASE_CHART || "chart-artifacts"),
+          plan,
+          commit,
+        )
+      : undefined,
+    values = await readPlatformRecords(directory),
     records = await mergePlatformImages({
       plan,
       commit,
@@ -565,13 +572,7 @@ async function main() {
     records,
     directory: resolve(".local/release-output", plan.tag),
     run,
-    chart: plan.chart
-      ? await readChartArtifact(
-          resolve(process.env.RELEASE_CHART || "chart-artifacts"),
-          plan,
-          commit,
-        )
-      : undefined,
+    chart,
   });
   console.log(JSON.stringify(result));
 }

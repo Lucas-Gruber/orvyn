@@ -261,6 +261,12 @@ const schema = {
   definitions: defs,
   allOf: [],
 };
+// Rancher injects deployment metadata even when it is absent from user values.
+schema.properties.global.properties.cattle = {
+  type: "object",
+  description: "Rancher-managed catalog metadata; not application credentials.",
+  additionalProperties: true,
+};
 function at(path, rule) {
   return path
     .split(".")

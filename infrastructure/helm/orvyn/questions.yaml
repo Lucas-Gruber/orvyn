@@ -1486,7 +1486,7 @@ questions:
     show_if: storage.driver=s3
   - variable: storage.s3.secretAccessKeySecretKey
     label: Storage / s3 / secret Access Key Secret Key
-    type: password
+    type: string
     default: S3_SECRET_ACCESS_KEY
     group: Storage
     show_if: storage.driver=s3
