@@ -12,6 +12,8 @@ A pending database record is created before S3 transfer and authorized again bef
 
 Compose runs the Apache-2.0-licensed SeaweedFS 4.08 mini service, pinned by OCI digest. Its S3 port is bound to loopback; other storage/admin ports are not exposed. setup:local generates credentials in ignored .env and a mode-0600 .local/s3.json identity file. There is no anonymous identity. The generated credentials are for local development, not a production IAM policy.
 
+A network-isolated, short-lived initializer copies that protected identity file into a Docker volume owned by SeaweedFS, with mode 0400. The running storage service mounts this volume read-only. This preserves host file permissions while supporting hosts whose user ID differs from the container user, including GitHub-hosted runners. The initializer can be rerun without removing object data.
+
 The mini service advertises loopback addresses internally because all its components share a container. This also keeps its internal RPC traffic local in proxied cloud environments. Existing proxy settings and CA verification are preserved. The initially attempted public MinIO image could not be fetched; no private registry token was required for the working SeaweedFS alternative.
 
 Run pnpm storage:init after pnpm build and pnpm infra:up. It creates a missing bucket, verifies signed write/read integrity, verifies anonymous denial, and removes only its own random probe object. It does not rewrite an existing bucket's policy.

@@ -45,7 +45,7 @@ jobs:
           }
           fs.writeFileSync('infrastructure-startup.txt', report);
           console.log(report);
-          const message = report.split('\n').slice(-80).join('\n').slice(-12000).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
+          const message = report.slice(-3500).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
           console.log('::error title=Test infrastructure startup failed::' + message);
           NODE
             exit 1

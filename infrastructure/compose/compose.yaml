@@ -12,8 +12,25 @@ services:
       interval: 2s
       timeout: 3s
       retries: 30
+  storage-config:
+    image: chrislusf/seaweedfs@sha256:8779e14fbb8c76c607bc2ed934aeeb61e5319016f0ac1ba4667eae8f40fe623b
+    user: "0:0"
+    network_mode: none
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        umask 077
+        cp /source/s3.json /config/s3.json
+        chown seaweed:seaweed /config/s3.json
+        chmod 0400 /config/s3.json
+    volumes:
+      - ../../.local/s3.json:/source/s3.json:ro
+      - storage-config:/config
   storage:
     image: chrislusf/seaweedfs@sha256:8779e14fbb8c76c607bc2ed934aeeb61e5319016f0ac1ba4667eae8f40fe623b
+    depends_on:
+      storage-config:
+        condition: service_completed_successfully
     command:
       [
         "mini",
@@ -26,7 +43,7 @@ services:
         "-s3.allowDeleteBucketNotEmpty=false",
       ]
     ports: ["127.0.0.1:8333:8333"]
-    volumes: ["objects:/data", "../../.local/s3.json:/etc/orvyn/s3.json:ro"]
+    volumes: ["objects:/data", "storage-config:/etc/orvyn:ro"]
     healthcheck:
       test: ["CMD", "nc", "-z", "localhost", "8333"]
       interval: 2s
@@ -47,3 +64,4 @@ services:
 volumes:
   objects:
   postgres:
+  storage-config:
