@@ -1,0 +1,213 @@
+questions:
+  # General
+  - variable: global.origin
+    label: Application URL
+    description: Public HTTPS origin of the application.
+    type: string
+    required: true
+    group: General
+
+  - variable: global.storageClass
+    label: Default Storage Class
+    description: Storage class used for persistent volumes.
+    type: storageclass
+    group: General
+
+  - variable: global.existingEncryptionSecret
+    label: Existing Encryption Secret
+    description: Leave empty to generate an encryption key.
+    type: secret
+    group: General
+
+  # PostgreSQL
+  - variable: postgresql.enabled
+    label: Deploy internal PostgreSQL
+    description: Disable to use an external PostgreSQL server.
+    type: boolean
+    default: true
+    group: PostgreSQL
+
+  - variable: postgresql.auth.database
+    label: Database Name
+    type: string
+    default: orvyn
+    show_if: "postgresql.enabled=true"
+    group: PostgreSQL
+
+  - variable: postgresql.auth.username
+    label: Database Username
+    type: string
+    default: orvyn
+    show_if: "postgresql.enabled=true"
+    group: PostgreSQL
+
+  - variable: postgresql.auth.password
+    label: Database Password
+    description: Leave empty to generate a password.
+    type: password
+    show_if: "postgresql.enabled=true"
+    group: PostgreSQL
+
+  - variable: postgresql.persistence.size
+    label: Database Storage Size
+    type: string
+    default: 10Gi
+    show_if: "postgresql.enabled=true"
+    group: PostgreSQL
+
+  - variable: externalPostgresql.url
+    label: External Database URL
+    type: password
+    show_if: "postgresql.enabled=false"
+    group: PostgreSQL
+
+  - variable: externalPostgresql.existingSecret
+    label: Existing Database Secret
+    type: secret
+    show_if: "postgresql.enabled=false"
+    group: PostgreSQL
+
+  # Valkey
+  - variable: valkey.enabled
+    label: Deploy internal Valkey
+    type: boolean
+    default: true
+    group: Valkey
+
+  - variable: valkey.auth.password
+    label: Valkey Password
+    description: Leave empty to generate a password.
+    type: password
+    show_if: "valkey.enabled=true"
+    group: Valkey
+
+  - variable: valkey.persistence.size
+    label: Valkey Storage Size
+    type: string
+    default: 2Gi
+    show_if: "valkey.enabled=true"
+    group: Valkey
+
+  - variable: externalValkey.url
+    label: External Redis URL
+    type: password
+    show_if: "valkey.enabled=false"
+    group: Valkey
+
+  - variable: externalValkey.existingSecret
+    label: Existing Redis Secret
+    type: secret
+    show_if: "valkey.enabled=false"
+    group: Valkey
+
+  # Storage
+  - variable: storage.internal.enabled
+    label: Deploy internal SeaweedFS
+    description: Disable to use an external S3 provider.
+    type: boolean
+    default: true
+    group: Storage
+
+  - variable: storage.internal.persistence.size
+    label: Storage Volume Size
+    type: string
+    default: 20Gi
+    show_if: "storage.internal.enabled=true"
+    group: Storage
+
+  - variable: storage.external.endpoint
+    label: External S3 Endpoint
+    type: string
+    show_if: "storage.internal.enabled=false"
+    group: Storage
+
+  - variable: storage.external.existingSecret
+    label: Existing S3 Credentials Secret
+    type: secret
+    show_if: "storage.internal.enabled=false"
+    group: Storage
+
+  - variable: storage.bucket
+    label: S3 Bucket
+    type: string
+    default: orvyn
+    group: Storage
+
+  - variable: storage.region
+    label: S3 Region
+    type: string
+    default: us-east-1
+    group: Storage
+
+  - variable: storage.forcePathStyle
+    label: Force Path Style
+    type: boolean
+    default: true
+    group: Storage
+
+  # SMTP
+  - variable: smtp.url
+    label: SMTP Connection URL
+    type: password
+    group: SMTP
+
+  - variable: smtp.existingSecret
+    label: Existing SMTP Secret
+    type: secret
+    group: SMTP
+
+  - variable: smtp.from
+    label: Sender Address
+    type: string
+    required: true
+    group: SMTP
+
+  # Ingress
+  - variable: ingress.enabled
+    label: Enable Ingress
+    type: boolean
+    default: true
+    group: Networking
+
+  - variable: ingress.className
+    label: Ingress Class
+    type: string
+    default: traefik
+    show_if: "ingress.enabled=true"
+    group: Networking
+
+  # Scaling
+  - variable: web.replicaCount
+    label: Web Replicas
+    type: int
+    default: 1
+    min: 1
+    group: Scaling
+
+  - variable: api.replicaCount
+    label: API Replicas
+    type: int
+    default: 1
+    min: 1
+    group: Scaling
+
+  - variable: worker.replicaCount
+    label: Worker Replicas
+    type: int
+    default: 1
+    min: 1
+    group: Scaling
+
+  - variable: collaboration.replicaCount
+    label: Collaboration Replicas
+    type: int
+    default: 1
+    min: 1
+    group: Scaling
+
+  - variable: api.maxUploadBytes
+    label: Maximum Upload Size (Bytes)
+    type: int
+    default: 10485760
+    min: 1
+    group: Advanced

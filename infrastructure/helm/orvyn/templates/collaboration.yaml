@@ -1,0 +1,105 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "orvyn.fullname" . }}-collaboration
+  labels:
+    {{- include "orvyn.labels" . | nindent 4 }}
+    app.kubernetes.io/component: collaboration
+
+spec:
+  replicas: {{ .Values.collaboration.replicaCount }}
+
+  selector:
+    matchLabels:
+      {{- include "orvyn.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: collaboration
+
+  template:
+    metadata:
+      labels:
+        {{- include "orvyn.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: collaboration
+
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+      containers:
+        - name: collaboration
+          image: {{ include "orvyn.image" (dict "root" . "image" .Values.collaboration.image) | quote }}
+          imagePullPolicy: {{ .Values.collaboration.image.pullPolicy }}
+
+          ports:
+            - name: http
+              containerPort: 3002
+
+          envFrom:
+            - configMapRef:
+                name: {{ include "orvyn.fullname" . }}-config
+
+          env:
+            {{- include "orvyn.databaseEnv" . | nindent 12 }}
+            {{- include "orvyn.redisEnv" . | nindent 12 }}
+
+            - name: COLLABORATION_NAMESPACE
+              value: {{ .Values.collaboration.namespace | quote }}
+
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 60
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+
+          livenessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 15
+
+          resources:
+            {{- toYaml .Values.collaboration.resources | nindent 12 }}
+
+      {{- with .Values.collaboration.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+      {{- with .Values.collaboration.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+      {{- with .Values.collaboration.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "orvyn.fullname" . }}-collaboration
+  labels:
+    {{- include "orvyn.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+
+  selector:
+    {{- include "orvyn.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: collaboration
+
+  ports:
+    - name: http
+      port: 3002
+      targetPort: http

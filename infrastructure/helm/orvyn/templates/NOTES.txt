@@ -1,0 +1,40 @@
+Orvyn has been installed.
+
+Release:   {{ .Release.Name }}
+Namespace: {{ .Release.Namespace }}
+
+{{- if .Values.ingress.enabled }}
+
+Application URL:
+  {{ .Values.global.origin }}
+
+{{- else }}
+
+Access the web interface using:
+
+  kubectl port-forward \
+    -n {{ .Release.Namespace }} \
+    svc/{{ include "orvyn.fullname" . }}-web \
+    3000:3000
+
+Production authentication requires HTTPS.
+
+{{- end }}
+
+Infrastructure:
+
+  PostgreSQL: {{ if .Values.postgresql.enabled }}Internal{{ else }}External{{ end }}
+  Valkey:     {{ if .Values.valkey.enabled }}Internal{{ else }}External{{ end }}
+  Storage:    {{ if .Values.storage.internal.enabled }}Internal SeaweedFS{{ else }}External S3{{ end }}
+
+Check deployment status:
+
+  kubectl get pods -n {{ .Release.Namespace }}
+  kubectl get pvc -n {{ .Release.Namespace }}
+
+IMPORTANT:
+
+  Back up PostgreSQL, object storage and the encryption key.
+  Do not regenerate the encryption key for existing installations.
+  Do not change database or storage credentials without coordinating
+  the corresponding backend configuration.

@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "orvyn.fullname" . }}-config
+  labels:
+    {{- include "orvyn.labels" . | nindent 4 }}
+data:
+  ORVYN_ORIGIN: {{ .Values.global.origin | quote }}
+  NODE_ENV: production

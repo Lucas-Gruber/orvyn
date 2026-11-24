@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "orvyn.fullname" . }}-worker
+  labels:
+    {{- include "orvyn.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+
+spec:
+  replicas: {{ .Values.worker.replicaCount }}
+
+  selector:
+    matchLabels:
+      {{- include "orvyn.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: worker
+
+  template:
+    metadata:
+      labels:
+        {{- include "orvyn.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: worker
+
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+      initContainers:
+        - name: wait-for-api
+          image: {{ include "orvyn.image" (dict "root" . "image" .Values.worker.image) | quote }}
+
+          command:
+            - node
+            - -e
+            - |
+              const url = "http://{{ include "orvyn.fullname" . }}-api:3001/api/v1/health";
+              async function wait() {
+                while (true) {
+                  try {
+                    const response = await fetch(url, {
+                      signal: AbortSignal.timeout(5000)
+                    });
+                    if (response.ok) return;
+                  } catch {}
+                  await new Promise(r => setTimeout(r, 5000));
+                }
+              }
+              wait();
+
+      containers:
+        - name: worker
+          image: {{ include "orvyn.image" (dict "root" . "image" .Values.worker.image) | quote }}
+          imagePullPolicy: {{ .Values.worker.image.pullPolicy }}
+
+          env:
+            - name: NODE_ENV
+              value: production
+
+            {{- include "orvyn.databaseEnv" . | nindent 12 }}
+            {{- include "orvyn.encryptionEnv" . | nindent 12 }}
+            {{- include "orvyn.storageEnv" . | nindent 12 }}
+            {{- include "orvyn.smtpEnv" . | nindent 12 }}
+
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}
+
+      {{- with .Values.worker.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+      {{- with .Values.worker.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+      {{- with .Values.worker.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
