@@ -1,0 +1,118 @@
+{{- range $component := list "web" "api" "worker" "collaboration" }}
+{{- $root := $ }}{{- $settings := index $.Values $component }}
+{{- $config := dict "settings" $settings "origin" $.Values.global.origin "secretRevision" $.Values.global.secretRevision }}
+{{- if eq $component "web" }}
+{{- $_ := set $config "upstreams" (list $.Values.api.service $.Values.collaboration.service) }}
+{{- else }}
+{{- $_ := set $config "database" (list $.Values.postgresql.auth $.Values.postgresql.enabled $.Values.externalPostgresql) }}
+{{- if eq $component "collaboration" }}
+{{- $_ := set $config "valkey" (list $.Values.valkey.enabled $.Values.valkey.auth $.Values.externalValkey) }}
+{{- else }}
+{{- $_ := set $config "storage" $.Values.storage }}
+{{- $_ := set $config "crypto" (list $.Values.global.encryptionKey $.Values.global.existingEncryptionSecret $.Values.global.encryptionSecretKey) }}
+{{- if eq $component "worker" }}{{- $_ := set $config "smtp" $.Values.smtp }}{{- else }}{{- $_ := set $config "oidcCa" $.Values.sso.oidc.ca }}{{- end }}
+{{- end }}
+{{- end }}
+{{- if not (and (eq $component "worker") (eq (include "orvyn.ephemeralLocal" $) "true")) }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "orvyn.fullname" $ }}-{{ $component }}
+  labels: {{- include "orvyn.labels" $ | nindent 4 }}
+spec:
+  replicas: {{ $settings.replicaCount }}
+  {{- if and (eq $component "api") (eq $.Values.storage.driver "local") (not $.Values.storage.local.persistence.enabled) }}
+  strategy:
+    type: Recreate
+  {{- end }}
+  selector:
+    matchLabels: {{- include "orvyn.selector" (dict "root" $ "component" $component) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- with $settings.podLabels }}{{ toYaml . | nindent 8 }}{{ end }}
+        {{- include "orvyn.selector" (dict "root" $ "component" $component) | nindent 8 }}
+        {{- if and (eq $.Values.storage.driver "local") (has $component (list "api" "worker")) }}
+        orvyn.io/local-storage: "true"
+        {{- end }}
+      annotations:
+        {{- with $settings.podAnnotations }}{{ toYaml . | nindent 8 }}{{ end }}
+        checksum/config: {{ toJson $config | sha256sum | quote }}
+    spec:
+      serviceAccountName: {{ include "orvyn.serviceAccount" $ }}
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      securityContext: {{- toYaml $settings.podSecurityContext | nindent 8 }}
+      {{- with $.Values.global.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $settings.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $settings.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- $affinity := deepCopy $settings.affinity }}
+      {{- if and (eq $.Values.storage.driver "local") $.Values.storage.local.persistence.enabled (eq $.Values.storage.local.persistence.accessMode "ReadWriteOnce") (has $component (list "api" "worker")) }}
+      {{- $podAffinity := default dict $affinity.podAffinity }}
+      {{- $required := default list $podAffinity.requiredDuringSchedulingIgnoredDuringExecution }}
+      {{- $_ := set $podAffinity "requiredDuringSchedulingIgnoredDuringExecution" (append $required (dict "topologyKey" "kubernetes.io/hostname" "labelSelector" (dict "matchLabels" (dict "app.kubernetes.io/instance" $.Release.Name "app.kubernetes.io/name" (include "orvyn.name" $) "orvyn.io/local-storage" "true")))) }}
+      {{- $_ := set $affinity "podAffinity" $podAffinity }}
+      {{- end }}
+      {{- with $affinity }}
+      affinity: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if eq $component "worker" }}
+      initContainers:
+        - name: wait-for-schema
+          image: {{ include "orvyn.image" (dict "root" $ "image" $settings.image) | quote }}
+          securityContext: {{- toYaml $settings.securityContext | nindent 12 }}
+          resources: {{- toYaml $settings.resources | nindent 12 }}
+          command: [node, -e]
+          args:
+            - {{ printf "(async()=>{for(let i=0;i<180;i++){try{const r=await fetch('http://%s-api:%v/api/v1/health',{signal:AbortSignal.timeout(2000)});if(r.ok)return;await r.body?.cancel()}catch{}await new Promise(r=>setTimeout(r,1000))}process.exit(1)})()" (include "orvyn.fullname" $) $.Values.api.service.port | quote }}
+      {{- end }}
+      containers:
+        {{- include "orvyn.container" (dict "root" $ "component" $component) | nindent 8 }}
+        {{- if and (eq $component "api") (eq (include "orvyn.ephemeralLocal" $) "true") }}
+        {{- include "orvyn.container" (dict "root" $ "component" "worker") | nindent 8 }}
+        {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi
+        {{- if and (eq $.Values.storage.driver "local") (has $component (list "api" "worker")) }}
+        - name: attachments
+          {{- if $.Values.storage.local.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "orvyn.claimName" (dict "root" $ "component" "attachments" "persistence" $.Values.storage.local.persistence) }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        {{- end }}
+        {{- if and (eq $component "api") $.Values.sso.oidc.ca.existingSecret }}
+        - name: oidc-ca
+          secret:
+            secretName: {{ $.Values.sso.oidc.ca.existingSecret | quote }}
+            items:
+              - key: {{ $.Values.sso.oidc.ca.secretKey | quote }}
+                path: ca.crt
+        {{- end }}
+{{- if ne $component "worker" }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "orvyn.fullname" $ }}-{{ $component }}
+  labels: {{- include "orvyn.labels" $ | nindent 4 }}
+spec:
+  type: {{ $settings.service.type }}
+  selector: {{- include "orvyn.selector" (dict "root" $ "component" $component) | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ $settings.service.port }}
+      targetPort: http
+{{- end }}
+{{- end }}
+{{- end }}

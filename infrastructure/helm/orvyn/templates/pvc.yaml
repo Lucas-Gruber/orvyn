@@ -1,0 +1,31 @@
+{{- $claims := list
+  (dict "component" "postgresql" "enabled" .Values.postgresql.enabled "persistence" .Values.postgresql.persistence)
+  (dict "component" "valkey" "enabled" .Values.valkey.enabled "persistence" .Values.valkey.persistence)
+  (dict "component" "storage" "enabled" (and (eq .Values.storage.driver "s3") .Values.storage.s3.internal.enabled) "persistence" .Values.storage.s3.internal.persistence)
+  (dict "component" "attachments" "enabled" (eq .Values.storage.driver "local") "persistence" .Values.storage.local.persistence)
+}}
+{{- range $claim := $claims }}
+{{- $p := $claim.persistence }}
+{{- if and $claim.enabled $p.enabled (not $p.existingClaim) }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "orvyn.claimName" (dict "root" $ "component" $claim.component "persistence" $p) }}
+  labels: {{- include "orvyn.labels" $ | nindent 4 }}
+  annotations:
+    {{- with $p.annotations }}{{ toYaml . | nindent 4 }}{{ end }}
+    {{- if $p.retain }}
+    helm.sh/resource-policy: keep
+    {{- end }}
+spec:
+  accessModes: [{{ $p.accessMode | quote }}]
+  {{- $class := default $.Values.global.storageClass $p.storageClass }}
+  {{- if $class }}
+  storageClassName: {{ ternary "" $class (eq $class "-") | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ $p.size | quote }}
+{{- end }}
+{{- end }}

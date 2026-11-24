@@ -1,96 +1,31 @@
+# Create referenced Secrets in the release namespace before installation.
+# All names and domains are examples; there are no embedded credentials.
 global:
-  origin: https://orvyn.example.com
-  storageClass: longhorn
-
-  existingEncryptionSecret: orvyn-encryption
-
-web:
-  replicaCount: 2
-
-  resources:
-    requests:
-      cpu: 100m
-      memory: 128Mi
-    limits:
-      memory: 512Mi
-
-api:
-  replicaCount: 1
-
-  resources:
-    requests:
-      cpu: 100m
-      memory: 256Mi
-    limits:
-      memory: 1Gi
-
-worker:
-  replicaCount: 1
-
-  resources:
-    requests:
-      cpu: 50m
-      memory: 128Mi
-    limits:
-      memory: 512Mi
-
-collaboration:
-  replicaCount: 1
-
-  resources:
-    requests:
-      cpu: 100m
-      memory: 128Mi
-    limits:
-      memory: 512Mi
-
+  origin: https://orvyn.example.org
+smtp:
+  existingSecret: orvyn-mail
+  secretKey: smtp-url
+  from: Orvyn <orvyn@example.org>
 postgresql:
   enabled: false
-
 externalPostgresql:
   existingSecret: orvyn-database
-  secretKey: DATABASE_URL
-
+  secretKey: connection-uri
 valkey:
-  enabled: true
-
-  persistence:
-    enabled: true
-    size: 2Gi
-
-  resources:
-    requests:
-      cpu: 50m
-      memory: 64Mi
-    limits:
-      memory: 256Mi
-
+  enabled: false
+externalValkey:
+  existingSecret: orvyn-cache
+  secretKey: connection-uri
 storage:
-  internal:
-    enabled: true
-
-    persistence:
-      enabled: true
-      size: 20Gi
-
-smtp:
-  from: orvyn@example.com
-  existingSecret: orvyn-smtp
-
-ingress:
-  enabled: true
-  className: traefik
-
-  annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-production
-
-  hosts:
-    - host: orvyn.example.com
-      paths:
-        - path: /
-          pathType: Prefix
-
-  tls:
-    - secretName: orvyn-tls
-      hosts:
-        - orvyn.example.com
+  driver: s3
+  s3:
+    internal:
+      enabled: false
+    external:
+      endpoint: https://s3.eu-central-1.amazonaws.com
+    region: eu-central-1
+    bucket: orvyn-attachments
+    forcePathStyle: false
+    existingSecret: orvyn-s3
+    accessKeySecretKey: access-key
+    secretAccessKeySecretKey: secret-key

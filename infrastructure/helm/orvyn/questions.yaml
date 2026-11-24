@@ -1,213 +1,1921 @@
+# Field types verified against rancher/dashboard df071f35b5da8c21e35b134fa72a03159058c01e101 (Questions components).
 questions:
-  # General
-  - variable: global.origin
-    label: Application URL
-    description: Public HTTPS origin of the application.
+  - variable: global.showAdvanced
+    label: Global / show Advanced
+    type: boolean
+    default: false
+    group: General
+  - variable: global.imageRegistry
+    label: Global / image Registry
     type: string
-    required: true
+    default: ghcr.io
     group: General
-
+  - variable: global.imagePullSecrets
+    label: Global / image Pull Secrets
+    type: yaml
+    default: []
+    group: General
+    show_if: global.showAdvanced=true
   - variable: global.storageClass
-    label: Default Storage Class
-    description: Storage class used for persistent volumes.
+    label: Global / storage Class
     type: storageclass
+    default: ""
     group: General
-
+  - variable: global.origin
+    label: Public application URL
+    type: string
+    default: https://orvyn.example.com
+    group: General
+    description: One public HTTPS origin without path or trailing slash. Controls
+      secure cookies, ingress and OIDC callbacks. TLS may terminate at the
+      ingress or an upstream load balancer.
+  - variable: global.generateSecrets
+    label: Generate missing secrets
+    type: boolean
+    default: true
+    group: General
+    description: Helm CLI can generate and reuse retained secrets with lookup.
+      Disable for deterministic GitOps and supply all credentials or references.
+  - variable: global.encryptionKey
+    label: Persistent encryption key
+    type: password
+    default: ""
+    group: General
+    description: 64 hexadecimal characters. Keep a recoverable backup; never replace
+      this key on an existing database.
   - variable: global.existingEncryptionSecret
-    label: Existing Encryption Secret
-    description: Leave empty to generate an encryption key.
+    label: Existing encryption Secret
     type: secret
+    default: ""
     group: General
-
-  # PostgreSQL
+    description: Secret in the release namespace. Takes precedence over inline
+      configuration.
+  - variable: global.encryptionSecretKey
+    label: Global / encryption Secret Key
+    type: string
+    default: ORVYN_ENCRYPTION_KEY
+    group: General
+  - variable: global.secretRevision
+    label: External Secret revision
+    type: string
+    default: ""
+    group: General
+    description: Change after rotating a referenced Secret to roll application pods.
+      A Helm upgrade reruns OIDC configuration.
+  - variable: nameOverride
+    label: Name Override
+    type: string
+    default: ""
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: fullnameOverride
+    label: Fullname Override
+    type: string
+    default: ""
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: web.replicaCount
+    label: Web / replica Count
+    type: int
+    default: 1
+    group: Scaling
+  - variable: web.image.repository
+    label: Web / image / repository
+    type: string
+    default: lucas-gruber/orvyn-web
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: web.image.tag
+    label: Web / image / tag
+    type: string
+    default: ""
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: web.image.digest
+    label: Web / image / digest
+    type: string
+    default: ""
+    group: Advanced
+    description: Pinned digest takes precedence over tag. Clear the digest when
+      intentionally selecting another image tag.
+    show_if: global.showAdvanced=true
+  - variable: web.image.pullPolicy
+    label: Web / image / pull Policy
+    type: enum
+    default: IfNotPresent
+    group: Advanced
+    options:
+      - IfNotPresent
+      - Always
+      - Never
+    show_if: global.showAdvanced=true
+  - variable: web.resources.requests.cpu
+    label: Web / resources / requests / cpu
+    type: string
+    default: 100m
+    group: Resources
+  - variable: web.resources.requests.memory
+    label: Web / resources / requests / memory
+    type: string
+    default: 128Mi
+    group: Resources
+  - variable: web.resources.limits.memory
+    label: Web / resources / limits / memory
+    type: string
+    default: 512Mi
+    group: Resources
+  - variable: web.resources.limits.cpu
+    label: Web / resources / limits / cpu
+    type: string
+    default: "1"
+    group: Resources
+  - variable: web.nodeSelector
+    label: Web / node Selector
+    type: map[string]
+    default: {}
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: web.affinity
+    label: Web / affinity
+    type: yaml
+    default: {}
+    group: Advanced
+    description: Optional native Kubernetes settings. Standard installation,
+      secrets, storage, SSO, scaling and resource fields have individual
+      controls.
+    show_if: global.showAdvanced=true
+  - variable: web.tolerations
+    label: Web / tolerations
+    type: yaml
+    default: []
+    group: Advanced
+    description: Optional native Kubernetes settings. Standard installation,
+      secrets, storage, SSO, scaling and resource fields have individual
+      controls.
+    show_if: global.showAdvanced=true
+  - variable: web.podLabels
+    label: Web / pod Labels
+    type: map[string]
+    default: {}
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: web.podAnnotations
+    label: Web / pod Annotations
+    type: map[string]
+    default: {}
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: web.podSecurityContext.runAsNonRoot
+    label: Web / pod Security Context / run As Non Root
+    type: boolean
+    default: true
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: web.podSecurityContext.runAsUser
+    label: Web / pod Security Context / run As User
+    type: int
+    default: 1000
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: web.podSecurityContext.runAsGroup
+    label: Web / pod Security Context / run As Group
+    type: int
+    default: 1000
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: web.podSecurityContext.fsGroup
+    label: Web / pod Security Context / fs Group
+    type: int
+    default: 1000
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: web.podSecurityContext.fsGroupChangePolicy
+    label: Web / pod Security Context / fs Group Change Policy
+    type: enum
+    default: OnRootMismatch
+    group: Advanced
+    options:
+      - OnRootMismatch
+      - Always
+    show_if: global.showAdvanced=true
+  - variable: web.podSecurityContext.seccompProfile.type
+    label: Web / pod Security Context / seccomp Profile / type
+    type: enum
+    default: RuntimeDefault
+    group: Advanced
+    options:
+      - RuntimeDefault
+      - Localhost
+    show_if: global.showAdvanced=true
+  - variable: web.securityContext.allowPrivilegeEscalation
+    label: Web / security Context / allow Privilege Escalation
+    type: boolean
+    default: false
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: web.securityContext.readOnlyRootFilesystem
+    label: Web / security Context / read Only Root Filesystem
+    type: boolean
+    default: true
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: web.securityContext.capabilities.drop
+    label: Web / security Context / capabilities / drop
+    type: array[string]
+    default:
+      - ALL
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: web.startupProbe
+    label: Web / startup Probe
+    type: yaml
+    default:
+      httpGet:
+        path: /api/v1/health
+        port: 3000
+      failureThreshold: 90
+      periodSeconds: 2
+      timeoutSeconds: 3
+    group: Advanced
+    description: Optional native Kubernetes settings. Standard installation,
+      secrets, storage, SSO, scaling and resource fields have individual
+      controls.
+    show_if: global.showAdvanced=true
+  - variable: web.readinessProbe
+    label: Web / readiness Probe
+    type: yaml
+    default:
+      httpGet:
+        path: /api/v1/health
+        port: 3000
+      periodSeconds: 5
+      timeoutSeconds: 3
+    group: Advanced
+    description: Optional native Kubernetes settings. Standard installation,
+      secrets, storage, SSO, scaling and resource fields have individual
+      controls.
+    show_if: global.showAdvanced=true
+  - variable: web.livenessProbe
+    label: Web / liveness Probe
+    type: yaml
+    default:
+      tcpSocket:
+        port: 3000
+      periodSeconds: 10
+    group: Advanced
+    description: Optional native Kubernetes settings. Standard installation,
+      secrets, storage, SSO, scaling and resource fields have individual
+      controls.
+    show_if: global.showAdvanced=true
+  - variable: web.service.type
+    label: Web / service / type
+    type: enum
+    default: ClusterIP
+    group: Advanced
+    options:
+      - ClusterIP
+      - NodePort
+      - LoadBalancer
+  - variable: web.service.port
+    label: Web / service / port
+    type: int
+    default: 3000
+    group: Advanced
+  - variable: api.replicaCount
+    label: Api / replica Count
+    type: int
+    default: 1
+    group: Scaling
+  - variable: api.image.repository
+    label: Api / image / repository
+    type: string
+    default: lucas-gruber/orvyn-api
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: api.image.tag
+    label: Api / image / tag
+    type: string
+    default: ""
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: api.image.digest
+    label: Api / image / digest
+    type: string
+    default: ""
+    group: Advanced
+    description: Pinned digest takes precedence over tag. Clear the digest when
+      intentionally selecting another image tag.
+    show_if: global.showAdvanced=true
+  - variable: api.image.pullPolicy
+    label: Api / image / pull Policy
+    type: enum
+    default: IfNotPresent
+    group: Advanced
+    options:
+      - IfNotPresent
+      - Always
+      - Never
+    show_if: global.showAdvanced=true
+  - variable: api.resources.requests.cpu
+    label: Api / resources / requests / cpu
+    type: string
+    default: 100m
+    group: Resources
+  - variable: api.resources.requests.memory
+    label: Api / resources / requests / memory
+    type: string
+    default: 128Mi
+    group: Resources
+  - variable: api.resources.limits.memory
+    label: Api / resources / limits / memory
+    type: string
+    default: 512Mi
+    group: Resources
+  - variable: api.resources.limits.cpu
+    label: Api / resources / limits / cpu
+    type: string
+    default: "1"
+    group: Resources
+  - variable: api.nodeSelector
+    label: Api / node Selector
+    type: map[string]
+    default: {}
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: api.affinity
+    label: Api / affinity
+    type: yaml
+    default: {}
+    group: Advanced
+    description: Optional native Kubernetes settings. Standard installation,
+      secrets, storage, SSO, scaling and resource fields have individual
+      controls.
+    show_if: global.showAdvanced=true
+  - variable: api.tolerations
+    label: Api / tolerations
+    type: yaml
+    default: []
+    group: Advanced
+    description: Optional native Kubernetes settings. Standard installation,
+      secrets, storage, SSO, scaling and resource fields have individual
+      controls.
+    show_if: global.showAdvanced=true
+  - variable: api.podLabels
+    label: Api / pod Labels
+    type: map[string]
+    default: {}
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: api.podAnnotations
+    label: Api / pod Annotations
+    type: map[string]
+    default: {}
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: api.podSecurityContext.runAsNonRoot
+    label: Api / pod Security Context / run As Non Root
+    type: boolean
+    default: true
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: api.podSecurityContext.runAsUser
+    label: Api / pod Security Context / run As User
+    type: int
+    default: 1000
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: api.podSecurityContext.runAsGroup
+    label: Api / pod Security Context / run As Group
+    type: int
+    default: 1000
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: api.podSecurityContext.fsGroup
+    label: Api / pod Security Context / fs Group
+    type: int
+    default: 1000
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: api.podSecurityContext.fsGroupChangePolicy
+    label: Api / pod Security Context / fs Group Change Policy
+    type: enum
+    default: OnRootMismatch
+    group: Advanced
+    options:
+      - OnRootMismatch
+      - Always
+    show_if: global.showAdvanced=true
+  - variable: api.podSecurityContext.seccompProfile.type
+    label: Api / pod Security Context / seccomp Profile / type
+    type: enum
+    default: RuntimeDefault
+    group: Advanced
+    options:
+      - RuntimeDefault
+      - Localhost
+    show_if: global.showAdvanced=true
+  - variable: api.securityContext.allowPrivilegeEscalation
+    label: Api / security Context / allow Privilege Escalation
+    type: boolean
+    default: false
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: api.securityContext.readOnlyRootFilesystem
+    label: Api / security Context / read Only Root Filesystem
+    type: boolean
+    default: true
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: api.securityContext.capabilities.drop
+    label: Api / security Context / capabilities / drop
+    type: array[string]
+    default:
+      - ALL
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: api.startupProbe
+    label: Api / startup Probe
+    type: yaml
+    default:
+      httpGet:
+        path: /api/v1/health
+        port: 3001
+      failureThreshold: 90
+      periodSeconds: 2
+      timeoutSeconds: 3
+    group: Advanced
+    description: Optional native Kubernetes settings. Standard installation,
+      secrets, storage, SSO, scaling and resource fields have individual
+      controls.
+    show_if: global.showAdvanced=true
+  - variable: api.readinessProbe
+    label: Api / readiness Probe
+    type: yaml
+    default:
+      httpGet:
+        path: /api/v1/health
+        port: 3001
+      periodSeconds: 5
+      timeoutSeconds: 3
+    group: Advanced
+    description: Optional native Kubernetes settings. Standard installation,
+      secrets, storage, SSO, scaling and resource fields have individual
+      controls.
+    show_if: global.showAdvanced=true
+  - variable: api.livenessProbe
+    label: Api / liveness Probe
+    type: yaml
+    default:
+      httpGet:
+        path: /api/v1/live
+        port: 3001
+      periodSeconds: 10
+      timeoutSeconds: 3
+      failureThreshold: 6
+    group: Advanced
+    description: Optional native Kubernetes settings. Standard installation,
+      secrets, storage, SSO, scaling and resource fields have individual
+      controls.
+    show_if: global.showAdvanced=true
+  - variable: api.service.type
+    label: Api / service / type
+    type: enum
+    default: ClusterIP
+    group: Advanced
+    options:
+      - ClusterIP
+  - variable: api.service.port
+    label: Api / service / port
+    type: int
+    default: 3001
+    group: Advanced
+  - variable: api.maxUploadBytes
+    label: Api / max Upload Bytes
+    type: int
+    default: 10485760
+    group: Advanced
+  - variable: worker.replicaCount
+    label: Worker / replica Count
+    type: int
+    default: 1
+    group: Scaling
+  - variable: worker.image.repository
+    label: Worker / image / repository
+    type: string
+    default: lucas-gruber/orvyn-worker
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: worker.image.tag
+    label: Worker / image / tag
+    type: string
+    default: ""
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: worker.image.digest
+    label: Worker / image / digest
+    type: string
+    default: ""
+    group: Advanced
+    description: Pinned digest takes precedence over tag. Clear the digest when
+      intentionally selecting another image tag.
+    show_if: global.showAdvanced=true
+  - variable: worker.image.pullPolicy
+    label: Worker / image / pull Policy
+    type: enum
+    default: IfNotPresent
+    group: Advanced
+    options:
+      - IfNotPresent
+      - Always
+      - Never
+    show_if: global.showAdvanced=true
+  - variable: worker.resources.requests.cpu
+    label: Worker / resources / requests / cpu
+    type: string
+    default: 100m
+    group: Resources
+  - variable: worker.resources.requests.memory
+    label: Worker / resources / requests / memory
+    type: string
+    default: 128Mi
+    group: Resources
+  - variable: worker.resources.limits.memory
+    label: Worker / resources / limits / memory
+    type: string
+    default: 512Mi
+    group: Resources
+  - variable: worker.resources.limits.cpu
+    label: Worker / resources / limits / cpu
+    type: string
+    default: "1"
+    group: Resources
+  - variable: worker.nodeSelector
+    label: Worker / node Selector
+    type: map[string]
+    default: {}
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: worker.affinity
+    label: Worker / affinity
+    type: yaml
+    default: {}
+    group: Advanced
+    description: Optional native Kubernetes settings. Standard installation,
+      secrets, storage, SSO, scaling and resource fields have individual
+      controls.
+    show_if: global.showAdvanced=true
+  - variable: worker.tolerations
+    label: Worker / tolerations
+    type: yaml
+    default: []
+    group: Advanced
+    description: Optional native Kubernetes settings. Standard installation,
+      secrets, storage, SSO, scaling and resource fields have individual
+      controls.
+    show_if: global.showAdvanced=true
+  - variable: worker.podLabels
+    label: Worker / pod Labels
+    type: map[string]
+    default: {}
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: worker.podAnnotations
+    label: Worker / pod Annotations
+    type: map[string]
+    default: {}
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: worker.podSecurityContext.runAsNonRoot
+    label: Worker / pod Security Context / run As Non Root
+    type: boolean
+    default: true
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: worker.podSecurityContext.runAsUser
+    label: Worker / pod Security Context / run As User
+    type: int
+    default: 1000
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: worker.podSecurityContext.runAsGroup
+    label: Worker / pod Security Context / run As Group
+    type: int
+    default: 1000
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: worker.podSecurityContext.fsGroup
+    label: Worker / pod Security Context / fs Group
+    type: int
+    default: 1000
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: worker.podSecurityContext.fsGroupChangePolicy
+    label: Worker / pod Security Context / fs Group Change Policy
+    type: enum
+    default: OnRootMismatch
+    group: Advanced
+    options:
+      - OnRootMismatch
+      - Always
+    show_if: global.showAdvanced=true
+  - variable: worker.podSecurityContext.seccompProfile.type
+    label: Worker / pod Security Context / seccomp Profile / type
+    type: enum
+    default: RuntimeDefault
+    group: Advanced
+    options:
+      - RuntimeDefault
+      - Localhost
+    show_if: global.showAdvanced=true
+  - variable: worker.securityContext.allowPrivilegeEscalation
+    label: Worker / security Context / allow Privilege Escalation
+    type: boolean
+    default: false
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: worker.securityContext.readOnlyRootFilesystem
+    label: Worker / security Context / read Only Root Filesystem
+    type: boolean
+    default: true
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: worker.securityContext.capabilities.drop
+    label: Worker / security Context / capabilities / drop
+    type: array[string]
+    default:
+      - ALL
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: worker.startupProbe
+    label: Worker / startup Probe
+    type: yaml
+    default: {}
+    group: Advanced
+    description: Optional native Kubernetes settings. Standard installation,
+      secrets, storage, SSO, scaling and resource fields have individual
+      controls.
+    show_if: global.showAdvanced=true
+  - variable: worker.readinessProbe
+    label: Worker / readiness Probe
+    type: yaml
+    default: {}
+    group: Advanced
+    description: Optional native Kubernetes settings. Standard installation,
+      secrets, storage, SSO, scaling and resource fields have individual
+      controls.
+    show_if: global.showAdvanced=true
+  - variable: worker.livenessProbe
+    label: Worker / liveness Probe
+    type: yaml
+    default: {}
+    group: Advanced
+    description: Optional native Kubernetes settings. Standard installation,
+      secrets, storage, SSO, scaling and resource fields have individual
+      controls.
+    show_if: global.showAdvanced=true
+  - variable: collaboration.replicaCount
+    label: Collaboration / replica Count
+    type: int
+    default: 1
+    group: Scaling
+  - variable: collaboration.image.repository
+    label: Collaboration / image / repository
+    type: string
+    default: lucas-gruber/orvyn-collaboration
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: collaboration.image.tag
+    label: Collaboration / image / tag
+    type: string
+    default: ""
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: collaboration.image.digest
+    label: Collaboration / image / digest
+    type: string
+    default: ""
+    group: Advanced
+    description: Pinned digest takes precedence over tag. Clear the digest when
+      intentionally selecting another image tag.
+    show_if: global.showAdvanced=true
+  - variable: collaboration.image.pullPolicy
+    label: Collaboration / image / pull Policy
+    type: enum
+    default: IfNotPresent
+    group: Advanced
+    options:
+      - IfNotPresent
+      - Always
+      - Never
+    show_if: global.showAdvanced=true
+  - variable: collaboration.resources.requests.cpu
+    label: Collaboration / resources / requests / cpu
+    type: string
+    default: 100m
+    group: Resources
+  - variable: collaboration.resources.requests.memory
+    label: Collaboration / resources / requests / memory
+    type: string
+    default: 128Mi
+    group: Resources
+  - variable: collaboration.resources.limits.memory
+    label: Collaboration / resources / limits / memory
+    type: string
+    default: 512Mi
+    group: Resources
+  - variable: collaboration.resources.limits.cpu
+    label: Collaboration / resources / limits / cpu
+    type: string
+    default: "1"
+    group: Resources
+  - variable: collaboration.nodeSelector
+    label: Collaboration / node Selector
+    type: map[string]
+    default: {}
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: collaboration.affinity
+    label: Collaboration / affinity
+    type: yaml
+    default: {}
+    group: Advanced
+    description: Optional native Kubernetes settings. Standard installation,
+      secrets, storage, SSO, scaling and resource fields have individual
+      controls.
+    show_if: global.showAdvanced=true
+  - variable: collaboration.tolerations
+    label: Collaboration / tolerations
+    type: yaml
+    default: []
+    group: Advanced
+    description: Optional native Kubernetes settings. Standard installation,
+      secrets, storage, SSO, scaling and resource fields have individual
+      controls.
+    show_if: global.showAdvanced=true
+  - variable: collaboration.podLabels
+    label: Collaboration / pod Labels
+    type: map[string]
+    default: {}
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: collaboration.podAnnotations
+    label: Collaboration / pod Annotations
+    type: map[string]
+    default: {}
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: collaboration.podSecurityContext.runAsNonRoot
+    label: Collaboration / pod Security Context / run As Non Root
+    type: boolean
+    default: true
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: collaboration.podSecurityContext.runAsUser
+    label: Collaboration / pod Security Context / run As User
+    type: int
+    default: 1000
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: collaboration.podSecurityContext.runAsGroup
+    label: Collaboration / pod Security Context / run As Group
+    type: int
+    default: 1000
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: collaboration.podSecurityContext.fsGroup
+    label: Collaboration / pod Security Context / fs Group
+    type: int
+    default: 1000
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: collaboration.podSecurityContext.fsGroupChangePolicy
+    label: Collaboration / pod Security Context / fs Group Change Policy
+    type: enum
+    default: OnRootMismatch
+    group: Advanced
+    options:
+      - OnRootMismatch
+      - Always
+    show_if: global.showAdvanced=true
+  - variable: collaboration.podSecurityContext.seccompProfile.type
+    label: Collaboration / pod Security Context / seccomp Profile / type
+    type: enum
+    default: RuntimeDefault
+    group: Advanced
+    options:
+      - RuntimeDefault
+      - Localhost
+    show_if: global.showAdvanced=true
+  - variable: collaboration.securityContext.allowPrivilegeEscalation
+    label: Collaboration / security Context / allow Privilege Escalation
+    type: boolean
+    default: false
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: collaboration.securityContext.readOnlyRootFilesystem
+    label: Collaboration / security Context / read Only Root Filesystem
+    type: boolean
+    default: true
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: collaboration.securityContext.capabilities.drop
+    label: Collaboration / security Context / capabilities / drop
+    type: array[string]
+    default:
+      - ALL
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: collaboration.startupProbe
+    label: Collaboration / startup Probe
+    type: yaml
+    default:
+      httpGet:
+        path: /health
+        port: 3002
+      failureThreshold: 90
+      periodSeconds: 2
+      timeoutSeconds: 3
+    group: Advanced
+    description: Optional native Kubernetes settings. Standard installation,
+      secrets, storage, SSO, scaling and resource fields have individual
+      controls.
+    show_if: global.showAdvanced=true
+  - variable: collaboration.readinessProbe
+    label: Collaboration / readiness Probe
+    type: yaml
+    default:
+      httpGet:
+        path: /health
+        port: 3002
+      periodSeconds: 5
+      timeoutSeconds: 3
+    group: Advanced
+    description: Optional native Kubernetes settings. Standard installation,
+      secrets, storage, SSO, scaling and resource fields have individual
+      controls.
+    show_if: global.showAdvanced=true
+  - variable: collaboration.livenessProbe
+    label: Collaboration / liveness Probe
+    type: yaml
+    default:
+      tcpSocket:
+        port: 3002
+      periodSeconds: 10
+    group: Advanced
+    description: Optional native Kubernetes settings. Standard installation,
+      secrets, storage, SSO, scaling and resource fields have individual
+      controls.
+    show_if: global.showAdvanced=true
+  - variable: collaboration.service.type
+    label: Collaboration / service / type
+    type: enum
+    default: ClusterIP
+    group: Advanced
+    options:
+      - ClusterIP
+  - variable: collaboration.service.port
+    label: Collaboration / service / port
+    type: int
+    default: 3002
+    group: Advanced
+  - variable: collaboration.namespace
+    label: Collaboration / namespace
+    type: string
+    default: orvyn:collaboration
+    group: Advanced
   - variable: postgresql.enabled
-    label: Deploy internal PostgreSQL
-    description: Disable to use an external PostgreSQL server.
+    label: Postgresql / enabled
     type: boolean
     default: true
     group: PostgreSQL
-
-  - variable: postgresql.auth.database
-    label: Database Name
+  - variable: postgresql.image.repository
+    label: Postgresql / image / repository
     type: string
-    default: orvyn
-    show_if: "postgresql.enabled=true"
+    default: docker.io/library/postgres
     group: PostgreSQL
-
+    show_if: global.showAdvanced=true&&postgresql.enabled=true
+  - variable: postgresql.image.tag
+    label: Postgresql / image / tag
+    type: string
+    default: "17"
+    group: PostgreSQL
+    show_if: global.showAdvanced=true&&postgresql.enabled=true
+  - variable: postgresql.image.digest
+    label: Postgresql / image / digest
+    type: string
+    default: sha256:0d938e975177bef9f1f61f3f9dbcf2e0aa0a139568f66d3415ed8892eb97f6ac
+    group: PostgreSQL
+    description: Pinned digest takes precedence over tag. Clear the digest when
+      intentionally selecting another image tag.
+    show_if: global.showAdvanced=true&&postgresql.enabled=true
+  - variable: postgresql.image.pullPolicy
+    label: Postgresql / image / pull Policy
+    type: enum
+    default: IfNotPresent
+    group: PostgreSQL
+    options:
+      - IfNotPresent
+      - Always
+      - Never
+    show_if: global.showAdvanced=true&&postgresql.enabled=true
   - variable: postgresql.auth.username
-    label: Database Username
+    label: Postgresql / auth / username
     type: string
     default: orvyn
-    show_if: "postgresql.enabled=true"
     group: PostgreSQL
-
+    show_if: postgresql.enabled=true
+  - variable: postgresql.auth.database
+    label: Postgresql / auth / database
+    type: string
+    default: orvyn
+    group: PostgreSQL
+    show_if: postgresql.enabled=true
   - variable: postgresql.auth.password
-    label: Database Password
-    description: Leave empty to generate a password.
+    label: Postgresql / auth / password
     type: password
-    show_if: "postgresql.enabled=true"
+    default: ""
     group: PostgreSQL
-
+    show_if: postgresql.enabled=true
+  - variable: postgresql.auth.existingSecret
+    label: Postgresql / auth / existing Secret
+    type: secret
+    default: ""
+    group: PostgreSQL
+    description: Existing Secret in the release namespace; use the key field below
+      for a custom key.
+    show_if: postgresql.enabled=true
+  - variable: postgresql.auth.secretKey
+    label: Postgresql / auth / secret Key
+    type: string
+    default: POSTGRES_PASSWORD
+    group: PostgreSQL
+    show_if: postgresql.enabled=true
+  - variable: postgresql.persistence.enabled
+    label: Postgresql / persistence / enabled
+    type: boolean
+    default: true
+    group: PostgreSQL
+    show_if: postgresql.enabled=true
+  - variable: postgresql.persistence.existingClaim
+    label: Postgresql / persistence / existing Claim
+    type: pvc
+    default: ""
+    group: PostgreSQL
+    show_if: postgresql.enabled=true
+  - variable: postgresql.persistence.storageClass
+    label: Postgresql / persistence / storage Class
+    type: storageclass
+    default: ""
+    group: PostgreSQL
+    show_if: postgresql.enabled=true
+  - variable: postgresql.persistence.accessMode
+    label: Postgresql / persistence / access Mode
+    type: enum
+    default: ReadWriteOnce
+    group: PostgreSQL
+    options:
+      - ReadWriteOnce
+      - ReadWriteMany
+    show_if: postgresql.enabled=true
   - variable: postgresql.persistence.size
-    label: Database Storage Size
+    label: Postgresql / persistence / size
     type: string
     default: 10Gi
-    show_if: "postgresql.enabled=true"
     group: PostgreSQL
-
+    show_if: postgresql.enabled=true
+  - variable: postgresql.persistence.annotations
+    label: Postgresql / persistence / annotations
+    type: map[string]
+    default: {}
+    group: PostgreSQL
+    show_if: postgresql.enabled=true
+  - variable: postgresql.persistence.retain
+    label: Postgresql / persistence / retain
+    type: boolean
+    default: true
+    group: PostgreSQL
+    show_if: postgresql.enabled=true
+  - variable: postgresql.resources.requests.cpu
+    label: Postgresql / resources / requests / cpu
+    type: string
+    default: 100m
+    group: Resources
+    show_if: postgresql.enabled=true
+  - variable: postgresql.resources.requests.memory
+    label: Postgresql / resources / requests / memory
+    type: string
+    default: 128Mi
+    group: Resources
+    show_if: postgresql.enabled=true
+  - variable: postgresql.resources.limits.memory
+    label: Postgresql / resources / limits / memory
+    type: string
+    default: 512Mi
+    group: Resources
+    show_if: postgresql.enabled=true
+  - variable: postgresql.resources.limits.cpu
+    label: Postgresql / resources / limits / cpu
+    type: string
+    default: "1"
+    group: Resources
+    show_if: postgresql.enabled=true
+  - variable: postgresql.nodeSelector
+    label: Postgresql / node Selector
+    type: map[string]
+    default: {}
+    group: PostgreSQL
+    show_if: global.showAdvanced=true&&postgresql.enabled=true
+  - variable: postgresql.affinity
+    label: Postgresql / affinity
+    type: yaml
+    default: {}
+    group: PostgreSQL
+    description: Optional native Kubernetes settings. Standard installation,
+      secrets, storage, SSO, scaling and resource fields have individual
+      controls.
+    show_if: global.showAdvanced=true&&postgresql.enabled=true
+  - variable: postgresql.tolerations
+    label: Postgresql / tolerations
+    type: yaml
+    default: []
+    group: PostgreSQL
+    description: Optional native Kubernetes settings. Standard installation,
+      secrets, storage, SSO, scaling and resource fields have individual
+      controls.
+    show_if: global.showAdvanced=true&&postgresql.enabled=true
+  - variable: postgresql.podLabels
+    label: Postgresql / pod Labels
+    type: map[string]
+    default: {}
+    group: PostgreSQL
+    show_if: global.showAdvanced=true&&postgresql.enabled=true
+  - variable: postgresql.podAnnotations
+    label: Postgresql / pod Annotations
+    type: map[string]
+    default: {}
+    group: PostgreSQL
+    show_if: global.showAdvanced=true&&postgresql.enabled=true
+  - variable: postgresql.podSecurityContext.runAsNonRoot
+    label: Postgresql / pod Security Context / run As Non Root
+    type: boolean
+    default: true
+    group: PostgreSQL
+    show_if: global.showAdvanced=true&&postgresql.enabled=true
+  - variable: postgresql.podSecurityContext.runAsUser
+    label: Postgresql / pod Security Context / run As User
+    type: int
+    default: 999
+    group: PostgreSQL
+    show_if: global.showAdvanced=true&&postgresql.enabled=true
+  - variable: postgresql.podSecurityContext.runAsGroup
+    label: Postgresql / pod Security Context / run As Group
+    type: int
+    default: 999
+    group: PostgreSQL
+    show_if: global.showAdvanced=true&&postgresql.enabled=true
+  - variable: postgresql.podSecurityContext.fsGroup
+    label: Postgresql / pod Security Context / fs Group
+    type: int
+    default: 999
+    group: PostgreSQL
+    show_if: global.showAdvanced=true&&postgresql.enabled=true
+  - variable: postgresql.podSecurityContext.fsGroupChangePolicy
+    label: Postgresql / pod Security Context / fs Group Change Policy
+    type: enum
+    default: OnRootMismatch
+    group: PostgreSQL
+    options:
+      - OnRootMismatch
+      - Always
+    show_if: global.showAdvanced=true&&postgresql.enabled=true
+  - variable: postgresql.podSecurityContext.seccompProfile.type
+    label: Postgresql / pod Security Context / seccomp Profile / type
+    type: enum
+    default: RuntimeDefault
+    group: PostgreSQL
+    options:
+      - RuntimeDefault
+      - Localhost
+    show_if: global.showAdvanced=true&&postgresql.enabled=true
+  - variable: postgresql.securityContext.allowPrivilegeEscalation
+    label: Postgresql / security Context / allow Privilege Escalation
+    type: boolean
+    default: false
+    group: PostgreSQL
+    show_if: global.showAdvanced=true&&postgresql.enabled=true
+  - variable: postgresql.securityContext.readOnlyRootFilesystem
+    label: Postgresql / security Context / read Only Root Filesystem
+    type: boolean
+    default: true
+    group: PostgreSQL
+    show_if: global.showAdvanced=true&&postgresql.enabled=true
+  - variable: postgresql.securityContext.capabilities.drop
+    label: Postgresql / security Context / capabilities / drop
+    type: array[string]
+    default:
+      - ALL
+    group: PostgreSQL
+    show_if: global.showAdvanced=true&&postgresql.enabled=true
   - variable: externalPostgresql.url
-    label: External Database URL
+    label: External Postgresql / url
     type: password
-    show_if: "postgresql.enabled=false"
+    default: ""
     group: PostgreSQL
-
+    show_if: postgresql.enabled=false
   - variable: externalPostgresql.existingSecret
-    label: Existing Database Secret
+    label: External Postgresql / existing Secret
     type: secret
-    show_if: "postgresql.enabled=false"
+    default: ""
     group: PostgreSQL
-
-  # Valkey
+    description: Existing Secret in the release namespace; use the key field below
+      for a custom key.
+    show_if: postgresql.enabled=false
+  - variable: externalPostgresql.secretKey
+    label: External Postgresql / secret Key
+    type: string
+    default: DATABASE_URL
+    group: PostgreSQL
+    show_if: postgresql.enabled=false
   - variable: valkey.enabled
-    label: Deploy internal Valkey
+    label: Valkey / enabled
     type: boolean
     default: true
     group: Valkey
-
-  - variable: valkey.auth.password
-    label: Valkey Password
-    description: Leave empty to generate a password.
-    type: password
-    show_if: "valkey.enabled=true"
+  - variable: valkey.image.repository
+    label: Valkey / image / repository
+    type: string
+    default: docker.io/valkey/valkey
     group: Valkey
-
+    show_if: global.showAdvanced=true&&valkey.enabled=true
+  - variable: valkey.image.tag
+    label: Valkey / image / tag
+    type: string
+    default: "8"
+    group: Valkey
+    show_if: global.showAdvanced=true&&valkey.enabled=true
+  - variable: valkey.image.digest
+    label: Valkey / image / digest
+    type: string
+    default: sha256:5032c4dd7abe08d6fd9382054608183e2bf1f7e3895ef619b8784698454325f7
+    group: Valkey
+    description: Pinned digest takes precedence over tag. Clear the digest when
+      intentionally selecting another image tag.
+    show_if: global.showAdvanced=true&&valkey.enabled=true
+  - variable: valkey.image.pullPolicy
+    label: Valkey / image / pull Policy
+    type: enum
+    default: IfNotPresent
+    group: Valkey
+    options:
+      - IfNotPresent
+      - Always
+      - Never
+    show_if: global.showAdvanced=true&&valkey.enabled=true
+  - variable: valkey.auth.password
+    label: Valkey / auth / password
+    type: password
+    default: ""
+    group: Valkey
+    show_if: valkey.enabled=true
+  - variable: valkey.auth.existingSecret
+    label: Valkey / auth / existing Secret
+    type: secret
+    default: ""
+    group: Valkey
+    description: Existing Secret in the release namespace; use the key field below
+      for a custom key.
+    show_if: valkey.enabled=true
+  - variable: valkey.auth.secretKey
+    label: Valkey / auth / secret Key
+    type: string
+    default: VALKEY_PASSWORD
+    group: Valkey
+    show_if: valkey.enabled=true
+  - variable: valkey.persistence.enabled
+    label: Valkey / persistence / enabled
+    type: boolean
+    default: true
+    group: Valkey
+    show_if: valkey.enabled=true
+  - variable: valkey.persistence.existingClaim
+    label: Valkey / persistence / existing Claim
+    type: pvc
+    default: ""
+    group: Valkey
+    show_if: valkey.enabled=true
+  - variable: valkey.persistence.storageClass
+    label: Valkey / persistence / storage Class
+    type: storageclass
+    default: ""
+    group: Valkey
+    show_if: valkey.enabled=true
+  - variable: valkey.persistence.accessMode
+    label: Valkey / persistence / access Mode
+    type: enum
+    default: ReadWriteOnce
+    group: Valkey
+    options:
+      - ReadWriteOnce
+      - ReadWriteMany
+    show_if: valkey.enabled=true
   - variable: valkey.persistence.size
-    label: Valkey Storage Size
+    label: Valkey / persistence / size
     type: string
     default: 2Gi
-    show_if: "valkey.enabled=true"
     group: Valkey
-
+    show_if: valkey.enabled=true
+  - variable: valkey.persistence.annotations
+    label: Valkey / persistence / annotations
+    type: map[string]
+    default: {}
+    group: Valkey
+    show_if: valkey.enabled=true
+  - variable: valkey.persistence.retain
+    label: Valkey / persistence / retain
+    type: boolean
+    default: true
+    group: Valkey
+    show_if: valkey.enabled=true
+  - variable: valkey.resources.requests.cpu
+    label: Valkey / resources / requests / cpu
+    type: string
+    default: 100m
+    group: Resources
+    show_if: valkey.enabled=true
+  - variable: valkey.resources.requests.memory
+    label: Valkey / resources / requests / memory
+    type: string
+    default: 128Mi
+    group: Resources
+    show_if: valkey.enabled=true
+  - variable: valkey.resources.limits.memory
+    label: Valkey / resources / limits / memory
+    type: string
+    default: 512Mi
+    group: Resources
+    show_if: valkey.enabled=true
+  - variable: valkey.resources.limits.cpu
+    label: Valkey / resources / limits / cpu
+    type: string
+    default: "1"
+    group: Resources
+    show_if: valkey.enabled=true
+  - variable: valkey.nodeSelector
+    label: Valkey / node Selector
+    type: map[string]
+    default: {}
+    group: Valkey
+    show_if: global.showAdvanced=true&&valkey.enabled=true
+  - variable: valkey.affinity
+    label: Valkey / affinity
+    type: yaml
+    default: {}
+    group: Valkey
+    description: Optional native Kubernetes settings. Standard installation,
+      secrets, storage, SSO, scaling and resource fields have individual
+      controls.
+    show_if: global.showAdvanced=true&&valkey.enabled=true
+  - variable: valkey.tolerations
+    label: Valkey / tolerations
+    type: yaml
+    default: []
+    group: Valkey
+    description: Optional native Kubernetes settings. Standard installation,
+      secrets, storage, SSO, scaling and resource fields have individual
+      controls.
+    show_if: global.showAdvanced=true&&valkey.enabled=true
+  - variable: valkey.podLabels
+    label: Valkey / pod Labels
+    type: map[string]
+    default: {}
+    group: Valkey
+    show_if: global.showAdvanced=true&&valkey.enabled=true
+  - variable: valkey.podAnnotations
+    label: Valkey / pod Annotations
+    type: map[string]
+    default: {}
+    group: Valkey
+    show_if: global.showAdvanced=true&&valkey.enabled=true
+  - variable: valkey.podSecurityContext.runAsNonRoot
+    label: Valkey / pod Security Context / run As Non Root
+    type: boolean
+    default: true
+    group: Valkey
+    show_if: global.showAdvanced=true&&valkey.enabled=true
+  - variable: valkey.podSecurityContext.runAsUser
+    label: Valkey / pod Security Context / run As User
+    type: int
+    default: 999
+    group: Valkey
+    show_if: global.showAdvanced=true&&valkey.enabled=true
+  - variable: valkey.podSecurityContext.runAsGroup
+    label: Valkey / pod Security Context / run As Group
+    type: int
+    default: 999
+    group: Valkey
+    show_if: global.showAdvanced=true&&valkey.enabled=true
+  - variable: valkey.podSecurityContext.fsGroup
+    label: Valkey / pod Security Context / fs Group
+    type: int
+    default: 999
+    group: Valkey
+    show_if: global.showAdvanced=true&&valkey.enabled=true
+  - variable: valkey.podSecurityContext.fsGroupChangePolicy
+    label: Valkey / pod Security Context / fs Group Change Policy
+    type: enum
+    default: OnRootMismatch
+    group: Valkey
+    options:
+      - OnRootMismatch
+      - Always
+    show_if: global.showAdvanced=true&&valkey.enabled=true
+  - variable: valkey.podSecurityContext.seccompProfile.type
+    label: Valkey / pod Security Context / seccomp Profile / type
+    type: enum
+    default: RuntimeDefault
+    group: Valkey
+    options:
+      - RuntimeDefault
+      - Localhost
+    show_if: global.showAdvanced=true&&valkey.enabled=true
+  - variable: valkey.securityContext.allowPrivilegeEscalation
+    label: Valkey / security Context / allow Privilege Escalation
+    type: boolean
+    default: false
+    group: Valkey
+    show_if: global.showAdvanced=true&&valkey.enabled=true
+  - variable: valkey.securityContext.readOnlyRootFilesystem
+    label: Valkey / security Context / read Only Root Filesystem
+    type: boolean
+    default: true
+    group: Valkey
+    show_if: global.showAdvanced=true&&valkey.enabled=true
+  - variable: valkey.securityContext.capabilities.drop
+    label: Valkey / security Context / capabilities / drop
+    type: array[string]
+    default:
+      - ALL
+    group: Valkey
+    show_if: global.showAdvanced=true&&valkey.enabled=true
   - variable: externalValkey.url
-    label: External Redis URL
+    label: External Valkey / url
     type: password
-    show_if: "valkey.enabled=false"
+    default: ""
     group: Valkey
-
+    show_if: valkey.enabled=false
   - variable: externalValkey.existingSecret
-    label: Existing Redis Secret
+    label: External Valkey / existing Secret
     type: secret
-    show_if: "valkey.enabled=false"
+    default: ""
     group: Valkey
-
-  # Storage
-  - variable: storage.internal.enabled
-    label: Deploy internal SeaweedFS
-    description: Disable to use an external S3 provider.
+    description: Existing Secret in the release namespace; use the key field below
+      for a custom key.
+    show_if: valkey.enabled=false
+  - variable: externalValkey.secretKey
+    label: External Valkey / secret Key
+    type: string
+    default: REDIS_URL
+    group: Valkey
+    show_if: valkey.enabled=false
+  - variable: storage.driver
+    label: Storage / driver
+    type: enum
+    default: s3
+    group: Storage
+    options:
+      - local
+      - s3
+  - variable: storage.local.path
+    label: Storage / local / path
+    type: string
+    default: /data/attachments
+    group: Storage
+    show_if: storage.driver=local
+  - variable: storage.local.persistence.enabled
+    label: Persist local attachments
     type: boolean
     default: true
     group: Storage
-
-  - variable: storage.internal.persistence.size
-    label: Storage Volume Size
+    description: Disabling persistence uses one API pod with a worker sidecar. All
+      files disappear when this pod is replaced.
+    show_if: storage.driver=local
+  - variable: storage.local.persistence.existingClaim
+    label: Storage / local / persistence / existing Claim
+    type: pvc
+    default: ""
+    group: Storage
+    show_if: storage.driver=local
+  - variable: storage.local.persistence.storageClass
+    label: Storage / local / persistence / storage Class
+    type: storageclass
+    default: ""
+    group: Storage
+    show_if: storage.driver=local
+  - variable: storage.local.persistence.accessMode
+    label: Attachment volume access mode
+    type: enum
+    default: ReadWriteOnce
+    group: Storage
+    description: "ReadWriteOnce: one API and one worker colocated on one node.
+      ReadWriteMany: shared storage for replicas across nodes."
+    options:
+      - ReadWriteOnce
+      - ReadWriteMany
+    show_if: storage.driver=local
+  - variable: storage.local.persistence.size
+    label: Storage / local / persistence / size
     type: string
     default: 20Gi
-    show_if: "storage.internal.enabled=true"
     group: Storage
-
-  - variable: storage.external.endpoint
-    label: External S3 Endpoint
-    type: string
-    show_if: "storage.internal.enabled=false"
+    show_if: storage.driver=local
+  - variable: storage.local.persistence.annotations
+    label: Storage / local / persistence / annotations
+    type: map[string]
+    default: {}
     group: Storage
-
-  - variable: storage.external.existingSecret
-    label: Existing S3 Credentials Secret
-    type: secret
-    show_if: "storage.internal.enabled=false"
+    show_if: storage.driver=local
+  - variable: storage.local.persistence.retain
+    label: Storage / local / persistence / retain
+    type: boolean
+    default: true
     group: Storage
-
-  - variable: storage.bucket
-    label: S3 Bucket
+    show_if: storage.driver=local
+  - variable: storage.s3.bucket
+    label: Storage / s3 / bucket
     type: string
     default: orvyn
     group: Storage
-
-  - variable: storage.region
-    label: S3 Region
+    show_if: storage.driver=s3
+  - variable: storage.s3.region
+    label: Storage / s3 / region
     type: string
     default: us-east-1
     group: Storage
-
-  - variable: storage.forcePathStyle
-    label: Force Path Style
+    show_if: storage.driver=s3
+  - variable: storage.s3.forcePathStyle
+    label: Storage / s3 / force Path Style
     type: boolean
     default: true
     group: Storage
-
-  # SMTP
-  - variable: smtp.url
-    label: SMTP Connection URL
+    show_if: storage.driver=s3
+  - variable: storage.s3.accessKeyId
+    label: Storage / s3 / access Key Id
     type: password
-    group: SMTP
-
-  - variable: smtp.existingSecret
-    label: Existing SMTP Secret
+    default: ""
+    group: Storage
+    show_if: storage.driver=s3
+  - variable: storage.s3.secretAccessKey
+    label: Storage / s3 / secret Access Key
+    type: password
+    default: ""
+    group: Storage
+    show_if: storage.driver=s3
+  - variable: storage.s3.existingSecret
+    label: Storage / s3 / existing Secret
     type: secret
-    group: SMTP
-
-  - variable: smtp.from
-    label: Sender Address
+    default: ""
+    group: Storage
+    description: Existing Secret in the release namespace; use the key field below
+      for a custom key.
+    show_if: storage.driver=s3
+  - variable: storage.s3.accessKeySecretKey
+    label: Storage / s3 / access Key Secret Key
     type: string
-    required: true
+    default: S3_ACCESS_KEY_ID
+    group: Storage
+    show_if: storage.driver=s3
+  - variable: storage.s3.secretAccessKeySecretKey
+    label: Storage / s3 / secret Access Key Secret Key
+    type: password
+    default: S3_SECRET_ACCESS_KEY
+    group: Storage
+    show_if: storage.driver=s3
+  - variable: storage.s3.internal.enabled
+    label: Storage / s3 / internal / enabled
+    type: boolean
+    default: true
+    group: Storage
+    show_if: storage.driver=s3
+  - variable: storage.s3.internal.image.repository
+    label: Storage / s3 / internal / image / repository
+    type: string
+    default: docker.io/chrislusf/seaweedfs
+    group: Storage
+    show_if: global.showAdvanced=true&&storage.driver=s3&&storage.s3.internal.enabled=true
+  - variable: storage.s3.internal.image.tag
+    label: Storage / s3 / internal / image / tag
+    type: string
+    default: ""
+    group: Storage
+    show_if: global.showAdvanced=true&&storage.driver=s3&&storage.s3.internal.enabled=true
+  - variable: storage.s3.internal.image.digest
+    label: Storage / s3 / internal / image / digest
+    type: string
+    default: sha256:8779e14fbb8c76c607bc2ed934aeeb61e5319016f0ac1ba4667eae8f40fe623b
+    group: Storage
+    description: Pinned digest takes precedence over tag. Clear the digest when
+      intentionally selecting another image tag.
+    show_if: global.showAdvanced=true&&storage.driver=s3&&storage.s3.internal.enabled=true
+  - variable: storage.s3.internal.image.pullPolicy
+    label: Storage / s3 / internal / image / pull Policy
+    type: enum
+    default: IfNotPresent
+    group: Storage
+    options:
+      - IfNotPresent
+      - Always
+      - Never
+    show_if: global.showAdvanced=true&&storage.driver=s3&&storage.s3.internal.enabled=true
+  - variable: storage.s3.internal.persistence.enabled
+    label: Storage / s3 / internal / persistence / enabled
+    type: boolean
+    default: true
+    group: Storage
+    show_if: storage.driver=s3&&storage.s3.internal.enabled=true
+  - variable: storage.s3.internal.persistence.existingClaim
+    label: Storage / s3 / internal / persistence / existing Claim
+    type: pvc
+    default: ""
+    group: Storage
+    show_if: storage.driver=s3&&storage.s3.internal.enabled=true
+  - variable: storage.s3.internal.persistence.storageClass
+    label: Storage / s3 / internal / persistence / storage Class
+    type: storageclass
+    default: ""
+    group: Storage
+    show_if: storage.driver=s3&&storage.s3.internal.enabled=true
+  - variable: storage.s3.internal.persistence.accessMode
+    label: Storage / s3 / internal / persistence / access Mode
+    type: enum
+    default: ReadWriteOnce
+    group: Storage
+    options:
+      - ReadWriteOnce
+      - ReadWriteMany
+    show_if: storage.driver=s3&&storage.s3.internal.enabled=true
+  - variable: storage.s3.internal.persistence.size
+    label: Storage / s3 / internal / persistence / size
+    type: string
+    default: 20Gi
+    group: Storage
+    show_if: storage.driver=s3&&storage.s3.internal.enabled=true
+  - variable: storage.s3.internal.persistence.annotations
+    label: Storage / s3 / internal / persistence / annotations
+    type: map[string]
+    default: {}
+    group: Storage
+    show_if: storage.driver=s3&&storage.s3.internal.enabled=true
+  - variable: storage.s3.internal.persistence.retain
+    label: Storage / s3 / internal / persistence / retain
+    type: boolean
+    default: true
+    group: Storage
+    show_if: storage.driver=s3&&storage.s3.internal.enabled=true
+  - variable: storage.s3.internal.resources.requests.cpu
+    label: Storage / s3 / internal / resources / requests / cpu
+    type: string
+    default: 100m
+    group: Resources
+    show_if: storage.driver=s3&&storage.s3.internal.enabled=true
+  - variable: storage.s3.internal.resources.requests.memory
+    label: Storage / s3 / internal / resources / requests / memory
+    type: string
+    default: 128Mi
+    group: Resources
+    show_if: storage.driver=s3&&storage.s3.internal.enabled=true
+  - variable: storage.s3.internal.resources.limits.memory
+    label: Storage / s3 / internal / resources / limits / memory
+    type: string
+    default: 512Mi
+    group: Resources
+    show_if: storage.driver=s3&&storage.s3.internal.enabled=true
+  - variable: storage.s3.internal.resources.limits.cpu
+    label: Storage / s3 / internal / resources / limits / cpu
+    type: string
+    default: "1"
+    group: Resources
+    show_if: storage.driver=s3&&storage.s3.internal.enabled=true
+  - variable: storage.s3.internal.nodeSelector
+    label: Storage / s3 / internal / node Selector
+    type: map[string]
+    default: {}
+    group: Storage
+    show_if: global.showAdvanced=true&&storage.driver=s3&&storage.s3.internal.enabled=true
+  - variable: storage.s3.internal.affinity
+    label: Storage / s3 / internal / affinity
+    type: yaml
+    default: {}
+    group: Storage
+    description: Optional native Kubernetes settings. Standard installation,
+      secrets, storage, SSO, scaling and resource fields have individual
+      controls.
+    show_if: global.showAdvanced=true&&storage.driver=s3&&storage.s3.internal.enabled=true
+  - variable: storage.s3.internal.tolerations
+    label: Storage / s3 / internal / tolerations
+    type: yaml
+    default: []
+    group: Storage
+    description: Optional native Kubernetes settings. Standard installation,
+      secrets, storage, SSO, scaling and resource fields have individual
+      controls.
+    show_if: global.showAdvanced=true&&storage.driver=s3&&storage.s3.internal.enabled=true
+  - variable: storage.s3.internal.podLabels
+    label: Storage / s3 / internal / pod Labels
+    type: map[string]
+    default: {}
+    group: Storage
+    show_if: global.showAdvanced=true&&storage.driver=s3&&storage.s3.internal.enabled=true
+  - variable: storage.s3.internal.podAnnotations
+    label: Storage / s3 / internal / pod Annotations
+    type: map[string]
+    default: {}
+    group: Storage
+    show_if: global.showAdvanced=true&&storage.driver=s3&&storage.s3.internal.enabled=true
+  - variable: storage.s3.internal.podSecurityContext.runAsNonRoot
+    label: Storage / s3 / internal / pod Security Context / run As Non Root
+    type: boolean
+    default: true
+    group: Storage
+    show_if: global.showAdvanced=true&&storage.driver=s3&&storage.s3.internal.enabled=true
+  - variable: storage.s3.internal.podSecurityContext.runAsUser
+    label: Storage / s3 / internal / pod Security Context / run As User
+    type: int
+    default: 1000
+    group: Storage
+    show_if: global.showAdvanced=true&&storage.driver=s3&&storage.s3.internal.enabled=true
+  - variable: storage.s3.internal.podSecurityContext.runAsGroup
+    label: Storage / s3 / internal / pod Security Context / run As Group
+    type: int
+    default: 1000
+    group: Storage
+    show_if: global.showAdvanced=true&&storage.driver=s3&&storage.s3.internal.enabled=true
+  - variable: storage.s3.internal.podSecurityContext.fsGroup
+    label: Storage / s3 / internal / pod Security Context / fs Group
+    type: int
+    default: 1000
+    group: Storage
+    show_if: global.showAdvanced=true&&storage.driver=s3&&storage.s3.internal.enabled=true
+  - variable: storage.s3.internal.podSecurityContext.fsGroupChangePolicy
+    label: Storage / s3 / internal / pod Security Context / fs Group Change Policy
+    type: enum
+    default: OnRootMismatch
+    group: Storage
+    options:
+      - OnRootMismatch
+      - Always
+    show_if: global.showAdvanced=true&&storage.driver=s3&&storage.s3.internal.enabled=true
+  - variable: storage.s3.internal.podSecurityContext.seccompProfile.type
+    label: Storage / s3 / internal / pod Security Context / seccomp Profile / type
+    type: enum
+    default: RuntimeDefault
+    group: Storage
+    options:
+      - RuntimeDefault
+      - Localhost
+    show_if: global.showAdvanced=true&&storage.driver=s3&&storage.s3.internal.enabled=true
+  - variable: storage.s3.internal.securityContext.allowPrivilegeEscalation
+    label: Storage / s3 / internal / security Context / allow Privilege Escalation
+    type: boolean
+    default: false
+    group: Storage
+    show_if: global.showAdvanced=true&&storage.driver=s3&&storage.s3.internal.enabled=true
+  - variable: storage.s3.internal.securityContext.readOnlyRootFilesystem
+    label: Storage / s3 / internal / security Context / read Only Root Filesystem
+    type: boolean
+    default: false
+    group: Storage
+    show_if: global.showAdvanced=true&&storage.driver=s3&&storage.s3.internal.enabled=true
+  - variable: storage.s3.internal.securityContext.capabilities.drop
+    label: Storage / s3 / internal / security Context / capabilities / drop
+    type: array[string]
+    default:
+      - ALL
+    group: Storage
+    show_if: global.showAdvanced=true&&storage.driver=s3&&storage.s3.internal.enabled=true
+  - variable: storage.s3.external.endpoint
+    label: Storage / s3 / external / endpoint
+    type: string
+    default: ""
+    group: Storage
+    show_if: storage.driver=s3&&storage.s3.internal.enabled=false
+  - variable: smtp.url
+    label: SMTP connection URL
+    type: password
+    default: ""
     group: SMTP
-
-  # Ingress
+    description: Required unless an existing Secret is selected. Use smtp:// or
+      smtps://; encode credentials in URLs.
+  - variable: smtp.from
+    label: Mail sender
+    type: string
+    default: orvyn@example.com
+    group: SMTP
+    description: Verified sender accepted by the SMTP provider. The worker requires
+      SMTP configuration.
+  - variable: smtp.existingSecret
+    label: Smtp / existing Secret
+    type: secret
+    default: ""
+    group: SMTP
+    description: Existing Secret in the release namespace; use the key field below
+      for a custom key.
+  - variable: smtp.secretKey
+    label: Smtp / secret Key
+    type: string
+    default: SMTP_URL
+    group: SMTP
+  - variable: sso.oidc.enabled
+    label: Enable OpenID Connect single sign-on
+    type: boolean
+    default: false
+    group: SSO (OIDC)
+    description: Deployment-managed provider. Register <public
+      URL>/api/v1/oidc/deployment/callback at the identity provider.
+  - variable: sso.oidc.name
+    label: Sso / oidc / name
+    type: string
+    default: Single sign-on
+    group: SSO (OIDC)
+    show_if: sso.oidc.enabled=true
+  - variable: sso.oidc.issuer
+    label: OIDC issuer URL
+    type: string
+    default: ""
+    group: SSO (OIDC)
+    description: HTTPS issuer discovery URL, e.g. https://login.example.org/realms/company.
+    show_if: sso.oidc.enabled=true
+  - variable: sso.oidc.clientId
+    label: Sso / oidc / client Id
+    type: string
+    default: ""
+    group: SSO (OIDC)
+    show_if: sso.oidc.enabled=true
+  - variable: sso.oidc.clientAuthMethod
+    label: OIDC client authentication
+    type: enum
+    default: client_secret_basic
+    group: SSO (OIDC)
+    description: Basic or POST for a confidential client; none only for a public
+      client with PKCE and no secret.
+    options:
+      - client_secret_basic
+      - client_secret_post
+      - none
+    show_if: sso.oidc.enabled=true
+  - variable: sso.oidc.clientSecret
+    label: Sso / oidc / client Secret
+    type: password
+    default: ""
+    group: SSO (OIDC)
+    show_if: sso.oidc.enabled=true
+  - variable: sso.oidc.existingSecret
+    label: Sso / oidc / existing Secret
+    type: secret
+    default: ""
+    group: SSO (OIDC)
+    description: Existing Secret in the release namespace; use the key field below
+      for a custom key.
+    show_if: sso.oidc.enabled=true
+  - variable: sso.oidc.secretKey
+    label: Sso / oidc / secret Key
+    type: string
+    default: ORVYN_OIDC_CLIENT_SECRET
+    group: SSO (OIDC)
+    show_if: sso.oidc.enabled=true
+  - variable: sso.oidc.scopes
+    label: Sso / oidc / scopes
+    type: string
+    default: openid email profile
+    group: SSO (OIDC)
+    show_if: sso.oidc.enabled=true
+  - variable: sso.oidc.autoProvision
+    label: Provision verified identities
+    type: boolean
+    default: false
+    group: SSO (OIDC)
+    description: Creates accounts only when the provider verifies their email.
+      Existing local accounts are not linked by matching email.
+    show_if: sso.oidc.enabled=true
+  - variable: sso.oidc.adminSubject
+    label: Administrator subject (optional)
+    type: string
+    default: ""
+    group: SSO (OIDC)
+    description: Exact immutable IdP subject, not an email address. Grants
+      administration only to this managed identity; removing it revokes that
+      grant.
+    show_if: sso.oidc.enabled=true
+  - variable: sso.oidc.ca.existingSecret
+    label: Private IdP CA Secret (optional)
+    type: secret
+    default: ""
+    group: SSO (OIDC)
+    description: PEM CA certificate for API discovery, token and JWKS requests. Does
+      not disable TLS verification.
+    show_if: sso.oidc.enabled=true
+  - variable: sso.oidc.ca.secretKey
+    label: Sso / oidc / ca / secret Key
+    type: string
+    default: ca.crt
+    group: SSO (OIDC)
+    show_if: sso.oidc.enabled=true
   - variable: ingress.enabled
-    label: Enable Ingress
+    label: Ingress / enabled
     type: boolean
     default: true
     group: Networking
-
   - variable: ingress.className
-    label: Ingress Class
+    label: Ingress / class Name
     type: string
-    default: traefik
-    show_if: "ingress.enabled=true"
+    default: ""
     group: Networking
-
-  # Scaling
-  - variable: web.replicaCount
-    label: Web Replicas
+    show_if: ingress.enabled=true
+  - variable: ingress.annotations
+    label: Ingress / annotations
+    type: map[string]
+    default: {}
+    group: Networking
+    show_if: ingress.enabled=true
+  - variable: ingress.tls.enabled
+    label: Ingress / tls / enabled
+    type: boolean
+    default: true
+    group: Networking
+    show_if: ingress.enabled=true
+  - variable: ingress.tls.secretName
+    label: Ingress / tls / secret Name
+    type: string
+    default: orvyn-tls
+    group: Networking
+    show_if: ingress.enabled=true&&ingress.tls.enabled=true
+  - variable: ingress.tls.issuer
+    label: cert-manager issuer (optional)
+    type: string
+    default: ""
+    group: Networking
+    description: Issuer resource must already exist. Leave blank to use an existing
+      TLS Secret.
+    show_if: ingress.enabled=true&&ingress.tls.enabled=true
+  - variable: ingress.tls.issuerKind
+    label: Ingress / tls / issuer Kind
+    type: enum
+    default: ClusterIssuer
+    group: Networking
+    options:
+      - Issuer
+      - ClusterIssuer
+    show_if: ingress.enabled=true&&ingress.tls.enabled=true
+  - variable: configuration.resources.requests.cpu
+    label: Configuration / resources / requests / cpu
+    type: string
+    default: 100m
+    group: Resources
+    show_if: global.showAdvanced=true
+  - variable: configuration.resources.requests.memory
+    label: Configuration / resources / requests / memory
+    type: string
+    default: 128Mi
+    group: Resources
+    show_if: global.showAdvanced=true
+  - variable: configuration.resources.limits.memory
+    label: Configuration / resources / limits / memory
+    type: string
+    default: 512Mi
+    group: Resources
+    show_if: global.showAdvanced=true
+  - variable: configuration.resources.limits.cpu
+    label: Configuration / resources / limits / cpu
+    type: string
+    default: "1"
+    group: Resources
+    show_if: global.showAdvanced=true
+  - variable: configuration.activeDeadlineSeconds
+    label: Configuration / active Deadline Seconds
     type: int
-    default: 1
-    min: 1
-    group: Scaling
-
-  - variable: api.replicaCount
-    label: API Replicas
-    type: int
-    default: 1
-    min: 1
-    group: Scaling
-
-  - variable: worker.replicaCount
-    label: Worker Replicas
-    type: int
-    default: 1
-    min: 1
-    group: Scaling
-
-  - variable: collaboration.replicaCount
-    label: Collaboration Replicas
-    type: int
-    default: 1
-    min: 1
-    group: Scaling
-
-  - variable: api.maxUploadBytes
-    label: Maximum Upload Size (Bytes)
-    type: int
-    default: 10485760
-    min: 1
+    default: 240
     group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: configuration.backoffLimit
+    label: Configuration / backoff Limit
+    type: int
+    default: 3
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: serviceAccount.create
+    label: Service Account / create
+    type: boolean
+    default: true
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: serviceAccount.name
+    label: Service Account / name
+    type: string
+    default: ""
+    group: Advanced
+    show_if: global.showAdvanced=true
+  - variable: serviceAccount.annotations
+    label: Service Account / annotations
+    type: map[string]
+    default: {}
+    group: Advanced
+    show_if: global.showAdvanced=true

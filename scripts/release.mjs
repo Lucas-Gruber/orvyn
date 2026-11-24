@@ -81,6 +81,29 @@ export async function manifests(directory = root) {
     const content = await readFile(resolve(directory, path), "utf8");
     result.push({ path, content, data: JSON.parse(content) });
   }
+  const chartPath = "infrastructure/helm/orvyn/Chart.yaml";
+  try {
+    const content = await readFile(resolve(directory, chartPath), "utf8");
+    const fields = {};
+    for (const name of ["version", "appVersion"]) {
+      const matches = [
+        ...content.matchAll(
+          new RegExp(
+            `^${name}:[ \\t]*["']?([^\\s"'#]+)["']?[ \\t]*(?:#.*)?$`,
+            "gm",
+          ),
+        ),
+      ];
+      if (matches.length !== 1)
+        throw Error(
+          `Chart.yaml must contain exactly one canonical ${name} field.`,
+        );
+      fields[name] = matches[0][1];
+    }
+    result.push({ path: chartPath, content, data: fields, kind: "chart" });
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
   return result;
 }
 export async function checkVersions(directory = root) {
@@ -88,7 +111,10 @@ export async function checkVersions(directory = root) {
     version = files[0].data.version;
   semver(version);
   for (const file of files)
-    if (file.data.version !== version)
+    if (
+      file.data.version !== version ||
+      (file.kind === "chart" && file.data.appVersion !== version)
+    )
       throw Error(
         `Version mismatch in ${file.path}; run pnpm release:version with an explicit version.`,
       );
@@ -131,7 +157,13 @@ export async function setVersion(
   semver(next);
   const changes = files.map((file) => ({
     ...file,
-    next: JSON.stringify({ ...file.data, version: next }, null, 2) + "\n",
+    next:
+      file.kind === "chart"
+        ? file.content.replace(
+            /^(version|appVersion):.*$/gm,
+            (_, name) => `${name}: "${next}"`,
+          )
+        : JSON.stringify({ ...file.data, version: next }, null, 2) + "\n",
   }));
   if (!dryRun) {
     const done = [];
@@ -163,7 +195,7 @@ export async function setVersion(
   };
 }
 export async function releasePlan(tag, repository, { directory = root } = {}) {
-  const { version } = await checkVersions(directory);
+  const { version, files } = await checkVersions(directory);
   if (tag !== "v" + version)
     throw Error(
       "Release tag must exactly match v followed by every manifest version.",
@@ -184,6 +216,14 @@ export async function releasePlan(tag, repository, { directory = root } = {}) {
     repository,
     prerelease: !!parsed.prerelease,
     imageTag,
+    ...(files.some((file) => file.kind === "chart")
+      ? {
+          chart: {
+            repository: `ghcr.io/${repository.split("/")[0].toLowerCase()}/charts/orvyn`,
+            version,
+          },
+        }
+      : {}),
     images: Object.fromEntries(
       components.map((name) => [
         name,

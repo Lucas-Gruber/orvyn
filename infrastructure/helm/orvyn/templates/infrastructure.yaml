@@ -1,0 +1,176 @@
+{{- range $component := list "postgresql" "valkey" "storage" }}
+{{- $root := $ }}
+{{- $settings := ternary $.Values.storage.s3.internal (index $.Values $component) (eq $component "storage") }}
+{{- if and $settings.enabled (or (ne $component "storage") (eq $.Values.storage.driver "s3")) }}
+{{- $port := index (dict "postgresql" 5432 "valkey" 6379 "storage" 8333) $component }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "orvyn.fullname" $ }}-{{ $component }}
+  labels: {{- include "orvyn.labels" $ | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector: {{- include "orvyn.selector" (dict "root" $ "component" $component) | nindent 4 }}
+  ports:
+    - name: service
+      port: {{ $port }}
+      targetPort: service
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "orvyn.fullname" $ }}-{{ $component }}
+  labels: {{- include "orvyn.labels" $ | nindent 4 }}
+spec:
+  replicas: 1
+  serviceName: {{ include "orvyn.fullname" $ }}-{{ $component }}
+  selector:
+    matchLabels: {{- include "orvyn.selector" (dict "root" $ "component" $component) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- with $settings.podLabels }}{{ toYaml . | nindent 8 }}{{ end }}
+        {{- include "orvyn.selector" (dict "root" $ "component" $component) | nindent 8 }}
+      annotations:
+        {{- with $settings.podAnnotations }}{{ toYaml . | nindent 8 }}{{ end }}
+        checksum/config: {{ toJson (dict "settings" $settings "s3" (ternary $.Values.storage.s3 dict (eq $component "storage")) "revision" $.Values.global.secretRevision "initializerImage" (ternary $.Values.api.image dict (eq $component "storage"))) | sha256sum | quote }}
+    spec:
+      serviceAccountName: {{ include "orvyn.serviceAccount" $ }}
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      securityContext: {{- toYaml $settings.podSecurityContext | nindent 8 }}
+      {{- with $.Values.global.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $settings.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $settings.affinity }}
+      affinity: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $settings.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if eq $component "storage" }}
+      initContainers:
+        - name: private-s3-configuration
+          image: {{ include "orvyn.image" (dict "root" $ "image" $.Values.api.image) | quote }}
+          imagePullPolicy: {{ $.Values.api.image.pullPolicy }}
+          securityContext: {{- toYaml $.Values.api.securityContext | nindent 12 }}
+          resources: {{- toYaml $.Values.configuration.resources | nindent 12 }}
+          command: [node, -e]
+          args:
+            - "const fs=require('node:fs');fs.writeFileSync('/config/s3.json',JSON.stringify({identities:[{name:'orvyn',credentials:[{accessKey:process.env.S3_ACCESS_KEY_ID,secretKey:process.env.S3_SECRET_ACCESS_KEY}],actions:['Admin','Read','List','Tagging','Write']}]}),{mode:0o400});"
+          env:
+            {{- include "orvyn.storageEnv" $ | nindent 12 }}
+          volumeMounts:
+            - name: s3-config
+              mountPath: /config
+      {{- end }}
+      containers:
+        - name: {{ $component }}
+          image: {{ include "orvyn.image" (dict "root" $ "image" $settings.image) | quote }}
+          imagePullPolicy: {{ $settings.image.pullPolicy }}
+          securityContext: {{- toYaml $settings.securityContext | nindent 12 }}
+          resources: {{- toYaml $settings.resources | nindent 12 }}
+          ports:
+            - name: service
+              containerPort: {{ $port }}
+          {{- if eq $component "postgresql" }}
+          env:
+            - name: PGDATA
+              value: /data/pgdata
+            - name: POSTGRES_DB
+              value: {{ $settings.auth.database | quote }}
+            - name: POSTGRES_USER
+              value: {{ $settings.auth.username | quote }}
+            - name: POSTGRES_PASSWORD
+              {{- include "orvyn.reference" (dict "root" $ "name" $settings.auth.existingSecret "key" (ternary $settings.auth.secretKey "POSTGRES_PASSWORD" (ne $settings.auth.existingSecret ""))) | nindent 14 }}
+          startupProbe:
+            exec:
+              command: [sh, -ec, 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"']
+            failureThreshold: 90
+            periodSeconds: 2
+          readinessProbe:
+            exec:
+              command: [sh, -ec, 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"']
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: [sh, -ec, 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"']
+            periodSeconds: 10
+            failureThreshold: 6
+          {{- else if eq $component "valkey" }}
+          command: [sh, -ec]
+          args:
+            - 'exec valkey-server --bind 0.0.0.0 --protected-mode yes --requirepass "$VALKEY_PASSWORD" --dir /data --appendonly {{ ternary "yes" "no" $settings.persistence.enabled }} --save ""'
+          env:
+            - name: VALKEY_PASSWORD
+              {{- include "orvyn.reference" (dict "root" $ "name" $settings.auth.existingSecret "key" (ternary $settings.auth.secretKey "VALKEY_PASSWORD" (ne $settings.auth.existingSecret ""))) | nindent 14 }}
+          startupProbe:
+            exec:
+              command: [sh, -ec, 'VALKEYCLI_AUTH="$VALKEY_PASSWORD" valkey-cli ping | grep -q PONG']
+            failureThreshold: 90
+            periodSeconds: 2
+          readinessProbe:
+            exec:
+              command: [sh, -ec, 'VALKEYCLI_AUTH="$VALKEY_PASSWORD" valkey-cli ping | grep -q PONG']
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: service
+            periodSeconds: 10
+          {{- else }}
+          args: [mini, '-dir=/data', '-ip=127.0.0.1', '-ip.bind=0.0.0.0', '-webdav=false', '-admin.ui=false', '-s3.config=/etc/orvyn/s3.json', '-s3.allowDeleteBucketNotEmpty=false']
+          startupProbe:
+            tcpSocket:
+              port: service
+            failureThreshold: 90
+            periodSeconds: 2
+          readinessProbe:
+            tcpSocket:
+              port: service
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: service
+            periodSeconds: 10
+          {{- end }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+            {{- if eq $component "postgresql" }}
+            - name: run
+              mountPath: /var/run/postgresql
+            {{- end }}
+            {{- if eq $component "storage" }}
+            - name: s3-config
+              mountPath: /etc/orvyn
+              readOnly: true
+            {{- end }}
+      volumes:
+        - name: data
+          {{- if $settings.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "orvyn.claimName" (dict "root" $ "component" $component "persistence" $settings.persistence) }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: tmp
+          emptyDir:
+            sizeLimit: 128Mi
+        {{- if eq $component "postgresql" }}
+        - name: run
+          emptyDir: {}
+        {{- end }}
+        {{- if eq $component "storage" }}
+        - name: s3-config
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Mi
+        {{- end }}
+{{- end }}
+{{- end }}

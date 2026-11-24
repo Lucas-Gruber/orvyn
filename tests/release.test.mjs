@@ -12,6 +12,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "node:http";
 import { once } from "node:events";
+import { createHash } from "node:crypto";
+import {
+  readChartArtifact,
+  validateChartManifest,
+  preflightChart,
+} from "../scripts/release-chart.mjs";
 import { manifestDigest } from "../scripts/release-platforms.mjs";
 import {
   semver,
@@ -54,6 +60,178 @@ async function fixture(version = "1.2.3") {
     dispose: () => rm(directory, { recursive: true, force: true }),
   };
 }
+test("chart and appVersion follow atomic version changes and mismatches fail release checks", async () => {
+  const f = await fixture();
+  try {
+    const path = join(f.directory, "infrastructure/helm/orvyn");
+    await mkdir(path, { recursive: true });
+    await writeFile(
+      join(path, "Chart.yaml"),
+      'apiVersion: v2\nname: orvyn\nversion: "1.2.3"\nappVersion: "1.2.3"\n# keep metadata\n',
+    );
+    await setVersion("minor", { directory: f.directory });
+    assert.equal((await checkVersions(f.directory)).version, "1.3.0");
+    const content = await readFile(join(path, "Chart.yaml"), "utf8");
+    assert.match(content, /appVersion: "1.3.0"/);
+    assert.match(content, /# keep metadata/);
+    const plan = await releasePlan("v1.3.0", "Example/Orvyn", {
+      directory: f.directory,
+    });
+    assert.equal(plan.chart.repository, "ghcr.io/example/charts/orvyn");
+    await writeFile(
+      join(path, "Chart.yaml"),
+      content.replace('appVersion: "1.3.0"', 'appVersion: "latest"'),
+    );
+    await assert.rejects(checkVersions(f.directory), /mismatch/);
+    await writeFile(join(path, "Chart.yaml"), content + "version: 1.3.0\n");
+    await assert.rejects(checkVersions(f.directory), /exactly one/);
+  } finally {
+    await f.dispose();
+  }
+});
+test("Helm release artifacts reject changed bytes and foreign source metadata", async () => {
+  const f = await fixture(),
+    p = plan(),
+    bytes = Buffer.from("checked chart archive"),
+    filename = "orvyn-1.2.3.tgz";
+  try {
+    const path = join(f.directory, "chart");
+    await mkdir(path);
+    const metadata = {
+      version: p.version,
+      commit,
+      filename,
+      sha256: createHash("sha256").update(bytes).digest("hex"),
+    };
+    await writeFile(join(path, filename), bytes);
+    await writeFile(join(path, "chart.json"), JSON.stringify(metadata));
+    assert.deepEqual((await readChartArtifact(path, p, commit)).bytes, bytes);
+    await writeFile(join(path, filename), "tampered");
+    await assert.rejects(readChartArtifact(path, p, commit), /digest/);
+    await writeFile(join(path, filename), bytes);
+    await assert.rejects(
+      readChartArtifact(path, p, "b".repeat(40)),
+      /validated release/,
+    );
+  } finally {
+    await f.dispose();
+  }
+});
+test("Helm publishing happens after all four verified image tags and signs the checked chart digest", async () => {
+  const f = await fixture(),
+    p = {
+      ...plan(),
+      chart: { repository: "ghcr.io/example/charts/orvyn", version: "1.2.3" },
+    },
+    api = fakeApi(p),
+    commands = [];
+  const bytes = Buffer.from("checked chart package"),
+    sha256 = createHash("sha256").update(bytes).digest("hex");
+  const chart = {
+    filename: "orvyn-1.2.3.tgz",
+    path: join(f.directory, "orvyn-1.2.3.tgz"),
+    bytes,
+    sha256,
+  };
+  const chartManifest = {
+    schemaVersion: 2,
+    config: { mediaType: "application/vnd.cncf.helm.config.v1+json" },
+    layers: [
+      {
+        mediaType: "application/vnd.cncf.helm.chart.content.v1.tar+gzip",
+        digest: "sha256:" + sha256,
+      },
+    ],
+  };
+  try {
+    const result = await publish({
+      api,
+      plan: p,
+      commit,
+      records: records(p),
+      directory: f.directory,
+      chart,
+      run: async (command, args) => {
+        commands.push([command, ...args]);
+        if (args.includes("--raw"))
+          return JSON.stringify(
+            args.at(-1).includes("/charts/")
+              ? chartManifest
+              : {
+                  manifests: [
+                    { platform: { os: "linux", architecture: "amd64" } },
+                    { platform: { os: "linux", architecture: "arm64" } },
+                  ],
+                },
+          );
+        if (args[0] === "sign-blob")
+          await writeFile(args[args.indexOf("--bundle") + 1], "test bundle");
+        return "";
+      },
+    });
+    const pushed = commands.findIndex((c) => c.includes("push"));
+    assert.ok(pushed > 0);
+    assert.equal(
+      commands.slice(0, pushed).filter((c) => c.includes("create")).length,
+      4,
+    );
+    assert.equal(
+      commands
+        .slice(0, pushed)
+        .filter((c) => c.includes("--raw") && c.at(-1).endsWith(":1.2.3"))
+        .length,
+      4,
+    );
+    assert.ok(result.chart.startsWith(p.chart.repository + "@sha256:"));
+    assert.ok(
+      commands.some(
+        (c) =>
+          c[0] === "cosign" && c[1] === "verify" && c.at(-1) === result.chart,
+      ),
+    );
+    assert.deepEqual(api.uploads.get(chart.filename), bytes);
+    assert.match(
+      api.uploads.get("SHA256SUMS").toString(),
+      new RegExp(sha256 + "  orvyn-1.2.3.tgz"),
+    );
+    assert.equal(api.writes.at(-1).body.draft, false);
+    const conflict = fakeApi(p, {
+      versions: (path) =>
+        path.includes("charts%2Forvyn")
+          ? [
+              {
+                name: "sha256:" + "a".repeat(64),
+                metadata: { container: { tags: ["1.2.3"] } },
+              },
+            ]
+          : [],
+    });
+    await assert.rejects(
+      preflightChart(conflict, p, chart, "users", async () =>
+        JSON.stringify(chartManifest),
+      ),
+      /digest mismatch/,
+    );
+    assert.throws(
+      () =>
+        validateChartManifest(
+          {
+            ...chartManifest,
+            layers: [
+              {
+                ...chartManifest.layers[0],
+                digest: "sha256:" + "0".repeat(64),
+              },
+            ],
+          },
+          chart,
+        ),
+      /checked Helm package/,
+    );
+  } finally {
+    await f.dispose();
+  }
+});
 test("public release diagnostics remove credential bindings, bearer tokens and signed URL credentials", () => {
   const message = safeReleaseError(
     "Failure with repo-secret and id-secret Bearer bearer-secret eyJhbGciOiJFUzI1NiJ9.cGF5bG9hZA.c2lnbmF0dXJl https://example.invalid/?X-Amz-Signature=url-secret&name=file",

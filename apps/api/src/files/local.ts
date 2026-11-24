@@ -162,7 +162,11 @@ export class LocalAttachmentStorage implements AttachmentStorage {
   }
   async copy(source: string, target: string) {
     const object = await this.get(source);
-    await this.put(target, { body: object.body, size: object.size });
+    try {
+      await this.put(target, { body: object.body, size: object.size });
+    } finally {
+      object.body.destroy();
+    }
   }
   async health() {
     const key = "health/" + randomUUID();

@@ -1,0 +1,21 @@
+# Create referenced Secrets in the release namespace before installation.
+# All names and domains are examples; there are no embedded credentials.
+global:
+  origin: https://orvyn.example.org
+smtp:
+  existingSecret: orvyn-mail
+  secretKey: smtp-url
+  from: Orvyn <orvyn@example.org>
+storage:
+  driver: s3
+  s3:
+    internal:
+      enabled: false
+    external:
+      endpoint: https://s3.eu-central-1.amazonaws.com
+    region: eu-central-1
+    bucket: orvyn-attachments
+    forcePathStyle: false
+    existingSecret: orvyn-s3
+    accessKeySecretKey: access-key
+    secretAccessKeySecretKey: secret-key

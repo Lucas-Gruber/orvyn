@@ -12,7 +12,7 @@ To view it **on your own computer**, install Node >=22.12, pnpm and Docker Deskt
 
 Start with [DEVELOPMENT.md](DEVELOPMENT.md). See [docs/STATUS.md](docs/STATUS.md) for the implementation boundary.
 
-Server CI, production container checks, versioning and the tag-triggered release workflow: [RELEASE.md](RELEASE.md). Preparing the pipeline does not create a tag or publish a release.
+Server CI, production container checks, synchronized app/chart versioning and the tag-triggered image/OCI-chart release workflow: [RELEASE.md](RELEASE.md). Kubernetes deployment, Rancher forms and OIDC SSO: [Helm chart](infrastructure/helm/orvyn/README.md). Native local/S3 attachment drivers: [STORAGE.md](docs/STORAGE.md). Brand and desktop icon assets: [branding](branding/README.md).
 
 Authentication and remaining provider limitations: [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md).
 

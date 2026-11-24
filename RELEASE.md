@@ -1,6 +1,6 @@
 # Releases
 
-Server CI and release automation are configured. Version `0.1.1` still denotes an incomplete development baseline, not a production-readiness claim. Do not create tags or publish releases without explicit authorization. The version command never commits, tags, pushes or publishes anything.
+Server CI and release automation are configured. The current source version `0.2.0` adds the Helm chart, deployment OIDC and native filesystem attachments; this version number is not a production-readiness claim. Do not create tags or publish releases without explicit authorization. The version command never commits, tags, pushes or publishes anything.
 
 ## Checks on pushes and pull requests
 
@@ -19,7 +19,7 @@ pnpm release:version patch
 pnpm release:check
 ```
 
-The command synchronizes the root and owned `@orvyn/*` package manifests, preserves dependency versions, supports SemVer prereleases/build metadata, and rolls back completed file writes if a later write fails. An explicit version can repair manifest drift. Review the diff, commit and push it using the normal development process. Neither this command nor the checks create Git tags. Every manifest must exactly match the tag before a release can run.
+The command synchronizes the root and owned `@orvyn/*` package manifests and both Helm `version` and `appVersion`, preserves dependency versions, supports SemVer prereleases/build metadata, and rolls back completed file writes if a later write fails. An explicit version can repair manifest drift. Review the diff, commit and push it using the normal development process. Neither this command nor the checks create Git tags. Every manifest must exactly match the tag before a release can run.
 
 There is no desktop application yet. Checks deliberately reject a newly added desktop directory until its Tauri/Cargo version synchronization is implemented. Desktop installers, platform signing, updater feeds and Flatpak publication are not simulated by this server pipeline.
 
@@ -60,7 +60,7 @@ cosign verify-blob --bundle SHA256SUMS.sigstore.json \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com SHA256SUMS
 ```
 
-Use `cosign verify` with the same identity/issuer options and the image's `@sha256:...` reference to verify an image signature. Substitute the actual tag version; forks must use their own repository identity.
+Use `cosign verify` with the same identity/issuer options and the image's `@sha256:...` reference to verify an image signature. The same command verifies the OCI chart manifest signature. Substitute the actual tag version; forks must use their own repository identity.
 
 ## Local image checks
 
@@ -81,6 +81,16 @@ Builds without an explicit `VERSION` argument carry the `development` label; CI 
 
 For a corporate/session HTTPS proxy CA, add `--secret id=build_ca,src=/path/to/ca.pem` to the build. It is mounted only in dependency-install steps and is not copied into image layers. TLS verification stays enabled. Runtime credentials are supplied separately; development `.env` files and signing-key formats are excluded from the build context.
 
-Local validation covers the actual four Linux/amd64 images, application/browser integration, native-platform metadata validation/merging, release policy and retry orchestration, and workflow syntax with Actionlint. Actual Buildx raw-manifest hashing and dry-run descriptor preservation are also checked against registry images. A complete native ARM64 and OIDC/signing publication remains pending until the authorized release workflow finishes.
+Local validation covers the actual four Linux/amd64 images, application/browser integration, native-platform metadata validation/merging, release policy and retry orchestration, and workflow syntax with Actionlint. Actual Buildx raw-manifest hashing and dry-run descriptor preservation are also checked against registry images. The authorized v0.1.1 server release completed successfully on native AMD64/ARM64 runners, including its OIDC/Cosign signing and publication job. Changes for v0.2.0 require their own successful checks and release run.
 
 The initial `v0.1.0` tag contains a Buildx scalar-formatting assumption that cannot complete publication. `v0.1.1` corrects that verification and replaces emulated builds with native runners. Existing source tags are preserved.
+
+## Helm checks and publication
+
+The regular checks run pinned Helm 3.22.1 lint/template/schema validation, strict Kubeconform validation for 15 installation modes, negative values tests and consistency checks for all Rancher questions. The default chart requires explicit SMTP configuration. Application tests cover the S3 default and native filesystem drivers; a checksum-verified Kind test installs internal services with wait/atomic, exercises private attachments, upgrades to two API replicas, checks OIDC configuration and unchanged secrets, rolls back configuration, and separately verifies shared local PVC behavior. Real Kind execution requires a Docker host with cgroup delegation; the managed Cloud host does not provide it. The workflow uses a normal Ubuntu runner.
+
+Checks package the chart with normalized tar/gzip metadata. Repackaging an unchanged commit produces identical bytes, which protects draft/asset retry guards. The chart artifact has an independent attempt name and metadata binding it to the validated source/version/digest. The publisher validates it separately from the eight architecture records; retries select the newest available chart package from the same source.
+
+After all four immutable versioned image tags have been verified, the publisher pushes `oci://ghcr.io/lucas-gruber/charts/orvyn:<version>` (forks use their own owner), verifies its Helm config/layer media types and package digest, and signs/verifies its exact OCI manifest using the existing GitHub workflow identity. Chart versions are immutable; an existing version is reused only if the checked package matches. There is no `latest` chart alias. The GitHub release remains a draft until images, chart and signatures are complete. The attached chart package is included in signed `SHA256SUMS`, and the server manifest records its repository/version/package hash. No cluster deployment is performed by publication.
+
+Chart usage, Rancher, GitOps, HTTPS, Secret rotation and database/storage migration limits are documented in [the chart README](infrastructure/helm/orvyn/README.md).

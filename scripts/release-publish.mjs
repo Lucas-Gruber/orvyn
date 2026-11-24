@@ -5,6 +5,11 @@ import { fileURLToPath } from "node:url";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import {
+  readChartArtifact,
+  preflightChart,
+  publishChart,
+} from "./release-chart.mjs";
+import {
   inspectManifest,
   readPlatformRecords,
   mergePlatformImages,
@@ -280,9 +285,19 @@ export async function preflight(api, plan, records, fingerprint) {
       return { record, exists: matches.length === 1 };
     }),
   );
-  return { release, states, latest: mayAdvanceLatest(plan, stable) };
+  return { release, states, namespace, latest: mayAdvanceLatest(plan, stable) };
 }
-export async function publish({ api, plan, commit, records, directory, run }) {
+export async function publish({
+  api,
+  plan,
+  commit,
+  records,
+  directory,
+  run,
+  chart,
+}) {
+  if (plan.chart && !chart)
+    throw Error("The checked Helm release package is required");
   const ref = await api.request(
     "/repos/" +
       plan.repository +
@@ -316,6 +331,16 @@ export async function publish({ api, plan, commit, records, directory, run }) {
               },
             ]),
           ),
+          ...(chart
+            ? {
+                chart: {
+                  repository: plan.chart.repository,
+                  tag: plan.imageTag,
+                  package: chart.filename,
+                  sha256: chart.sha256,
+                },
+              }
+            : {}),
         },
         null,
         2,
@@ -330,6 +355,9 @@ export async function publish({ api, plan, commit, records, directory, run }) {
       "--certificate-oidc-issuer",
       "https://token.actions.githubusercontent.com",
     ];
+  const existingChart = chart
+    ? await preflightChart(api, plan, chart, checked.namespace, run)
+    : null;
   // The registry index itself must contain both promised architectures.
   for (const record of records) {
     const { manifest: value, digest } = await inspectManifest(
@@ -365,16 +393,22 @@ export async function publish({ api, plan, commit, records, directory, run }) {
         draft: true,
         prerelease: plan.prerelease,
         make_latest: "false",
-        body: `<!-- orvyn:${fingerprint} -->\n\n${notes.body || ""}\n\nServer images for Web, API, Collaboration and Worker. Use the attached manifest to pin their exact digests. Desktop applications are not included.`,
+        body: `<!-- orvyn:${fingerprint} -->\n\n${notes.body || ""}\n\nServer images for Web, API, Collaboration and Worker. Use the attached manifest to pin their exact digests.${chart ? ` Helm chart: oci://${plan.chart.repository}, version ${plan.version}; the package is covered by SHA256SUMS and its OCI digest is signed with Cosign.` : ""} Desktop applications are not included.`,
       },
     });
   }
   await mkdir(directory, { recursive: true });
   const filename = `orvyn-${plan.version}-server-images.json`,
-    sums = hash(manifest) + "  " + filename + "\n",
+    sums =
+      hash(manifest) +
+      "  " +
+      filename +
+      "\n" +
+      (chart ? chart.sha256 + "  " + chart.filename + "\n" : ""),
     contents = new Map([
       [filename, Buffer.from(manifest)],
       ["SHA256SUMS", Buffer.from(sums)],
+      ...(chart ? [[chart.filename, chart.bytes]] : []),
     ]),
     assets = await api.pages(repoPath + `/releases/${release.id}/assets`);
   async function retain(name, bytes) {
@@ -451,6 +485,9 @@ export async function publish({ api, plan, commit, records, directory, run }) {
     if (digest !== record.digest)
       throw Error("Promoted image digest did not match the tested release.");
   }
+  const chartReference = chart
+    ? await publishChart(plan, chart, existingChart, verify, run)
+    : undefined;
   if (checked.latest)
     for (const record of records) {
       await run("docker", [
@@ -475,7 +512,12 @@ export async function publish({ api, plan, commit, records, directory, run }) {
       make_latest: checked.latest ? "true" : "false",
     },
   });
-  return { tag: plan.tag, latest: checked.latest, url: release.html_url };
+  return {
+    tag: plan.tag,
+    latest: checked.latest,
+    url: release.html_url,
+    ...(chartReference ? { chart: chartReference } : {}),
+  };
 }
 async function main() {
   const plan = await releasePlan(
@@ -523,6 +565,13 @@ async function main() {
     records,
     directory: resolve(".local/release-output", plan.tag),
     run,
+    chart: plan.chart
+      ? await readChartArtifact(
+          resolve(process.env.RELEASE_CHART || "chart-artifacts"),
+          plan,
+          commit,
+        )
+      : undefined,
   });
   console.log(JSON.stringify(result));
 }

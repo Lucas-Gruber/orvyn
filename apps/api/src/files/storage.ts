@@ -85,11 +85,12 @@ class S3AttachmentStorage implements AttachmentStorage {
       new GetObjectCommand({ Bucket: bucket(), Key: key }),
       { abortSignal: signal },
     );
-    if (
-      !(object.Body instanceof Readable) ||
-      object.ContentLength === undefined
-    )
+    if (!(object.Body instanceof Readable))
       throw Error("Attachment is not readable");
+    if (object.ContentLength === undefined) {
+      object.Body.destroy();
+      throw Error("Attachment size is unavailable");
+    }
     return { body: object.Body, size: object.ContentLength };
   }
   async exists(key: string) {

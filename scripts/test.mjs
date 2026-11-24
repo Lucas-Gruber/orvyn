@@ -149,6 +149,7 @@ try {
           "tests/editor.test.mjs",
           "tests/files.test.mjs",
           "tests/local-storage.test.mjs",
+          "tests/database-configuration.test.mjs",
           "tests/restore.test.mjs",
           "tests/databases.test.mjs",
           "tests/database-events.test.mjs",

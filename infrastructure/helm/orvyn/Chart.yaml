@@ -2,30 +2,24 @@ apiVersion: v2
 name: orvyn
 description: Self-hosted knowledge management and collaboration platform
 type: application
-
-version: 0.1.1
-appVersion: "latest"
-
+version: "0.2.0"
+appVersion: "0.2.0"
 home: https://github.com/Lucas-Gruber/orvyn
-
 sources:
   - https://github.com/Lucas-Gruber/orvyn
-
 keywords:
   - knowledge-management
   - documentation
   - collaboration
   - wiki
-
 maintainers:
   - name: Lucas Gruber
     url: https://github.com/Lucas-Gruber
-
-kubeVersion: ">=1.25.0-0"
-
+kubeVersion: ">=1.27.0-0"
 annotations:
+  org.opencontainers.image.source: https://github.com/Lucas-Gruber/orvyn
   catalog.cattle.io/display-name: Orvyn
   catalog.cattle.io/namespace: orvyn
   catalog.cattle.io/release-name: orvyn
-
-icon: https://example.com/orvyn-icon.png
+  catalog.cattle.io/type: app
+icon: https://raw.githubusercontent.com/Lucas-Gruber/orvyn/main/infrastructure/helm/orvyn/icon.png

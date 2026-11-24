@@ -1,0 +1,24 @@
+# Create referenced Secrets in the release namespace before installation.
+# All names and domains are examples; there are no embedded credentials.
+global:
+  origin: https://orvyn.example.org
+  generateSecrets: false
+  existingEncryptionSecret: orvyn-credentials
+  encryptionSecretKey: encryption-key
+smtp:
+  existingSecret: orvyn-credentials
+  secretKey: smtp-url
+  from: Orvyn <orvyn@example.org>
+postgresql:
+  auth:
+    existingSecret: orvyn-credentials
+    secretKey: database-password
+valkey:
+  auth:
+    existingSecret: orvyn-credentials
+    secretKey: valkey-password
+storage:
+  s3:
+    existingSecret: orvyn-credentials
+    accessKeySecretKey: s3-access-key
+    secretAccessKeySecretKey: s3-secret-key

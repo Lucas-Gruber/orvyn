@@ -31,6 +31,17 @@ jobs:
         run: |
           pnpm exec playwright install --with-deps chromium
           node -e 'console.log("CHROMIUM_PATH="+require("@playwright/test").chromium.executablePath())' >> "$GITHUB_ENV"
+      - name: Validate Helm modes, schema, Kubernetes manifests and Rancher questions
+        run: |
+          node scripts/test-helm.mjs
+          node scripts/package-helm.mjs .local/helm-package
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7, node24
+        with:
+          name: helm-package-${{ github.run_attempt }}
+          path: .local/helm-package/*
+          include-hidden-files: true
+          retention-days: 7
+          if-no-files-found: error
       - name: Prepare disposable local infrastructure
         run: |
           pnpm setup:local
@@ -57,6 +68,8 @@ jobs:
           pnpm typecheck
       - name: Test release tools
         run: pnpm test:release
+      - name: Exercise filesystem uploads, copies, publications and exports
+        run: ORVYN_TEST_STORAGE_DRIVER=local node --env-file=.env scripts/test.mjs tests/database-templates.test.mjs tests/publications.test.mjs tests/markdown-bundle.test.mjs
       - name: Run complete integration suite
         run: node --env-file=.env scripts/test.mjs 2>&1 | tee test-results.txt
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4, node24
@@ -71,6 +84,8 @@ jobs:
           done
       - name: Exercise production containers over HTTPS
         run: pnpm test:images
+      - name: Install and upgrade on Kubernetes with internal and local storage
+        run: node scripts/test-kubernetes.mjs
       - name: Keep test output and UI screenshots
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7, node24

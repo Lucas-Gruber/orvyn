@@ -1,41 +1,34 @@
 {{- if .Values.ingress.enabled }}
+{{- $host := (urlParse .Values.global.origin).host -}}
+{{- if contains ":" $host }}{{ fail "Ingress requires a DNS host without an explicit port in global.origin" }}{{ end }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
-
 metadata:
   name: {{ include "orvyn.fullname" . }}
-  labels:
-    {{- include "orvyn.labels" . | nindent 4 }}
-
-  {{- with .Values.ingress.annotations }}
+  labels: {{- include "orvyn.labels" . | nindent 4 }}
   annotations:
-    {{- toYaml . | nindent 4 }}
-  {{- end }}
-
+    {{- if .Values.ingress.tls.issuer }}
+    {{ ternary "cert-manager.io/cluster-issuer" "cert-manager.io/issuer" (eq .Values.ingress.tls.issuerKind "ClusterIssuer") }}: {{ .Values.ingress.tls.issuer | quote }}
+    {{- end }}
+    {{- with .Values.ingress.annotations }}{{ toYaml . | nindent 4 }}{{ end }}
 spec:
   {{- with .Values.ingress.className }}
   ingressClassName: {{ . | quote }}
   {{- end }}
-
-  {{- with .Values.ingress.tls }}
+  {{- if .Values.ingress.tls.enabled }}
   tls:
-    {{- toYaml . | nindent 4 }}
+    - secretName: {{ .Values.ingress.tls.secretName | quote }}
+      hosts: [{{ $host | quote }}]
   {{- end }}
-
   rules:
-    {{- range .Values.ingress.hosts }}
-    - host: {{ .host | quote }}
+    - host: {{ $host | quote }}
       http:
         paths:
-          {{- range .paths }}
-          - path: {{ .path | quote }}
-            pathType: {{ .pathType }}
-
+          - path: /
+            pathType: Prefix
             backend:
               service:
-                name: {{ include "orvyn.fullname" $ }}-web
+                name: {{ include "orvyn.fullname" . }}-web
                 port:
-                  number: 3000
-          {{- end }}
-    {{- end }}
+                  number: {{ .Values.web.service.port }}
 {{- end }}

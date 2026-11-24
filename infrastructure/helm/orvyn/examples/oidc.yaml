@@ -1,0 +1,19 @@
+# Create referenced Secrets in the release namespace before installation.
+# All names and domains are examples; there are no embedded credentials.
+global:
+  origin: https://orvyn.example.org
+smtp:
+  existingSecret: orvyn-mail
+  secretKey: smtp-url
+  from: Orvyn <orvyn@example.org>
+sso:
+  oidc:
+    enabled: true
+    name: Company SSO
+    issuer: https://login.example.org/realms/company
+    clientId: orvyn
+    clientAuthMethod: client_secret_basic
+    existingSecret: orvyn-oidc
+    secretKey: client-secret
+    autoProvision: false
+    adminSubject: ""

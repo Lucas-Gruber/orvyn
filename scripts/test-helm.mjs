@@ -1,0 +1,403 @@
+import assert from "node:assert/strict";
+import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { spawnSync } from "node:child_process";
+import YAML from "yaml";
+import { checkVersions, root } from "./release.mjs";
+import { helmImage, kubeconformImage } from "./helm-tools.mjs";
+const chart = "infrastructure/helm/orvyn";
+const temp = await mkdtemp(join(tmpdir(), "orvyn-chart-tests-"));
+function docker(image, args, input) {
+  const result = spawnSync(
+    "docker",
+    [
+      "run",
+      "--rm",
+      "-i",
+      "--user",
+      "0:0",
+      "-v",
+      `${root}:/repo:ro`,
+      "-v",
+      `${temp}:/checks:ro`,
+      "-v",
+      "/etc/ssl/certs/ca-certificates.crt:/certs/ca.crt:ro",
+      "-e",
+      "SSL_CERT_FILE=/certs/ca.crt",
+      "-w",
+      "/repo",
+      image,
+      ...args,
+    ],
+    { input, encoding: "utf8", maxBuffer: 8 * 1024 * 1024, timeout: 120000 },
+  );
+  if (result.error) throw result.error;
+  return result;
+}
+const docs = (text) =>
+  YAML.parseAllDocuments(text, { uniqueKeys: true })
+    .map((d) => {
+      if (d.errors.length) throw d.errors[0];
+      return d.toJSON();
+    })
+    .filter(Boolean);
+try {
+  const { version } = await checkVersions();
+  for (const script of ["helm-schema.mjs", "helm-questions.mjs"]) {
+    const r = spawnSync(process.execPath, [`scripts/${script}`, "--check"], {
+      cwd: root,
+      encoding: "utf8",
+    });
+    assert.equal(r.status, 0, r.stderr);
+  }
+  const values = YAML.parse(
+    await readFile(join(root, chart, "values.yaml"), "utf8"),
+  );
+  const questions = YAML.parse(
+    await readFile(join(root, chart, "questions.yaml"), "utf8"),
+  ).questions;
+  const types = new Set([
+    "string",
+    "boolean",
+    "int",
+    "enum",
+    "password",
+    "storageclass",
+    "secret",
+    "pvc",
+    "yaml",
+    "map[string]",
+    "array[string]",
+  ]);
+  const seen = new Set();
+  for (const q of questions) {
+    assert.ok(!seen.has(q.variable), q.variable);
+    seen.add(q.variable);
+    assert.ok(types.has(q.type), q.type);
+    const actual = q.variable.split(".").reduce((v, k) => v?.[k], values);
+    assert.notEqual(actual, undefined, q.variable);
+    assert.deepEqual(q.default, actual, q.variable);
+    if (q.options) assert.ok(q.options.includes(actual), q.variable);
+  }
+  const cases = [
+    ["all-in-one", {}, "all-in-one"],
+    ["local-storage", {}, "local-storage"],
+    [
+      "local-rwx",
+      {
+        storage: {
+          driver: "local",
+          local: { persistence: { accessMode: "ReadWriteMany" } },
+        },
+        api: { replicaCount: 2 },
+        worker: { replicaCount: 2 },
+      },
+      "all-in-one",
+    ],
+    ["external-postgresql", {}, "external-postgresql"],
+    ["external-valkey", {}, "external-valkey"],
+    ["external-s3", {}, "external-s3"],
+    ["external-services", {}, "external-services"],
+    ["gitops", {}, "gitops"],
+    ["oidc", {}, "oidc"],
+    [
+      "public-oidc",
+      {
+        sso: {
+          oidc: {
+            enabled: true,
+            name: "Public SSO",
+            issuer: "https://login.example.org",
+            clientId: "public",
+            clientAuthMethod: "none",
+          },
+        },
+      },
+      "all-in-one",
+    ],
+    ["no-ingress", { ingress: { enabled: false } }, "all-in-one"],
+    [
+      "external-tls-termination",
+      {
+        ingress: { tls: { enabled: false } },
+      },
+      "all-in-one",
+    ],
+    [
+      "ephemeral-s3",
+      {
+        postgresql: { persistence: { enabled: false } },
+        valkey: { persistence: { enabled: false } },
+        storage: { s3: { internal: { persistence: { enabled: false } } } },
+      },
+      "all-in-one",
+    ],
+    [
+      "ephemeral-local",
+      {
+        storage: {
+          driver: "local",
+          local: { persistence: { enabled: false } },
+        },
+      },
+      "all-in-one",
+    ],
+    [
+      "custom-secrets",
+      {
+        global: {
+          generateSecrets: false,
+          existingEncryptionSecret: "crypto",
+          encryptionSecretKey: "key",
+        },
+        postgresql: { auth: { existingSecret: "pg", secretKey: "password" } },
+        valkey: { auth: { existingSecret: "cache", secretKey: "password" } },
+        storage: {
+          s3: {
+            existingSecret: "objects",
+            accessKeySecretKey: "access",
+            secretAccessKeySecretKey: "secret",
+          },
+        },
+      },
+      "all-in-one",
+    ],
+  ];
+  const manifestFiles = [];
+  let internal;
+  for (const [name, overlay, example] of cases) {
+    await writeFile(join(temp, "overlay.yaml"), YAML.stringify(overlay), {
+      mode: 0o600,
+    });
+    const args = [
+      "-f",
+      `${chart}/examples/${example}.yaml`,
+      "-f",
+      "/checks/overlay.yaml",
+    ];
+    const lint = docker(helmImage, ["lint", "--strict", chart, ...args]);
+    assert.equal(lint.status, 0, `${name}: ${lint.stderr}\n${lint.stdout}`);
+    const render = () =>
+      docker(helmImage, ["template", "orvyn", chart, ...args]);
+    const rendered = render();
+    assert.equal(rendered.status, 0, `${name}: ${rendered.stderr}`);
+    const resources = docs(rendered.stdout);
+    assert.ok(resources.length > 0);
+    const deployments = resources.filter((r) => r.kind === "Deployment");
+    const config = resources.find(
+      (r) => r.kind === "Job" && r.metadata.name.endsWith("-configuration"),
+    );
+    assert.equal(
+      config.metadata.annotations["helm.sh/hook"],
+      "post-install,post-upgrade,post-rollback",
+    );
+    assert.ok(
+      !resources.some(
+        (r) => r.kind === "Service" && r.metadata.name.endsWith("-worker"),
+      ),
+    );
+    for (const r of resources.filter((r) =>
+      ["Deployment", "StatefulSet", "Job"].includes(r.kind),
+    )) {
+      assert.equal(r.spec.template.spec.automountServiceAccountToken, false);
+      for (const c of [
+        ...r.spec.template.spec.containers,
+        ...(r.spec.template.spec.initContainers || []),
+      ]) {
+        assert.equal(c.securityContext.allowPrivilegeEscalation, false);
+        assert.ok(
+          c.image.includes("@sha256:") || c.image.endsWith(":" + version),
+        );
+      }
+    }
+    const api = deployments.find((d) => d.metadata.name.endsWith("-api")).spec
+      .template.spec.containers[0];
+    assert.ok(!api.env.some((e) => e.name === "ORVYN_OIDC_CLIENT_SECRET"));
+    const web = deployments.find((d) => d.metadata.name.endsWith("-web")).spec
+      .template.spec.containers[0];
+    assert.ok(!web.env.some((e) => e.valueFrom));
+    const valkey = resources.find(
+      (r) => r.kind === "StatefulSet" && r.metadata.name.endsWith("-valkey"),
+    );
+    if (valkey)
+      assert.equal(valkey.spec.template.spec.securityContext.fsGroup, 999);
+    if (name === "all-in-one") {
+      internal = resources;
+      const bootstrap = resources.find(
+        (r) => r.kind === "Job" && r.metadata.name.includes("-storage-init-"),
+      );
+      assert.ok(bootstrap);
+      assert.equal(bootstrap.metadata.annotations?.["helm.sh/hook"], undefined);
+      const second = docs(render().stdout);
+      const checks = (a) =>
+        a
+          .filter((r) => r.kind === "Deployment" || r.kind === "StatefulSet")
+          .map((r) => r.spec.template.metadata.annotations);
+      assert.deepEqual(
+        checks(resources),
+        checks(second),
+        "random secrets must not perturb rollout checksums",
+      );
+    }
+    if (name === "gitops") {
+      assert.equal(
+        resources.some((r) => r.kind === "Secret"),
+        false,
+      );
+      assert.equal(
+        rendered.stdout,
+        render().stdout,
+        "GitOps rendering is deterministic without lookup",
+      );
+    }
+    if (name === "ephemeral-local") {
+      assert.equal(deployments.length, 3);
+      assert.deepEqual(
+        deployments
+          .find((r) => r.metadata.name.endsWith("-api"))
+          .spec.template.spec.containers.map((c) => c.name),
+        ["api", "worker"],
+      );
+    }
+    if (name === "local-storage") {
+      assert.equal(
+        resources.some((r) => r.metadata.name.endsWith("-storage")),
+        false,
+      );
+      for (const d of deployments.filter((d) =>
+        /-(api|worker)$/.test(d.metadata.name),
+      ))
+        assert.ok(
+          d.spec.template.spec.affinity.podAffinity
+            .requiredDuringSchedulingIgnoredDuringExecution.length,
+        );
+    }
+
+    await writeFile(join(temp, name + ".yaml"), rendered.stdout, {
+      mode: 0o600,
+    });
+    manifestFiles.push("/checks/" + name + ".yaml");
+    console.log(
+      `PASS Helm lint, schema, render and architecture: ${name} (${resources.length} resources)`,
+    );
+  }
+  const invalid = [
+    ["missing SMTP", {}],
+    [
+      "bad encryption",
+      { smtp: { existingSecret: "mail" }, global: { encryptionKey: "wrong" } },
+    ],
+    [
+      "missing GitOps credentials",
+      { smtp: { existingSecret: "mail" }, global: { generateSecrets: false } },
+    ],
+    [
+      "missing external PG",
+      { smtp: { existingSecret: "mail" }, postgresql: { enabled: false } },
+    ],
+    [
+      "missing external Valkey",
+      { smtp: { existingSecret: "mail" }, valkey: { enabled: false } },
+    ],
+    [
+      "missing S3 endpoint",
+      {
+        smtp: { existingSecret: "mail" },
+        storage: { s3: { internal: { enabled: false } } },
+      },
+    ],
+    [
+      "bad local scaling",
+      {
+        smtp: { existingSecret: "mail" },
+        storage: { driver: "local" },
+        api: { replicaCount: 2 },
+      },
+    ],
+    [
+      "invalid origin",
+      {
+        smtp: { existingSecret: "mail" },
+        global: { origin: "https://orvyn.example.org/path" },
+      },
+    ],
+    [
+      "TLS scheme mismatch",
+      {
+        smtp: { existingSecret: "mail" },
+        global: { origin: "http://orvyn.example.org" },
+      },
+    ],
+    [
+      "missing OIDC credentials",
+      {
+        smtp: { existingSecret: "mail" },
+        sso: {
+          oidc: {
+            enabled: true,
+            issuer: "https://login.example.org",
+            clientId: "orvyn",
+          },
+        },
+      },
+    ],
+    [
+      "public OIDC with secret",
+      {
+        smtp: { existingSecret: "mail" },
+        sso: {
+          oidc: {
+            enabled: true,
+            issuer: "https://login.example.org",
+            clientId: "orvyn",
+            clientAuthMethod: "none",
+            clientSecret: "test-only",
+          },
+        },
+      },
+    ],
+    [
+      "bad replica count",
+      { smtp: { existingSecret: "mail" }, api: { replicaCount: 0 } },
+    ],
+    [
+      "unknown legacy storage",
+      {
+        smtp: { existingSecret: "mail" },
+        storage: { internal: { enabled: false } },
+      },
+    ],
+  ];
+  for (const [name, value] of invalid) {
+    await writeFile(join(temp, "invalid.yaml"), YAML.stringify(value), {
+      mode: 0o600,
+    });
+    assert.notEqual(
+      docker(helmImage, [
+        "template",
+        "invalid",
+        chart,
+        "-f",
+        "/checks/invalid.yaml",
+      ]).status,
+      0,
+      name,
+    );
+    console.log("PASS rejected: " + name);
+  }
+  const validation = docker(kubeconformImage, [
+    "-strict",
+    "-summary",
+    "-kubernetes-version",
+    "1.33.0",
+    ...manifestFiles,
+  ]);
+  assert.equal(validation.status, 0, validation.stdout + validation.stderr);
+  console.log(validation.stdout.trim());
+  console.log(
+    `PASS ${questions.length} Rancher questions, ${cases.length} deployment modes, ${invalid.length} negative cases; app/chart ${version}`,
+  );
+} finally {
+  await rm(temp, { recursive: true, force: true });
+}

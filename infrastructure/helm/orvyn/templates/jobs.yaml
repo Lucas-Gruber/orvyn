@@ -1,0 +1,67 @@
+{{- $root := . }}
+{{- range $purpose := list "configuration" "storage-init" }}
+{{- if or (eq $purpose "configuration") (and (eq $.Values.storage.driver "s3") $.Values.storage.s3.internal.enabled) }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "orvyn.fullname" $ }}-{{ $purpose }}{{ if eq $purpose "storage-init" }}-{{ toJson (dict "storage" $.Values.storage.s3 "api" $.Values.api "configuration" $.Values.configuration "global" $.Values.global "version" $.Chart.AppVersion) | sha256sum | trunc 10 }}{{ end }}
+  labels: {{- include "orvyn.labels" $ | nindent 4 }}
+  {{- if eq $purpose "configuration" }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade,post-rollback
+    helm.sh/hook-weight: "10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+  {{- end }}
+spec:
+  activeDeadlineSeconds: {{ $.Values.configuration.activeDeadlineSeconds }}
+  backoffLimit: {{ $.Values.configuration.backoffLimit }}
+  template:
+    metadata:
+      labels: {{- include "orvyn.selector" (dict "root" $ "component" $purpose) | nindent 8 }}
+      {{- if eq $purpose "storage-init" }}
+      annotations:
+        checksum/storage: {{ toJson $.Values.storage.s3 | sha256sum | quote }}
+      {{- end }}
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: {{ include "orvyn.serviceAccount" $ }}
+      automountServiceAccountToken: false
+      securityContext: {{- toYaml $.Values.api.podSecurityContext | nindent 8 }}
+      {{- with $.Values.api.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $.Values.api.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $.Values.global.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: {{ $purpose }}
+          image: {{ include "orvyn.image" (dict "root" $ "image" $.Values.api.image) | quote }}
+          imagePullPolicy: {{ $.Values.api.image.pullPolicy }}
+          command: [node, {{ ternary "dist/commands/configure.js" "dist/commands/storage-init.js" (eq $purpose "configuration") | quote }}]
+          securityContext: {{- toYaml $.Values.api.securityContext | nindent 12 }}
+          resources: {{- toYaml $.Values.configuration.resources | nindent 12 }}
+          env:
+            - name: NODE_ENV
+              value: production
+            {{- if eq $purpose "configuration" }}
+            - name: ORVYN_ORIGIN
+              value: {{ $.Values.global.origin | quote }}
+            {{- include "orvyn.databaseEnv" $ | nindent 12 }}
+            {{- include "orvyn.encryptionEnv" $ | nindent 12 }}
+            {{- include "orvyn.oidcEnv" $ | nindent 12 }}
+            {{- else }}
+            {{- include "orvyn.storageEnv" $ | nindent 12 }}
+            {{- end }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+{{- end }}
+{{- end }}
