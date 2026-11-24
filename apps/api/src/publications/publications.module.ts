@@ -35,7 +35,7 @@ import {
   rateLimit,
 } from "../auth/security.js";
 import { pageAccess, pageWrite } from "../permissions/access.js";
-import { storage, bucket, GetObjectCommand } from "../files/storage.js";
+import { attachments } from "../files/storage.js";
 import { database, querySql } from "../databases/model.js";
 import { publicViewProperties, publicPropertyTypes } from "./databases.js";
 import { publicationFormulaInputs } from "./formulas.js";
@@ -611,13 +611,11 @@ class PublicReader {
     if (!file) fail(404, "Attachment unavailable");
     let object;
     try {
-      object = await storage().send(
-        new GetObjectCommand({ Bucket: bucket(), Key: file.object_key }),
-      );
+      object = await attachments().get(file.object_key);
     } catch {
       fail(404, "Attachment unavailable");
     }
-    const body = object?.Body;
+    const body = object?.body;
     if (!(body instanceof Readable)) return fail(503, "Attachment unavailable");
     const inline = [
       "image/png",

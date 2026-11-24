@@ -14,6 +14,9 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import { db, derive, hash, fail, text, mutation, user } from "./runtime.js";
 @Controller("api/v1")
 class HealthController {
+  @Get("live") live() {
+    return { status: "ok" };
+  }
   @Get("health") async health() {
     await db.query("SELECT 1");
     await storageHealth();

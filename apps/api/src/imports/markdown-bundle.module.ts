@@ -14,7 +14,7 @@ import { zipSync, strToU8, type Zippable } from "fflate";
 import { markdownBundleInput, markdownBundleDownload, z } from "@orvyn/shared";
 import { readSnapshot, rateLimit } from "../auth/security.js";
 import { fail, mutation, user } from "../runtime.js";
-import { storage, bucket, GetObjectCommand } from "../files/storage.js";
+import { attachments } from "../files/storage.js";
 import { bundleTree, bundlePlan } from "./markdown-bundle-plan.js";
 
 function parse<T>(schema: z.ZodType<T>, body: unknown) {
@@ -84,11 +84,8 @@ class MarkdownBundles {
         const cancel = () =>
           body?.destroy(new Error("Attachment read aborted"));
         try {
-          const object = await storage().send(
-            new GetObjectCommand({ Bucket: bucket(), Key: file.object_key }),
-            { abortSignal: signal },
-          );
-          const stream = object.Body;
+          const object = await attachments().get(file.object_key, signal);
+          const stream = object.body;
           if (!(stream instanceof Readable))
             return fail(
               503,
@@ -97,7 +94,7 @@ class MarkdownBundles {
           body = stream;
           signal.addEventListener("abort", cancel, { once: true });
           if (signal.aborted) cancel();
-          if (object.ContentLength !== Number(file.size))
+          if (object.size !== Number(file.size))
             throw Error("Attachment size changed");
           const chunks: Buffer[] = [];
           let bytes = 0;

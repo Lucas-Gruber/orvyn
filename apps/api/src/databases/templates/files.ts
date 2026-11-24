@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { CopyObjectCommand } from "@aws-sdk/client-s3";
-import { storage, bucket, DeleteObjectCommand } from "../../files/storage.js";
+import { attachments } from "../../files/storage.js";
 import { db } from "../../runtime.js";
 
 export interface TemplateFile {
@@ -28,11 +27,7 @@ export async function removeTemplateCopies(files: CopiedTemplateFile[]) {
   await Promise.allSettled(
     files
       .filter((f) => !keep.has(f.object_key))
-      .map((f) =>
-        storage().send(
-          new DeleteObjectCommand({ Bucket: bucket(), Key: f.object_key }),
-        ),
-      ),
+      .map((f) => attachments().delete(f.object_key)),
   );
 }
 export async function copyTemplateFiles(
@@ -54,20 +49,7 @@ export async function copyTemplateFiles(
           original = source[at];
         if (!target || !original) return;
         try {
-          await storage().send(
-            new CopyObjectCommand({
-              Bucket: bucket(),
-              Key: target.object_key,
-              CopySource:
-                bucket() +
-                "/" +
-                original.object_key
-                  .split("/")
-                  .map(encodeURIComponent)
-                  .join("/"),
-              MetadataDirective: "COPY",
-            }),
-          );
+          await attachments().copy(original.object_key, target.object_key);
         } catch (e) {
           error = e;
         }

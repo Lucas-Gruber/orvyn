@@ -11,7 +11,7 @@ import { OidcModule } from "./oidc.module.js";
 import { DatabaseTransferModule } from "./databases/transfer.module.js";
 import { DatabasesModule } from "./databases.module.js";
 import { FilesModule } from "./files.module.js";
-import { storageHealth } from "./files/storage.js";
+import { storageHealth, attachments } from "./files/storage.js";
 import { AuthModule } from "./auth.module.js";
 import { SpacesModule } from "./spaces.module.js";
 import { PagesModule } from "./pages.module.js";
@@ -52,12 +52,27 @@ import { WhiteboardsModule } from "./whiteboards.module.js";
 })
 class App {}
 async function main() {
-  if (!process.env.DATABASE_URL) throw Error("DATABASE_URL required");
   encryptionKey();
   await migrate(db);
   await initializeDeploymentOidc(db);
   await storageHealth();
   const app = await NestFactory.create(App);
+  let stopping = false;
+  const shutdown = async () => {
+    if (stopping) return;
+    stopping = true;
+    const deadline = setTimeout(() => process.exit(1), 25000);
+    deadline.unref();
+    try {
+      await app.close();
+      attachments().close();
+      await db.end();
+    } finally {
+      clearTimeout(deadline);
+    }
+  };
+  process.once("SIGTERM", shutdown);
+  process.once("SIGINT", shutdown);
   app.use((req: any, res: any, next: any) => {
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("Cache-Control", "no-store");

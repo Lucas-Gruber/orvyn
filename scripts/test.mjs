@@ -4,6 +4,9 @@ import { randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
 import { createServer } from "node:net";
 import { once } from "node:events";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 const require = createRequire(
   new URL("../apps/api/package.json", import.meta.url),
 );
@@ -79,6 +82,10 @@ function start(args, env) {
   return c;
 }
 let created = false;
+const localStorage =
+  process.env.ORVYN_TEST_STORAGE_DRIVER === "local"
+    ? await mkdtemp(join(tmpdir(), "orvyn-local-suite-"))
+    : null;
 try {
   await root.query("CREATE DATABASE " + name);
   created = true;
@@ -92,6 +99,8 @@ try {
     ...process.env,
     DATABASE_URL: url.toString(),
     S3_BUCKET: storageBucket,
+    ORVYN_STORAGE_DRIVER: localStorage ? "local" : "s3",
+    ...(localStorage ? { ORVYN_STORAGE_LOCAL_PATH: localStorage } : {}),
     ORVYN_ORIGIN: base,
     NODE_ENV: "test",
     ORVYN_OIDC_ALLOW_HTTP_LOCAL: "true",
@@ -139,6 +148,7 @@ try {
           "tests/collaboration.test.mjs",
           "tests/editor.test.mjs",
           "tests/files.test.mjs",
+          "tests/local-storage.test.mjs",
           "tests/restore.test.mjs",
           "tests/databases.test.mjs",
           "tests/database-events.test.mjs",
@@ -235,4 +245,5 @@ try {
   await root.end();
   if (bucketCreated) await removeTestBucket(s3, storageBucket);
   s3.destroy();
+  if (localStorage) await rm(localStorage, { recursive: true, force: true });
 }

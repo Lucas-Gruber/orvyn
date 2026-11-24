@@ -8,7 +8,7 @@ import { Redis as RedisExtension } from "@hocuspocus/extension-redis";
 import { Redis as RedisClient } from "ioredis";
 import { Pool, type PoolClient } from "pg";
 import { databaseFingerprint, rollupDependencyState } from "@orvyn/shared";
-import { authenticateCookie } from "@orvyn/auth";
+import { authenticateCookie, databaseConfiguration } from "@orvyn/auth";
 import {
   documentToYDoc,
   yDocToDocument,
@@ -35,17 +35,22 @@ type Identity = {
   lastPoll: number;
   watchGeneration: number;
 };
-const db = new Pool({ connectionString: process.env.DATABASE_URL });
+const db = new Pool(databaseConfiguration());
 const live = new Set<Connection<Identity>>();
 let notificationsReady = false;
 let stopping = false,
   poisoned = false,
   revalidating = false;
 const origin = process.env.ORVYN_ORIGIN || "http://localhost:3000";
-const redis = new RedisClient(
-  process.env.REDIS_URL || "redis://127.0.0.1:6379",
-  { connectTimeout: 2000, maxRetriesPerRequest: 1 },
-);
+const redisOptions = { connectTimeout: 2000, maxRetriesPerRequest: 1 };
+const redis = process.env.REDIS_URL
+  ? new RedisClient(process.env.REDIS_URL, redisOptions)
+  : new RedisClient({
+      ...redisOptions,
+      host: process.env.VALKEY_HOST || "127.0.0.1",
+      port: Number(process.env.VALKEY_PORT || 6379),
+      password: process.env.VALKEY_PASSWORD || undefined,
+    });
 redis.on("error", () => {});
 const extension = new RedisExtension({
   redis,
@@ -592,7 +597,6 @@ function redisLost() {
   setTimeout(() => process.exit(1), 50);
 }
 async function main() {
-  if (!process.env.DATABASE_URL) throw Error("DATABASE_URL required");
   await redis.ping();
   const listener = await db.connect();
   await listener.query("LISTEN orvyn_database_changed");

@@ -1,4 +1,4 @@
-import { authenticateCookie } from "@orvyn/auth";
+import { authenticateCookie, databaseConfiguration } from "@orvyn/auth";
 import { Pool } from "pg";
 import { HttpException } from "@nestjs/common";
 import { scrypt, createHash } from "node:crypto";
@@ -8,7 +8,7 @@ export const derive = (password: string, salt: string) =>
       err ? reject(err) : resolve(key),
     ),
   );
-export const db = new Pool({ connectionString: process.env.DATABASE_URL });
+export const db = new Pool(databaseConfiguration());
 export const fail = (status: number, message: string): never => {
   throw new HttpException({ message }, status);
 };

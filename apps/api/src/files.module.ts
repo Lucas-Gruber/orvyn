@@ -16,18 +16,12 @@ import {
   StreamableFile,
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { Readable } from "node:stream";
 import { db, fail, mutation, user } from "./runtime.js";
 import { pageAccess, pageWrite } from "./permissions/access.js";
 import { transaction, audit, origin, rateLimit } from "./auth/security.js";
-import {
-  storage,
-  bucket,
-  PutObjectCommand,
-  GetObjectCommand,
-  DeleteObjectCommand,
-} from "./files/storage.js";
+import { attachments } from "./files/storage.js";
 const maxBytes = Number(process.env.MAX_UPLOAD_BYTES || 10 * 1024 * 1024);
 if (
   !Number.isSafeInteger(maxBytes) ||
@@ -140,15 +134,11 @@ class FilesController {
       ).rows[0];
     });
     try {
-      await storage().send(
-        new PutObjectCommand({
-          Bucket: bucket(),
-          Key: key,
-          Body: file.buffer,
-          ContentType: type,
-          ContentMD5: createHash("md5").update(file.buffer).digest("base64"),
-        }),
-      );
+      await attachments().put(key, {
+        body: file.buffer,
+        size: file.size,
+        contentType: type,
+      });
       return await transaction(async (c) => {
         await pageWrite(c, uid, id);
         const r = await c.query(
@@ -161,9 +151,7 @@ class FilesController {
       });
     } catch (error) {
       try {
-        await storage().send(
-          new DeleteObjectCommand({ Bucket: bucket(), Key: key }),
-        );
+        await attachments().delete(key);
         await db.query("DELETE FROM files WHERE id=$1 AND state='pending'", [
           row.id,
         ]);
@@ -204,13 +192,11 @@ class FilesController {
       return fail(415, "Inline preview is not supported for this file");
     let object;
     try {
-      object = await storage().send(
-        new GetObjectCommand({ Bucket: bucket(), Key: file.object_key }),
-      );
+      object = await attachments().get(file.object_key);
     } catch {
       return fail(503, "File storage unavailable");
     }
-    if (!(object.Body instanceof Readable))
+    if (!(object.body instanceof Readable))
       return fail(503, "File could not be read");
     res.setHeader(
       "Content-Type",
@@ -224,7 +210,7 @@ class FilesController {
     res.setHeader("Content-Security-Policy", "default-src 'none'; sandbox");
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("Cache-Control", "private, no-store");
-    return new StreamableFile(object.Body);
+    return new StreamableFile(object.body);
   }
   @Delete("files/:id") async remove(@Req() req: any, @Param("id") id: string) {
     mutation(req);

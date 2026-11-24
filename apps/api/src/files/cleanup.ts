@@ -1,6 +1,7 @@
 import { transaction } from "../auth/security.js";
-import { storage, bucket, DeleteObjectCommand } from "./storage.js";
+import { attachments } from "./storage.js";
 export async function cleanupFiles() {
+  await attachments().cleanup();
   for (let i = 0; i < 10; i++) {
     const found = await transaction(async (c) => {
       const r = await c.query(
@@ -8,9 +9,7 @@ export async function cleanupFiles() {
       );
       if (!r.rowCount) return false;
       const file = r.rows[0];
-      await storage().send(
-        new DeleteObjectCommand({ Bucket: bucket(), Key: file.object_key }),
-      );
+      await attachments().delete(file.object_key);
       await c.query("DELETE FROM files WHERE id=$1", [file.id]);
       return true;
     });
