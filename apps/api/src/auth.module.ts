@@ -22,6 +22,7 @@ import {
   rateLimit,
 } from "./auth/security.js";
 import { accountLink } from "./auth/mail.js";
+import { administratorSql } from "./auth/deployment-oidc.js";
 
 function emailInput(value: unknown) {
   const email = text(value, 254).toLowerCase();
@@ -136,7 +137,7 @@ class AuthController {
   }
   @Get("me") async me(@Req() req: any) {
     const r = await db.query(
-      'SELECT id,email,email_verified AS "emailVerified",is_admin AS "isAdmin" FROM users WHERE id=$1',
+      `SELECT u.id,u.email,u.email_verified AS "emailVerified",${administratorSql} AS "isAdmin" FROM users u WHERE u.id=$1`,
       [await user(req)],
     );
     return r.rows[0];

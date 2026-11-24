@@ -1,7 +1,10 @@
 import * as client from "openid-client";
 import { fail } from "../runtime.js";
 import { decrypt, origin } from "./security.js";
-export function validateIssuer(input: string) {
+export function validateIssuer(
+  input: string,
+  env: Readonly<Record<string, string | undefined>> = process.env,
+) {
   let url: URL;
   try {
     url = new URL(input);
@@ -12,8 +15,7 @@ export function validateIssuer(input: string) {
     fail(400, "Invalid issuer URL");
   const local = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
   const localTest =
-    process.env.NODE_ENV !== "production" &&
-    process.env.ORVYN_OIDC_ALLOW_HTTP_LOCAL === "true";
+    env.NODE_ENV !== "production" && env.ORVYN_OIDC_ALLOW_HTTP_LOCAL === "true";
   if (
     url.protocol !== "https:" &&
     !(local && localTest && url.protocol === "http:")
@@ -21,15 +23,24 @@ export function validateIssuer(input: string) {
     fail(400, "OIDC requires HTTPS");
   return url;
 }
-export function redirectUri(id: string) {
-  return `${origin()}/api/v1/oidc/${id}/callback`;
+export function redirectUri(id: string, managed = false) {
+  return `${origin()}/api/v1/oidc/${managed ? "deployment" : id}/callback`;
 }
 export async function configuration(provider: any) {
   const issuer = validateIssuer(provider.issuer);
   const secret = provider.encrypted_secret
     ? decrypt(provider.encrypted_secret)
     : undefined;
-  const auth = secret ? client.ClientSecretPost(secret) : client.None();
+  const method =
+    provider.auth_method || (secret ? "client_secret_post" : "none");
+  if (method !== "none" && !secret)
+    throw Error("OIDC client secret is required");
+  const auth =
+    method === "none"
+      ? client.None()
+      : method === "client_secret_basic"
+        ? client.ClientSecretBasic(secret!)
+        : client.ClientSecretPost(secret!);
   const options: client.DiscoveryRequestOptions = {
     timeout: 10,
     execute: [client.enableNonRepudiationChecks],

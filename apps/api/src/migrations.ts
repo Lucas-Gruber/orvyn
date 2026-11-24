@@ -641,6 +641,16 @@ END $$;`,
   { version: 42, sql: whiteboardMigration },
   { version: 43, sql: publicationMigration },
   { version: 44, sql: pageImportMigration },
+  {
+    version: 45,
+    sql: `
+ALTER TABLE oidc_providers ADD COLUMN managed_by text CHECK(managed_by='deployment');
+ALTER TABLE oidc_providers ADD COLUMN admin_subject text;
+ALTER TABLE oidc_providers ADD COLUMN auth_method text CHECK(auth_method IN ('none','client_secret_post','client_secret_basic'));
+CREATE UNIQUE INDEX oidc_one_active_deployment ON oidc_providers(managed_by) WHERE managed_by='deployment' AND enabled;
+CREATE TABLE deployment_configuration(name text PRIMARY KEY, fingerprint text NOT NULL, updated_at timestamptz NOT NULL DEFAULT now());
+`,
+  },
 ] as const;
 
 export async function migrate(pool: Pool, target = migrations.at(-1)!.version) {

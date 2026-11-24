@@ -132,6 +132,8 @@ try {
           "tests/browser.test.mjs",
           "tests/migrations.test.mjs",
           "tests/oidc.test.mjs",
+          "tests/deployment-oidc.test.mjs",
+          "tests/oidc-keycloak.test.mjs",
           "tests/workspace.test.mjs",
           "tests/permissions.test.mjs",
           "tests/collaboration.test.mjs",

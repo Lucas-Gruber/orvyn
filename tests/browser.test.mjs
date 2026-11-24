@@ -135,7 +135,7 @@ test("Chromium: account, persisted page, verification, session settings and OIDC
       .fill("https://id.example.test");
     await page.getByLabel("Client ID", { exact: true }).fill("browser-test");
     await page
-      .getByLabel("Client secret (optional for public clients)", {
+      .getByLabel("Client secret (required for confidential clients)", {
         exact: true,
       })
       .fill(randomUUID());

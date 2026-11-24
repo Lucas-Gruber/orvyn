@@ -12,8 +12,12 @@ const defaults = () => ({
   clientSecret: "",
   enabled: false,
   autoProvision: false,
+  clientAuthMethod: "client_secret_post",
 });
 const form = reactive(defaults());
+const managed = computed(
+  () => !!providers.value.find((p) => p.id === selected.value)?.managed,
+);
 async function load() {
   providers.value = await $fetch<any[]>("/api/v1/admin/oidc/providers");
 }
@@ -23,6 +27,7 @@ function choose(p?: any) {
   notice.value = "";
 }
 async function save() {
+  if (managed.value) return;
   busy.value = true;
   error.value = "";
   try {
@@ -72,55 +77,76 @@ onMounted(async () => {
           Client secret:
           {{ p.hasClientSecret ? "Configured" : "Not configured" }}
         </p>
+        <p v-if="p.managed" class="managed-note">Managed by deployment</p>
       </li>
     </ul>
     <button @click="choose()">New provider</button>
     <form @submit.prevent="save">
       <h2>{{ selected ? "Edit provider" : "Add provider" }}</h2>
-      <label for="oidc-name">Display name</label
-      ><input
-        id="oidc-name"
-        v-model="form.name"
-        required
-        maxlength="120"
-      /><label for="oidc-issuer">Issuer URL</label
-      ><input
-        id="oidc-issuer"
-        v-model="form.issuer"
-        type="url"
-        :disabled="!!selected"
-        required
-      /><label for="oidc-client">Client ID</label
-      ><input
-        id="oidc-client"
-        v-model="form.clientId"
-        :disabled="!!selected"
-        required
-      /><label for="oidc-secret"
-        >Client secret
-        {{
-          selected
-            ? "(leave empty to keep the current secret)"
-            : "(optional for public clients)"
-        }}</label
-      ><input
-        id="oidc-secret"
-        v-model="form.clientSecret"
-        type="password"
-        autocomplete="new-password"
-      /><label for="oidc-scopes">Scopes</label
-      ><input id="oidc-scopes" v-model="form.scopes" required /><label
-        class="check"
-        ><input v-model="form.autoProvision" type="checkbox" /> Allow creation
-        of accounts with a verified provider email</label
-      ><label class="check"
-        ><input v-model="form.enabled" type="checkbox" /> Enable sign-in</label
-      >
-      <p>
-        Disabling a provider revokes its active Orvyn sessions. Saving any
-        change invalidates in-progress sign-ins.
+      <p v-if="managed" class="managed-note" role="note">
+        This provider is configured through Helm or environment settings. Apply
+        changes there; its client secret stays hidden.
       </p>
-      <button :disabled="busy">{{ busy ? "Saving…" : "Save provider" }}</button>
+      <fieldset :disabled="managed">
+        <label for="oidc-name">Display name</label
+        ><input
+          id="oidc-name"
+          v-model="form.name"
+          required
+          maxlength="120"
+        /><label for="oidc-issuer">Issuer URL</label
+        ><input
+          id="oidc-issuer"
+          v-model="form.issuer"
+          type="url"
+          :disabled="!!selected"
+          required
+        /><label for="oidc-client">Client ID</label
+        ><input
+          id="oidc-client"
+          v-model="form.clientId"
+          :disabled="!!selected"
+          required
+        /><label for="oidc-method">Client authentication</label>
+        <select id="oidc-method" v-model="form.clientAuthMethod">
+          <option value="client_secret_post">
+            Client secret in token request (POST)
+          </option>
+          <option value="client_secret_basic">
+            Client secret with HTTP Basic
+          </option>
+          <option value="none">Public client with PKCE</option>
+        </select>
+        <label v-if="form.clientAuthMethod !== 'none'" for="oidc-secret"
+          >Client secret
+          {{
+            selected
+              ? "(leave empty to keep the current secret)"
+              : "(required for confidential clients)"
+          }}</label
+        ><input
+          v-if="form.clientAuthMethod !== 'none'"
+          id="oidc-secret"
+          v-model="form.clientSecret"
+          type="password"
+          autocomplete="new-password"
+        /><label for="oidc-scopes">Scopes</label
+        ><input id="oidc-scopes" v-model="form.scopes" required /><label
+          class="check"
+          ><input v-model="form.autoProvision" type="checkbox" /> Allow creation
+          of accounts with a verified provider email</label
+        ><label class="check"
+          ><input v-model="form.enabled" type="checkbox" /> Enable
+          sign-in</label
+        >
+        <p>
+          Disabling a provider revokes its active Orvyn sessions. Saving any
+          change invalidates in-progress sign-ins.
+        </p>
+        <button :disabled="busy">
+          {{ busy ? "Saving…" : "Save provider" }}
+        </button>
+      </fieldset>
     </form>
   </section>
 </template>
@@ -146,5 +172,14 @@ code {
 }
 form {
   margin-top: 2rem;
+}
+fieldset {
+  border: 0;
+  padding: 0;
+  min-width: 0;
+}
+.managed-note {
+  color: var(--muted);
+  font-size: 0.88rem;
 }
 </style>

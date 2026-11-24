@@ -23,11 +23,17 @@ import {
   rateLimit,
 } from "./auth/security.js";
 import { configuration, redirectUri, validateIssuer } from "./auth/oidc.js";
-const safeFields =
-  'id,name,issuer,client_id AS "clientId",scopes,enabled,auto_provision AS "autoProvision",encrypted_secret IS NOT NULL AS "hasClientSecret"';
+import {
+  administratorSql,
+  type OidcClientAuth,
+} from "./auth/deployment-oidc.js";
+const safeFields = `id,name,issuer,client_id AS "clientId",scopes,enabled,auto_provision AS "autoProvision",encrypted_secret IS NOT NULL AS "hasClientSecret",managed_by IS NOT NULL AS managed,coalesce(auth_method,CASE WHEN encrypted_secret IS NULL THEN 'none' ELSE 'client_secret_post' END) AS "clientAuthMethod"`;
 async function admin(req: any) {
   const uid = await user(req);
-  const r = await db.query("SELECT is_admin FROM users WHERE id=$1", [uid]);
+  const r = await db.query(
+    `SELECT ${administratorSql} AS is_admin FROM users u WHERE u.id=$1`,
+    [uid],
+  );
   if (!r.rows[0]?.is_admin) fail(403, "Administrator required");
   return uid;
 }
@@ -50,8 +56,21 @@ function providerInput(body: any) {
     fail(400, "Boolean settings required");
   let secret: string | undefined | null;
   if (body.clientSecret === null) secret = null;
-  else if (body.clientSecret !== undefined)
-    secret = encrypt(text(body.clientSecret, 4000));
+  else if (body.clientSecret !== undefined) {
+    if (
+      typeof body.clientSecret !== "string" ||
+      !body.clientSecret.trim() ||
+      body.clientSecret.length > 4000
+    )
+      fail(400, "Invalid client secret");
+    secret = encrypt(body.clientSecret);
+  }
+  const method = body.clientAuthMethod;
+  if (
+    method !== undefined &&
+    !["none", "client_secret_post", "client_secret_basic"].includes(method)
+  )
+    fail(400, "Invalid OIDC client authentication method");
   return {
     name,
     issuer,
@@ -60,7 +79,33 @@ function providerInput(body: any) {
     enabled: body.enabled,
     autoProvision: body.autoProvision,
     secret,
+    method: method as OidcClientAuth | undefined,
   };
+}
+function clientAuth(p: ReturnType<typeof providerInput>, existing?: any) {
+  const hasSecret =
+    p.secret === undefined ? !!existing?.encrypted_secret : !!p.secret;
+  const method =
+    p.method ||
+    (p.secret === null
+      ? "none"
+      : existing?.auth_method || (hasSecret ? "client_secret_post" : "none"));
+  if (method !== "none" && !hasSecret)
+    fail(400, "A client secret is required for this authentication method");
+  if (method === "none") {
+    if (p.secret)
+      fail(400, "Public OIDC clients must not configure a client secret");
+    p.secret = null;
+  }
+  return method;
+}
+async function resolveProviderRoute(id: string) {
+  if (id !== "deployment") return id;
+  const result = await db.query(
+    "SELECT id FROM oidc_providers WHERE managed_by='deployment' AND enabled",
+  );
+  if (!result.rowCount) fail(404, "Provider not found");
+  return result.rows[0].id as string;
 }
 @Controller("api/v1")
 class OidcController {
@@ -75,7 +120,7 @@ class OidcController {
     await admin(req);
     return (
       await db.query(`SELECT ${safeFields} FROM oidc_providers ORDER BY name`)
-    ).rows.map((p) => ({ ...p, redirectUri: redirectUri(p.id) }));
+    ).rows.map((p) => ({ ...p, redirectUri: redirectUri(p.id, p.managed) }));
   }
   @Post("admin/oidc/providers") async create(
     @Req() req: any,
@@ -85,8 +130,9 @@ class OidcController {
     const uid = await admin(req),
       p = providerInput(body);
     return transaction(async (c) => {
+      const method = clientAuth(p);
       const r = await c.query(
-        `INSERT INTO oidc_providers(name,issuer,client_id,encrypted_secret,scopes,enabled,auto_provision) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(issuer) DO NOTHING RETURNING ${safeFields}`,
+        `INSERT INTO oidc_providers(name,issuer,client_id,encrypted_secret,scopes,enabled,auto_provision,auth_method) VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(issuer) DO NOTHING RETURNING ${safeFields}`,
         [
           p.name,
           p.issuer,
@@ -95,6 +141,7 @@ class OidcController {
           p.scopes,
           p.enabled,
           p.autoProvision,
+          method,
         ],
       );
       if (!r.rowCount) fail(409, "Issuer is already configured");
@@ -112,10 +159,15 @@ class OidcController {
       p = providerInput(body);
     return transaction(async (c) => {
       const existing = await c.query(
-        "SELECT issuer,client_id,enabled FROM oidc_providers WHERE id::text=$1 FOR UPDATE",
+        "SELECT issuer,client_id,enabled,managed_by,encrypted_secret,auth_method FROM oidc_providers WHERE id::text=$1 FOR UPDATE",
         [id],
       );
       if (!existing.rowCount) fail(404, "Provider not found");
+      if (existing.rows[0].managed_by)
+        fail(
+          409,
+          "This provider is managed by deployment configuration; update its Helm values or environment settings",
+        );
       if (
         existing.rows[0].issuer !== p.issuer ||
         existing.rows[0].client_id !== p.clientId
@@ -124,8 +176,9 @@ class OidcController {
           400,
           "Issuer and client identity are immutable; create a new provider",
         );
+      const method = clientAuth(p, existing.rows[0]);
       const r = await c.query(
-        `UPDATE oidc_providers SET config_version=config_version+1,name=$1,encrypted_secret=CASE WHEN $2 THEN $3 ELSE encrypted_secret END,scopes=$4,enabled=$5,auto_provision=$6 WHERE id::text=$7 RETURNING ${safeFields}`,
+        `UPDATE oidc_providers SET config_version=config_version+1,name=$1,encrypted_secret=CASE WHEN $2 THEN $3 ELSE encrypted_secret END,scopes=$4,enabled=$5,auto_provision=$6,auth_method=$8 WHERE id::text=$7 RETURNING ${safeFields}`,
         [
           p.name,
           p.secret !== undefined,
@@ -134,6 +187,7 @@ class OidcController {
           p.enabled,
           p.autoProvision,
           id,
+          method,
         ],
       );
       // Config changes invalidate in-flight logins; disabling also revokes all provider sessions.
@@ -151,6 +205,7 @@ class OidcController {
   ) {
     mutation(req);
     await rateLimit("oidc:" + req.ip);
+    id = await resolveProviderRoute(id);
     const r = await db.query(
       "SELECT * FROM oidc_providers WHERE id::text=$1 AND enabled=true",
       [id],
@@ -184,7 +239,7 @@ class OidcController {
     return {
       url: client
         .buildAuthorizationUrl(config, {
-          redirect_uri: redirectUri(id),
+          redirect_uri: redirectUri(id, !!r.rows[0].managed_by),
           scope: r.rows[0].scopes,
           state,
           nonce,
@@ -199,6 +254,7 @@ class OidcController {
     @Res() res: any,
     @Param("id") id: string,
   ) {
+    id = await resolveProviderRoute(id);
     const callback = new URL(req.originalUrl, origin()),
       state = callback.searchParams.get("state");
     if (!state || !/^[a-zA-Z0-9_-]{20,128}$/.test(state))
