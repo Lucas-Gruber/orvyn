@@ -470,6 +470,8 @@ ingress:
     issuer: ""
     issuerKind: ClusterIssuer
 configuration:
+  reconcileIntervalSeconds: 30
+  retryIntervalSeconds: 5
   resources:
     requests:
       cpu: 100m

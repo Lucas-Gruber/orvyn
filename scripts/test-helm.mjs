@@ -300,11 +300,22 @@ try {
     assert.ok(resources.length > 0);
     const deployments = resources.filter((r) => r.kind === "Deployment");
     const config = resources.find(
-      (r) => r.kind === "Job" && r.metadata.name.endsWith("-configuration"),
+      (r) =>
+        r.kind === "Deployment" && r.metadata.name.endsWith("-configuration"),
     );
-    assert.equal(
-      config.metadata.annotations["helm.sh/hook"],
-      "post-install,post-upgrade,post-rollback",
+    assert.equal(config.metadata.annotations?.["helm.sh/hook"], undefined);
+    assert.equal(config.spec.replicas, 1);
+    assert.equal(config.spec.strategy.type, "Recreate");
+    const configuration = config.spec.template.spec.containers[0];
+    assert.ok(configuration.command.includes("--watch"));
+    assert.ok(
+      configuration.readinessProbe.exec.command.includes(
+        "dist/commands/configure-health.js",
+      ),
+    );
+    assert.ok(
+      !configuration.env.some((e) => /^(SMTP_|S3_|VALKEY_)/.test(e.name)),
+      "Configuration is independent of attachment, SMTP and Valkey availability",
     );
     if (name === "oidc-legacy-repair-private-ca") {
       const pod = config.spec.template.spec,
@@ -405,6 +416,35 @@ try {
       assert.equal(valkey.spec.template.spec.securityContext.fsGroup, 999);
     if (name === "all-in-one") {
       internal = resources;
+      const upgrade = docker(helmImage, [
+        "template",
+        "orvyn",
+        chart,
+        ...args,
+        "--is-upgrade",
+      ]);
+      assert.equal(upgrade.status, 0, upgrade.stderr);
+      const legacy = docs(upgrade.stdout).find(
+        (r) => r.kind === "Job" && r.metadata.name.endsWith("-configuration"),
+      );
+      assert.equal(legacy.metadata.annotations["helm.sh/hook"], "pre-upgrade");
+      assert.match(
+        legacy.metadata.annotations["helm.sh/hook-delete-policy"],
+        /before-hook-creation/,
+      );
+      const pod = legacy.spec.template.spec;
+      assert.equal(pod.automountServiceAccountToken, false);
+      assert.ok(!pod.containers[0].env?.length);
+      assert.ok(!pod.volumes?.length);
+      assert.deepEqual(pod.containers[0].command, [
+        "node",
+        "-e",
+        "process.exit(0)",
+      ]);
+      await writeFile(join(temp, "legacy-upgrade.yaml"), upgrade.stdout, {
+        mode: 0o600,
+      });
+      manifestFiles.push("/checks/legacy-upgrade.yaml");
       const bootstrap = resources.find(
         (r) => r.kind === "Job" && r.metadata.name.includes("-storage-init-"),
       );
@@ -433,7 +473,7 @@ try {
       );
     }
     if (name === "ephemeral-local") {
-      assert.equal(deployments.length, 3);
+      assert.equal(deployments.length, 4);
       assert.deepEqual(
         deployments
           .find((r) => r.metadata.name.endsWith("-api"))
@@ -552,6 +592,20 @@ try {
     );
   }
   const invalid = [
+    [
+      "zero configuration interval",
+      {
+        smtp: { existingSecret: "mail" },
+        configuration: { reconcileIntervalSeconds: 0 },
+      },
+    ],
+    [
+      "unbounded configuration retries",
+      {
+        smtp: { existingSecret: "mail" },
+        configuration: { retryIntervalSeconds: 301 },
+      },
+    ],
     [
       "wildcard registration domain",
       {

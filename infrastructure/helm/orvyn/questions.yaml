@@ -2188,6 +2188,23 @@ questions:
       - Issuer
       - ClusterIssuer
     show_if: ingress.enabled=true&&ingress.tls.enabled=true
+  - variable: configuration.reconcileIntervalSeconds
+    label: Configuration reconciliation interval
+    type: int
+    default: 30
+    group: Advanced
+    description: Seconds between idempotent checks of deployment-managed OIDC
+      settings. The independent configuration workload applies settings without
+      waiting for API or attachment readiness.
+    show_if: global.showAdvanced=true
+  - variable: configuration.retryIntervalSeconds
+    label: Configuration retry interval
+    type: int
+    default: 5
+    group: Advanced
+    description: Seconds before retrying database, migration or OIDC configuration
+      failures. Readiness stays false until the desired configuration succeeds.
+    show_if: global.showAdvanced=true
   - variable: configuration.resources.requests.cpu
     label: Configuration / resources / requests / cpu
     type: string

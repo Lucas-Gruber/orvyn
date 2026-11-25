@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "orvyn.fullname" . }}-configuration
+  labels: {{- include "orvyn.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  revisionHistoryLimit: 2
+  progressDeadlineSeconds: 900
+  selector:
+    matchLabels: {{- include "orvyn.selector" (dict "root" . "component" "configuration") | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "orvyn.selector" (dict "root" . "component" "configuration") | nindent 8 }}
+      annotations:
+        checksum/config: {{ toJson (dict "oidc" .Values.sso.oidc "postgresql" .Values.postgresql "externalPostgresql" .Values.externalPostgresql "global" .Values.global "configuration" .Values.configuration "logging" .Values.logging) | sha256sum | quote }}
+    spec:
+      serviceAccountName: {{ include "orvyn.serviceAccount" . }}
+      automountServiceAccountToken: false
+      securityContext: {{- toYaml .Values.api.podSecurityContext | nindent 8 }}
+      {{- with .Values.api.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.api.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: configuration
+          image: {{ include "orvyn.image" (dict "root" . "image" .Values.api.image) | quote }}
+          imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+          command: [node, dist/commands/configure.js, --watch]
+          securityContext: {{- toYaml .Values.api.securityContext | nindent 12 }}
+          resources: {{- toYaml .Values.configuration.resources | nindent 12 }}
+          startupProbe:
+            exec:
+              command: [node, dist/commands/configure-health.js]
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 120
+          readinessProbe:
+            exec:
+              command: [node, dist/commands/configure-health.js]
+            periodSeconds: 5
+            timeoutSeconds: 5
+          livenessProbe:
+            exec:
+              command: [node, dist/commands/configure-health.js, --live]
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: ORVYN_ORIGIN
+              value: {{ .Values.global.origin | quote }}
+            - name: ORVYN_LOG_LEVEL
+              value: {{ .Values.logging.level | quote }}
+            - name: ORVYN_CONFIGURATION_RECONCILE_SECONDS
+              value: {{ .Values.configuration.reconcileIntervalSeconds | quote }}
+            - name: ORVYN_CONFIGURATION_RETRY_SECONDS
+              value: {{ .Values.configuration.retryIntervalSeconds | quote }}
+            {{- include "orvyn.databaseEnv" . | nindent 12 }}
+            {{- include "orvyn.encryptionEnv" . | nindent 12 }}
+            {{- include "orvyn.oidcEnv" . | nindent 12 }}
+            {{- if .Values.sso.oidc.ca.existingSecret }}
+            - name: NODE_EXTRA_CA_CERTS
+              value: /etc/orvyn/oidc/ca.crt
+            {{- end }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            {{- if .Values.sso.oidc.ca.existingSecret }}
+            - name: oidc-ca
+              mountPath: /etc/orvyn/oidc
+              readOnly: true
+            {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+        {{- if .Values.sso.oidc.ca.existingSecret }}
+        - name: oidc-ca
+          secret:
+            secretName: {{ .Values.sso.oidc.ca.existingSecret | quote }}
+            items:
+              - key: {{ .Values.sso.oidc.ca.secretKey | quote }}
+                path: ca.crt
+        {{- end }}

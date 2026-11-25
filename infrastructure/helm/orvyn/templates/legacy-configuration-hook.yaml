@@ -1,0 +1,46 @@
+{{- if .Release.IsUpgrade }}
+# Helm retires the old configuration Job before starting this credential-free
+# compatibility hook. OIDC reconciliation itself is the regular Deployment.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "orvyn.fullname" . }}-configuration
+  labels: {{- include "orvyn.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-upgrade
+    helm.sh/hook-weight: "-20"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  activeDeadlineSeconds: 120
+  backoffLimit: 1
+  template:
+    metadata:
+      labels: {{- include "orvyn.selector" (dict "root" . "component" "configuration-legacy-cleanup") | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "orvyn.serviceAccount" . }}
+      automountServiceAccountToken: false
+      securityContext: {{- toYaml .Values.api.podSecurityContext | nindent 8 }}
+      {{- with .Values.api.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.api.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: retire-legacy-hook
+          image: {{ include "orvyn.image" (dict "root" . "image" .Values.api.image) | quote }}
+          imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+          command: [node, -e, "process.exit(0)"]
+          securityContext: {{- toYaml .Values.api.securityContext | nindent 12 }}
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+{{- end }}

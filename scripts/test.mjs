@@ -146,6 +146,7 @@ try {
           "tests/oidc.test.mjs",
           "tests/oidc-issuer.test.mjs",
           "tests/deployment-oidc.test.mjs",
+          "tests/configuration-service.test.mjs",
           "tests/oidc-keycloak.test.mjs",
           "tests/workspace.test.mjs",
           "tests/permissions.test.mjs",

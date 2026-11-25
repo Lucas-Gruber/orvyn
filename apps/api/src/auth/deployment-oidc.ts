@@ -3,8 +3,19 @@ import type { Pool } from "pg";
 import { encrypt, decrypt, encryptionKey, audit } from "./security.js";
 import { validateIssuer } from "./oidc.js";
 import { applyIssuerRepair, prepareIssuerRepair } from "./issuer-repair.js";
+import { RuntimeConfigurationError } from "@orvyn/shared/server";
 
-export class DeploymentConfigurationError extends Error {}
+export class DeploymentConfigurationError extends RuntimeConfigurationError {
+  constructor(message: string) {
+    const setting = /^ORVYN_OIDC_([A-Z_]+)/u.exec(message)?.[1];
+    const code = setting
+      ? "OIDC_" + setting + "_INVALID"
+      : message.startsWith("Existing OIDC credentials")
+        ? "OIDC_SECRET_DECRYPTION_FAILED"
+        : "OIDC_CONFIGURATION_CONFLICT";
+    super(code, message);
+  }
+}
 export type OidcClientAuth =
   "none" | "client_secret_post" | "client_secret_basic";
 export type DeploymentOidc =
@@ -171,6 +182,14 @@ export async function configureDeploymentOidc(
     );
     let providerId = config.enabled ? config.id : null;
     if (config.enabled) {
+      const bound = current.rows.find((row) => row.id === config.id);
+      if (
+        bound &&
+        (bound.issuer !== config.issuer || bound.client_id !== config.clientId)
+      )
+        problem(
+          "This provider UUID is already bound to a different issuer/client identity. Keep the exact repaired issuer or plan an explicit identity migration.",
+        );
       const match = current.rows.find((row) => row.issuer === config.issuer);
       if (match && match.client_id !== config.clientId)
         problem(
@@ -226,7 +245,11 @@ export async function configureDeploymentOidc(
             config.name,
             config.issuer,
             config.clientId,
-            config.clientSecret ? encrypt(config.clientSecret) : null,
+            config.clientSecret
+              ? existing && existingSecret === config.clientSecret
+                ? existing.encrypted_secret
+                : encrypt(config.clientSecret)
+              : null,
             config.scopes,
             config.autoProvision,
             config.adminSubject,
@@ -282,7 +305,7 @@ export async function initializeDeploymentOidc(
     await new Promise((resolve) => setTimeout(resolve, 500));
   } while (Date.now() < deadline);
   return problem(
-    "OIDC deployment configuration is pending; check the configure Job and its Secret references",
+    "OIDC deployment configuration is pending; check the configuration workload and its Secret references",
   );
 }
 export const administratorSql = `(u.is_admin OR EXISTS(SELECT 1 FROM external_identities i JOIN oidc_providers p ON p.id=i.provider_id WHERE i.user_id=u.id AND p.managed_by='deployment' AND p.enabled AND p.admin_subject=i.subject))`;

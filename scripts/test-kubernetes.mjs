@@ -458,6 +458,54 @@ try {
   console.log(
     "PASS Kubernetes: real CronJob archive on retained PVC, non-root isolated restore Job and preserved source attachment",
   );
+  // An unfinished pre-reconciler hook must not keep applying old settings.
+  await kubectl(
+    ["-n", namespace, "apply", "-f", "-"],
+    JSON.stringify({
+      apiVersion: "batch/v1",
+      kind: "Job",
+      metadata: { name: "s3-orvyn-configuration" },
+      spec: {
+        backoffLimit: 0,
+        activeDeadlineSeconds: 600,
+        template: {
+          spec: {
+            restartPolicy: "Never",
+            automountServiceAccountToken: false,
+            securityContext: {
+              runAsNonRoot: true,
+              runAsUser: 1000,
+              runAsGroup: 1000,
+              seccompProfile: { type: "RuntimeDefault" },
+            },
+            containers: [
+              {
+                name: "legacy-configuration",
+                image: "orvyn/api:ci",
+                imagePullPolicy: "Never",
+                command: ["node", "-e", "setInterval(()=>{},1000)"],
+                securityContext: {
+                  allowPrivilegeEscalation: false,
+                  readOnlyRootFilesystem: true,
+                  capabilities: { drop: ["ALL"] },
+                },
+              },
+            ],
+          },
+        },
+      },
+    }),
+  );
+  await kubectl([
+    "-n",
+    namespace,
+    "wait",
+    "--for=condition=Ready",
+    "pod",
+    "-l",
+    "job-name=s3-orvyn-configuration",
+    "--timeout=60s",
+  ]);
   await helm([
     "upgrade",
     "s3",
@@ -478,6 +526,24 @@ try {
     "--set",
     "sso.oidc.clientAuthMethod=none",
   ]);
+  if (
+    (
+      await kubectl([
+        "-n",
+        namespace,
+        "get",
+        "job",
+        "s3-orvyn-configuration",
+        "--ignore-not-found",
+        "-o",
+        "name",
+      ])
+    ).trim()
+  )
+    throw Error("Legacy configuration hook was not retired before upgrade");
+  console.log(
+    "PASS Kubernetes: legacy configuration Job retired without database/application credentials",
+  );
   const after = JSON.parse(
     await kubectl([
       "-n",
@@ -515,10 +581,9 @@ try {
       "fetch('http://127.0.0.1:3000/api/v1/oidc/providers').then(r=>r.text()).then(console.log)",
     ]),
   );
-  if (providers.length !== 1)
-    throw Error("OIDC configuration hook did not apply");
+  if (providers.length !== 1) throw Error("OIDC reconciliation did not apply");
   console.log(
-    "PASS Kubernetes: two API replicas, migration/configuration upgrade, OIDC hook, stable secrets and existing attachment",
+    "PASS Kubernetes: two API replicas, migration/configuration upgrade, independent OIDC reconciliation, stable secrets and existing attachment",
   );
   await helm([
     "rollback",

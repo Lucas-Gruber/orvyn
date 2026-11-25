@@ -152,6 +152,33 @@ export function diagnosticCode(error: unknown): string {
   }
 }
 const actions: Record<string, string> = {
+  CONFIGURATION_INTERVAL_INVALID:
+    "Set ORVYN_CONFIGURATION_RECONCILE_SECONDS and ORVYN_CONFIGURATION_RETRY_SECONDS to whole seconds between 1 and 300.",
+  CONFIGURATION_ARGUMENT_INVALID:
+    "Use configure.js for a single run, or configure.js --watch for continuous reconciliation.",
+  DATABASE_CONFIGURATION_INVALID:
+    "Configure a valid PostgreSQL DATABASE_URL or PGHOST, PGUSER, PGDATABASE and PGPASSWORD. URL-encode credentials in connection URLs.",
+  OIDC_CONFIGURATION_CONFLICT:
+    "Check existing provider identities and the exact configured issuer/client pair. Keep a repaired issuer stable; do not replace accounts by matching email.",
+  OIDC_ENABLED_INVALID: "Set ORVYN_OIDC_ENABLED to true or false.",
+  OIDC_ISSUER_INVALID:
+    "Set ORVYN_OIDC_ISSUER to the exact HTTPS issuer from trusted metadata, including its trailing slash.",
+  OIDC_CLIENT_ID_INVALID:
+    "Set ORVYN_OIDC_CLIENT_ID to the registered client identity.",
+  OIDC_CLIENT_SECRET_INVALID:
+    "Provide the existing confidential-client Secret or choose a registered public PKCE client without a secret. Do not expose the credential in logs.",
+  OIDC_CLIENT_AUTH_METHOD_INVALID:
+    "Set ORVYN_OIDC_CLIENT_AUTH_METHOD to client_secret_basic, client_secret_post or none, matching the registered client.",
+  OIDC_SCOPES_INVALID:
+    "Set ORVYN_OIDC_SCOPES to valid space-separated scopes including openid; request email and profile for provisioning and display names.",
+  OIDC_AUTO_PROVISION_INVALID:
+    "Set ORVYN_OIDC_AUTO_PROVISION to true or false. Disabled provisioning still allows already-linked identities.",
+  OIDC_REPAIR_LEGACY_ISSUER_INVALID:
+    "Set ORVYN_OIDC_REPAIR_LEGACY_ISSUER to true or false after reviewing the documented legacy correction rules.",
+  OIDC_ADMIN_SUBJECT_INVALID:
+    "Set ORVYN_OIDC_ADMIN_SUBJECT to the exact nonempty provider subject, or leave it unset.",
+  OIDC_BOOTSTRAP_MODE_INVALID:
+    "Use auto for API-managed configuration, external for the independent configuration workload, or wait for an explicitly coordinated command.",
   OIDC_ISSUER_MISMATCH:
     "Copy the exact issuer from the provider metadata, including trailing slashes. Repair legacy normalization explicitly for linked identities; keep issuer validation enabled.",
   OIDC_METADATA_INVALID:

@@ -286,6 +286,18 @@ test("managed issuer repair requires linked-account approval, preserves the hist
       ORVYN_OIDC_BOOTSTRAP_MODE: "wait",
     });
     await assert.rejects(
+      configureDeploymentOidc(db, legacy),
+      /different issuer\/client identity/,
+    );
+    assert.equal(
+      (
+        await db.query("SELECT issuer FROM oidc_providers WHERE id=$1", [
+          legacy.id,
+        ])
+      ).rows[0].issuer,
+      config.issuer,
+    );
+    await assert.rejects(
       configureDeploymentOidc(db, {
         ...config,
         clientId: "different-client",

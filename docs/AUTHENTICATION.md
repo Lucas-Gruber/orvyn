@@ -120,15 +120,21 @@ OIDC can also be configured declaratively. The stable redirect URI is **`<ORVYN_
 | `ORVYN_OIDC_SCOPES`             | Space-separated scopes including `openid`; defaults to `openid email profile`.                                                                                        |
 | `ORVYN_OIDC_AUTO_PROVISION`     | `true` allows new accounts with a provider-verified email; defaults to `false`.                                                                                       |
 | `ORVYN_OIDC_ADMIN_SUBJECT`      | Optional exact, immutable provider `sub` for instance administration. This is an identity ID, not an email address or display name.                                   |
-| `ORVYN_OIDC_BOOTSTRAP_MODE`     | `auto` applies settings at API startup; `external` leaves them to a configuration command/Job; `wait` waits up to two minutes for that command's exact configuration. |
+| `ORVYN_OIDC_BOOTSTRAP_MODE`     | `auto` applies settings at API startup; `external` leaves them to a configuration command/workload; `wait` waits up to two minutes for that command's exact configuration. |
 
-For a single API, `auto` is the default. For Kubernetes or multiple API replicas, use `external` and apply configuration once through the same API image:
+For a single API, `auto` is the default. For Kubernetes or multiple API replicas, use `external`. The Helm chart runs a dedicated configuration workload using the API image:
 
 ```sh
-node dist/commands/configure.js
+node dist/commands/configure.js --watch
 ```
 
-The command waits for PostgreSQL, applies advisory-lock-protected migrations and transactionally configures OIDC. Supply the database, encryption and OIDC environment to that command. API replicas in `external` mode do not receive the client secret through their environment and never overwrite configuration during restarts. A post-install/upgrade configuration Job can therefore run after application readiness, without an application/Job dependency cycle. Runtime discovery reads the encrypted provider settings from PostgreSQL.
+The workload connects to PostgreSQL, applies advisory-lock-protected migrations and transactionally reconciles OIDC. It starts independently of API, attachment, SMTP and Valkey readiness, retries failures and clears readiness until the desired settings succeed. Database recovery or a corrected volume therefore does not require another Helm upgrade to trigger configuration. API replicas use `external` mode, keep independent readiness and do not receive the client secret through their environment. Runtime discovery reads the encrypted provider settings from PostgreSQL.
+
+The chart uses one configuration replica and `Recreate` updates so older desired settings stop before a replacement starts. The same regular resource works for install, upgrade, rollback and GitOps reconciliation. A Helm-upgrade-only compatibility hook retires a leftover legacy configuration Job through Helm's own deletion policy; its Node process has no database, application secrets, PVCs or service-account token. GitOps tools should prune retired legacy hook Jobs when adopting the new manifest set.
+
+`ORVYN_CONFIGURATION_RECONCILE_SECONDS` defaults to 30 and `ORVYN_CONFIGURATION_RETRY_SECONDS` to 5; both accept 1–300 whole seconds. Helm exposes them as `configuration.reconcileIntervalSeconds` and `configuration.retryIntervalSeconds`. Readiness/liveness use private expiring markers under the standard temporary directory and the lightweight `configure-health.js` command. Markers are cleared on process startup/shutdown. Structured diagnostics identify the failing stage without printing connection strings or secrets. The original one-shot `node dist/commands/configure.js` remains available for explicit administration.
+
+Keep the database, encryption and OIDC environment consistent on the configuration workload. Multiple API replicas must not also apply competing `auto` settings. Configuration resources are now a steady workload; `configuration.activeDeadlineSeconds` and `backoffLimit` apply to the separate internal S3 bootstrap Job. Kubernetes rollout and matching-image checks are part of CI; the chart does not automatically downgrade or destructively rewrite database schemas when rolling back older application binaries.
 
 Reapplying identical settings does not rotate encrypted credentials or configuration revisions. Changed settings invalidate in-flight sign-ins. Disabling/replacing the deployment provider revokes its sessions. The administration UI marks it as deployment-managed and rejects edits through the HTTP API. Existing manual providers retain their own controls.
 

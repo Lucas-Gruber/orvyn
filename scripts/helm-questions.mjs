@@ -19,6 +19,14 @@ const enums = {
   ],
 };
 const info = {
+  "configuration.reconcileIntervalSeconds": [
+    "Configuration reconciliation interval",
+    "Seconds between idempotent checks of deployment-managed OIDC settings. The independent configuration workload applies settings without waiting for API or attachment readiness.",
+  ],
+  "configuration.retryIntervalSeconds": [
+    "Configuration retry interval",
+    "Seconds before retrying database, migration or OIDC configuration failures. Readiness stays false until the desired configuration succeeds.",
+  ],
   "logging.level": [
     "Application log level",
     "Structured diagnostics for startup, storage, OIDC and dependency failures. Debug logging excludes credentials, tokens and raw error payloads.",

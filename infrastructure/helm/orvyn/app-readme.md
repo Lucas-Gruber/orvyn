@@ -20,3 +20,9 @@ Use existing namespace Secrets for GitOps and disable automatic generation. Keep
 The development chart's **Database backups** section can schedule verified PostgreSQL snapshots on a separate retained PVC, with count-based retention and isolated new-database restore tooling. These database-only snapshots need separate coordinated attachment/key backups and encrypted offsite copies; the published 0.2.0 chart does not include them.
 
 See the bundled [chart README](README.md), [values](values.yaml) and [examples](examples/) for installation, OCI signature verification, storage migration, backup/restore, PVC expansion, compatible rollback and operational limits. Chart/app versions follow the server release; desktop icon assets do not imply a shipped desktop client.
+
+The development chart runs OIDC configuration as an independent, single-replica
+Deployment with automatic retries and readiness after successful application.
+API/storage startup failures no longer require a second Helm upgrade to apply
+SSO settings. Reconciliation/retry intervals are available under Configuration;
+matching development images are required.

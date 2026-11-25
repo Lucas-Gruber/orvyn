@@ -294,6 +294,11 @@ for (const name of ["nameOverride", "fullnameOverride"])
     maxLength: name === "nameOverride" ? 40 : 45,
     pattern: "^$|^[a-z]([a-z0-9-]*[a-z0-9])?$",
   });
+for (const name of ["reconcileIntervalSeconds", "retryIntervalSeconds"])
+  Object.assign(property("configuration." + name), {
+    minimum: 1,
+    maximum: 300,
+  });
 Object.assign(property("global.origin"), { pattern: "^https://[^/?#@]+$" });
 Object.assign(property("storage.driver"), { enum: ["local", "s3"] });
 Object.assign(property("logging.level"), {
