@@ -83,6 +83,14 @@ try {
   }
   const cases = [
     ["all-in-one", {}, "all-in-one"],
+    [
+      "bounded-storage-bootstrap",
+      {
+        configuration: { activeDeadlineSeconds: 900, retryIntervalSeconds: 2 },
+        logging: { level: "debug" },
+      },
+      "all-in-one",
+    ],
     ["nfs-authentik", {}, "nfs-authentik"],
     [
       "permissions-fsgroup",
@@ -340,6 +348,23 @@ try {
     const resources = docs(rendered.stdout);
     assert.ok(resources.length > 0);
     const deployments = resources.filter((r) => r.kind === "Deployment");
+    const storageBootstrap = resources.find(
+      (r) => r.kind === "Job" && r.metadata.name.includes("-storage-init-"),
+    );
+    if (storageBootstrap) {
+      assert.equal(
+        storageBootstrap.spec.activeDeadlineSeconds,
+        overlay.configuration?.activeDeadlineSeconds || undefined,
+      );
+      const container = storageBootstrap.spec.template.spec.containers[0];
+      assert.ok(container.command.includes("--wait"));
+      assert.equal(
+        container.env.find(
+          (e) => e.name === "ORVYN_CONFIGURATION_RETRY_SECONDS",
+        ).value,
+        String(overlay.configuration?.retryIntervalSeconds || 5),
+      );
+    }
     const config = resources.find(
       (r) =>
         r.kind === "Deployment" && r.metadata.name.endsWith("-configuration"),
@@ -532,7 +557,7 @@ try {
         );
         assert.equal(
           container.env.find((e) => e.name === "ORVYN_LOG_LEVEL")?.value,
-          "info",
+          overlay.logging?.level || "info",
         );
       }
     }

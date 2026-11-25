@@ -372,7 +372,8 @@ export async function runVolumePermissions(args: string[]) {
           constants.O_NOFOLLOW,
         0o600,
       );
-      await file.chown(o.uid, group);
+      // An application-owned marker needs no chown on root-squashed exports.
+      if ((await file.stat()).uid !== o.uid) await file.chown(o.uid, group);
       await file.writeFile(JSON.stringify({ version: 1, signature }));
       await file.sync();
       await file.close();
@@ -460,7 +461,18 @@ export async function runVolumePermissions(args: string[]) {
           if (fixOwner) await setOwner(child, stat, "repair.critical_owner");
           else if (stat.uid !== o.uid)
             throw new VolumeError("VOLUME_OWNER_MISMATCH");
-          if (isPrivate(currentRelative) && stat.mode & 0o022) {
+          const privatePreparation =
+            isPrivate(currentRelative) && (stat.mode & 0o7777) !== 0o700;
+          // Persist intent before touching any private descendants. A failed or
+          // interrupted non-root preparation must also resume after Pod replacement.
+          if (prepare && !fixOwner && privatePreparation)
+            await beginRepair(handle);
+          const safeMode = ((stat.mode & 0o7777) | 0o700) & ~0o002;
+          if ((prepare || fixOwner) && (stat.mode & 0o7777) !== safeMode) {
+            await setMode(child, stat, safeMode, "prepare.critical_mode");
+            stat = await child.stat();
+          }
+          if (privatePreparation) {
             if (prepare || fixOwner)
               await walk(child, currentRelative, stat.dev, fixOwner, !fixOwner);
             else throw new VolumeError("VOLUME_PRIVATE_MODE_INVALID");
@@ -506,6 +518,7 @@ export async function runVolumePermissions(args: string[]) {
         await completeRepair(handle);
       }
       await criticalDirectories(handle, true);
+      await completeRepair(handle);
     } finally {
       await handle.close();
     }

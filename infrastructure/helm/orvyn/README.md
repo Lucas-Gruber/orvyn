@@ -127,7 +127,16 @@ https://notes.example.org/api/v1/oidc/deployment/callback
 
 For a private CA, set `sso.oidc.ca.existingSecret` and `secretKey` to a PEM certificate. API and configuration workloads mount it using `NODE_EXTRA_CA_CERTS`; TLS verification remains enabled. All API replicas read the provider from PostgreSQL. A dedicated single-replica **configuration Deployment** applies advisory-lock-protected migrations and continuously reconciles the desired provider. It starts independently of API and storage readiness, retries failures and recovers without another Helm upgrade. `Recreate` updates stop the previous configuration process before starting the next; GitOps manages it as a regular resource. API uses `ORVYN_OIDC_BOOTSTRAP_MODE=external` with independent readiness. **Only the configuration workload receives the OIDC client secret.** Provider secrets are encrypted in the database using the persistent encryption key. The managed provider is read-only in the application administrator UI; manually configured providers remain supported. Disabling deployment SSO disables/revokes only its managed provider/sessions. Issuer/client identity changes do not relink existing users.
 
-`configuration.reconcileIntervalSeconds` (30) and `retryIntervalSeconds` (5) control idempotent checks/retries in whole seconds (1–300). Readiness is set after the desired configuration succeeds and expires if the process stops progressing. `configuration.resources` also applies to this steady workload. Deadlines/backoff limits remain for internal storage bootstrap Jobs. Changes to unrelated settings preserve an unchanged encrypted client secret.
+`configuration.reconcileIntervalSeconds` (30) and `retryIntervalSeconds` (5) control idempotent checks/retries in whole seconds (1–300). Readiness is set after the desired configuration succeeds and expires if the process stops progressing. `configuration.resources` also applies to this steady workload. Changes to unrelated settings preserve an unchanged encrypted client secret.
+
+The internal storage bootstrap uses `--wait` and retries backend failures with
+the same retry interval. `configuration.activeDeadlineSeconds=0` keeps its Job
+eligible to recover after storage permissions/service health are corrected; a
+positive value explicitly bounds the Job. `backoffLimit` applies to actual process
+failures. Job names include logging/retry settings to avoid immutable-template
+updates. Helm/Rancher wait timeouts still apply; a failed atomic **install** may
+remove the release, so fix the backend and reinstall with the retained claims
+and original Secrets. The bootstrap never recreates PVCs or deletes a bucket.
 
 During Helm upgrades, a short compatibility hook with the legacy Job name lets Helm retire an unfinished old configuration hook before the reconciler starts. It uses the API image and Node without database credentials, PVCs, application secrets or a Kubernetes token. GitOps renderers manage the new Deployment and should prune any retired legacy hook Job. Rollbacks of configuration values retain accounts/attachments; application rollback across newer database migrations requires a compatible version or database recovery.
 

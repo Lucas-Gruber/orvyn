@@ -5,8 +5,9 @@ import {
 } from "@orvyn/shared/server";
 
 export default defineNitroPlugin(() => {
-  const log = createDiagnostics("web", process.env);
+  let log = createDiagnostics("web", {});
   try {
+    log = createDiagnostics("web", process.env);
     runtimeOrigin(process.env);
     runtimeUpstream(
       process.env,

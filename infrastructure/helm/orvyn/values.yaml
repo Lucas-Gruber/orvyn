@@ -509,7 +509,8 @@ configuration:
     limits:
       memory: 512Mi
       cpu: "1"
-  activeDeadlineSeconds: 240
+  # Zero keeps internal storage bootstrap retrying after a backend outage.
+  activeDeadlineSeconds: 0
   backoffLimit: 3
 serviceAccount:
   create: true

@@ -2,14 +2,23 @@ import { authenticateCookie, databaseConfiguration } from "@orvyn/auth";
 import { Pool } from "pg";
 import { HttpException } from "@nestjs/common";
 import { scrypt, createHash } from "node:crypto";
-import { runtimeOrigin } from "@orvyn/shared/server";
+import { runtimeOrigin, createDiagnostics } from "@orvyn/shared/server";
 export const derive = (password: string, salt: string) =>
   new Promise<Buffer>((resolve, reject) =>
     scrypt(password, salt, 64, (err, key) =>
       err ? reject(err) : resolve(key),
     ),
   );
-export const db = new Pool(databaseConfiguration());
+export const db = new Pool({
+  ...databaseConfiguration(),
+  connectionTimeoutMillis: 5000,
+});
+db.on("error", (error) =>
+  createDiagnostics("database", process.env).error("connection.failed", {
+    stage: "database",
+    error,
+  }),
+);
 export const fail = (status: number, message: string): never => {
   throw new HttpException({ message }, status);
 };

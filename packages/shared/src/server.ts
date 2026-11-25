@@ -110,6 +110,7 @@ const recognized = new Set([
   "3D000",
   "53300",
   "57P03",
+  "57P01",
   "08001",
   "08006",
   "42501",
@@ -139,9 +140,23 @@ export function diagnosticCode(error: unknown): string {
         code?: unknown;
         cause?: unknown;
         name?: unknown;
+        message?: unknown;
+        $metadata?: { httpStatusCode?: unknown };
       };
       if (typeof value.code === "string" && recognized.has(value.code))
         return value.code;
+      if (
+        value.name === "ReplyError" &&
+        typeof value.message === "string" &&
+        /^(WRONGPASS|NOAUTH)\b/.test(value.message)
+      )
+        return "VALKEY_AUTH_FAILED";
+      const status = value.$metadata?.httpStatusCode;
+      if (status === 401 || status === 403) return "S3_AUTH_DENIED";
+      if (status === 404) return "S3_BUCKET_MISSING";
+      if (status === 429) return "S3_THROTTLED";
+      if (typeof status === "number" && status >= 500 && status <= 599)
+        return "S3_SERVICE_UNAVAILABLE";
       if (value.name === "TimeoutError" || value.name === "AbortError")
         return "ETIMEDOUT";
       current = value.cause;
@@ -152,6 +167,26 @@ export function diagnosticCode(error: unknown): string {
   }
 }
 const actions: Record<string, string> = {
+  SMTP_CONFIGURATION_INVALID:
+    "Configure smtp:// or smtps:// with individually URL-encoded credentials and an explicit production MAIL_FROM accepted by the mail provider. Keep TLS certificate validation enabled.",
+  VALKEY_CONFIGURATION_INVALID:
+    "Configure REDIS_URL with redis:// or rediss://, or VALKEY_HOST and a valid VALKEY_PORT. Production requires an explicit endpoint; keep credentials in Secrets.",
+  VALKEY_AUTH_FAILED:
+    "Check the referenced Valkey credentials and server ACLs. Do not log connection URLs or passwords.",
+  VALKEY_COORDINATION_LOST:
+    "Restore Valkey connectivity and allow the workload to restart. Collaboration closes live connections to avoid inconsistent coordination.",
+  STORAGE_BOOTSTRAP_CONFIGURATION_INVALID:
+    "Use storage-init.js for bounded setup or --wait for the managed internal storage Job; set retry seconds between 1 and 300.",
+  STORAGE_INTEGRITY_FAILED:
+    "Verify private storage read/write integrity and backend health before serving attachments. The probe never overwrites application objects.",
+  S3_AUTH_DENIED:
+    "Check the private bucket policy and referenced access credentials. Keep anonymous access denied; rotate Secrets deliberately and update secretRevision.",
+  S3_BUCKET_MISSING:
+    "Provision the selected external private bucket, or allow the chart's internal bootstrap to create and verify its own bucket.",
+  S3_THROTTLED:
+    "Retry after the object store's rate limit and review backend capacity.",
+  S3_SERVICE_UNAVAILABLE:
+    "Restore the object store's service and volume health. Internal bootstrap retries automatically without replacing stored objects.",
   OIDC_PROVISIONING_DISABLED:
     "Enable provider autoProvision explicitly if new verified SSO users should be created. Already-linked identities continue to work; do not link accounts solely by matching email.",
   OIDC_EMAIL_UNVERIFIED:

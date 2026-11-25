@@ -2383,10 +2383,14 @@ questions:
     group: Resources
     show_if: global.showAdvanced=true
   - variable: configuration.activeDeadlineSeconds
-    label: Configuration / active Deadline Seconds
+    label: Internal storage bootstrap deadline
     type: int
-    default: 240
+    default: 0
     group: Advanced
+    description: Zero keeps retrying while the private storage backend recovers,
+      without exhausting a completed failed Job. A positive value sets a
+      Kubernetes deadline. Helm/Rancher wait timeouts remain independent; atomic
+      install failure may remove the release.
     show_if: global.showAdvanced=true
   - variable: configuration.backoffLimit
     label: Configuration / backoff Limit

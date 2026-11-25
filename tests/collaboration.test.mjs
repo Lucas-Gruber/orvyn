@@ -268,7 +268,18 @@ test("Yjs: concurrent replicas, durable acknowledgement, reconnect, read-only an
       1,
       "Losing Redis must fail closed and require process restart",
     );
-    assert.match(recoveryOutput, /Collaboration coordination lost/);
+    assert.ok(
+      recoveryOutput
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line))
+        .some(
+          (event) =>
+            event.event === "coordination.lost" &&
+            event.code === "VALKEY_COORDINATION_LOST",
+        ),
+      "Coordination failure must produce a structured, actionable diagnostic",
+    );
     await waitFor(
       () => !restored.provider.isAuthenticated,
       "Coordination loss must disconnect editors",

@@ -239,6 +239,29 @@ test("fsGroup works without root and retains kubelet's shared mount boundary", (
     });
   }));
 
+test("correct ownership with a read-only critical directory is prepared without a repair loop", () =>
+  fixture(async ({ phase, root }) => {
+    await root(
+      "import{mkdir,chown,chmod,writeFile}from'node:fs/promises';await chown('/data',1000,1000);await mkdir('/data/orvyn-objects/staging',{recursive:true});for(const p of ['/data/orvyn-objects','/data/orvyn-objects/staging']){await chown(p,1000,1000);await chmod(p,0o550)}await chmod('/data/orvyn-objects',0o750);await writeFile('/data/orvyn-objects/staging/hidden-filename','secret-file-content',{mode:0o440});await chown('/data/orvyn-objects/staging/hidden-filename',1000,1000)",
+    );
+    const probe = await phase("probe");
+    assert.equal(probe.code, 0, probe.output);
+    assert.equal(probe.logs.at(-1).event, "permissions.probe_ready");
+    assert.equal(
+      (await phase("repair")).logs.at(-1).event,
+      "permissions.repair_skipped",
+    );
+    assert.equal((await phase("verify")).code, 0);
+    assert.deepEqual(
+      JSON.parse(
+        await root(
+          "import{stat}from'node:fs/promises';console.log(JSON.stringify([(await stat('/data/orvyn-objects')).mode&0o777,(await stat('/data/orvyn-objects/staging')).mode&0o777,(await stat('/data/orvyn-objects/staging/hidden-filename')).mode&0o777]))",
+        ),
+      ),
+      [0o700, 0o700, 0o600],
+    );
+  }));
+
 test("denied chown fails real nonroot verification and recovers after server-side correction", () =>
   fixture(async ({ phase, root }) => {
     const options = { caps: false };
@@ -255,6 +278,37 @@ test("denied chown fails real nonroot verification and recovers after server-sid
       "import{chown}from'node:fs/promises';await chown('/data',1000,1000)",
     );
     assert.equal((await phase("verify", options)).code, 0);
+  }));
+
+test("partially prepared private modes persist intent and repair unreadable descendants", () =>
+  fixture(async ({ phase, root }) => {
+    await root(
+      "import{mkdir,chown,chmod,writeFile}from'node:fs/promises';await chown('/data',1000,1000);await mkdir('/data/orvyn-objects/staging',{recursive:true});for(const p of ['/data/orvyn-objects','/data/orvyn-objects/staging']){await chown(p,1000,1000);await chmod(p,0o770)}await writeFile('/data/orvyn-objects/staging/hidden-filename','secret-file-content',{mode:0o000});await chown('/data/orvyn-objects/staging/hidden-filename',1000,1000)",
+    );
+    const probe = await phase("probe");
+    assert.equal(probe.code, 0);
+    assert.equal(probe.logs.at(-1).event, "permissions.repair_needed");
+    assert.equal(
+      JSON.parse(
+        await root(
+          "import{readdir}from'node:fs/promises';console.log(JSON.stringify((await readdir('/data')).some(n=>n.startsWith('.orvyn-permissions-incomplete-'))))",
+        ),
+      ),
+      true,
+    );
+    const repair = await phase("repair");
+    assert.equal(repair.code, 0, repair.output);
+    assert.ok(repair.logs.at(-1).visitedEntries > 2);
+    const verified = await phase("verify");
+    assert.equal(verified.code, 0, verified.output);
+    assert.equal(
+      JSON.parse(
+        await root(
+          "import{stat}from'node:fs/promises';console.log(JSON.stringify((await stat('/data/orvyn-objects/staging/hidden-filename')).mode&0o777))",
+        ),
+      ),
+      0o600,
+    );
   }));
 
 test("recursive repair cannot follow symlinks or hardlinks outside the data volume", () =>

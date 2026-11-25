@@ -23,7 +23,6 @@
 | COLLABORATION_PORT | Collaboration service port, default 3002. |
 | COLLABORATION_NAMESPACE | Shared Redis key namespace; use one value per deployment. |
 | NUXT_PUBLIC_COLLABORATION_URL | Optional browser WebSocket override; leave empty to use the browser origin with /collaboration (including forwarded ports and HTTPS/WSS). |
-
 | NUXT_COLLABORATION_UPSTREAM | Private Nuxt WebSocket upstream, required explicitly in production. Development default ws://127.0.0.1:3002. Never point this at the public /collaboration route itself. |
 
 ## Attachments and deployment SSO
@@ -33,3 +32,29 @@
 Deployment OIDC uses `ORVYN_OIDC_ENABLED`, `NAME`, `ISSUER`, `CLIENT_ID`, `CLIENT_SECRET`, `CLIENT_AUTH_METHOD`, `SCOPES`, `AUTO_PROVISION`, and optional `ADMIN_SUBJECT` (each with the `ORVYN_OIDC_` prefix). Issuers are exact strings: preserve trailing slashes from discovery metadata. `ORVYN_OIDC_REPAIR_LEGACY_ISSUER=false` controls explicit approval to repair legacy normalization when linked accounts exist; see the migration rules in [AUTHENTICATION.md](AUTHENTICATION.md). `ORVYN_OIDC_BOOTSTRAP_MODE=auto` applies configuration on API startup; Helm uses `external` and a dedicated, single-replica configuration reconciler, keeping the client secret out of API pods. `NODE_EXTRA_CA_CERTS` can reference a mounted private IdP CA. The [Helm chart](../infrastructure/helm/orvyn/README.md) provides a dedicated SSO form section.
 
 The configuration reconciler accepts `ORVYN_CONFIGURATION_RECONCILE_SECONDS=30` and `ORVYN_CONFIGURATION_RETRY_SECONDS=5` (1–300 whole seconds). It requires database, origin, encryption and desired OIDC settings, and operates independently of attachment, SMTP and Valkey availability. `node dist/commands/configure.js --watch` retries until the desired settings are applied; `node dist/commands/configure-health.js` checks private, expiring readiness state. The command without `--watch` remains a one-shot operation.
+
+The internal-storage bootstrap accepts `node dist/commands/storage-init.js --wait`:
+it retries dependency failures using `ORVYN_CONFIGURATION_RETRY_SECONDS`, verifies
+a private probe object and exits successfully after recovery. Without `--wait`,
+setup is bounded to three minutes. The chart defaults
+`configuration.activeDeadlineSeconds=0` (no Kubernetes Job deadline); a positive
+value remains available. Helm's own wait/atomic timeout is independent and may
+remove a failed initial release. Neither mode deletes application objects or
+creates external buckets.
+
+Use a provider-approved `smtp://` (usually port 587 with required STARTTLS) or
+`smtps://` (implicit TLS, usually 465) URL. Encode username and password components
+individually: `@` → `%40`, `:` → `%3A`, `/` → `%2F`, `#` → `%23`, `%` → `%25`.
+For example, `smtps://orvyn%40example.org:p%40ss%3Aword@mail.example.org:465`
+illustrates encoding only; supply real credentials through the SMTP Secret.
+Keep certificate verification enabled and set the provider-approved `MAIL_FROM`.
+The production worker requires an explicit sender. Never paste or log the full
+SMTP URL. Encryption keys accept exactly 64 hexadecimal characters in either
+case; preserve the existing key across upgrades.
+
+API/worker/collaboration entrypoints validate configuration before constructing
+clients. PostgreSQL connections have a five-second connect timeout. Collaboration
+also validates its explicit production Valkey endpoint, reports database/Valkey
+startup stages and filters library error messages/stacks through the safe JSON
+logger. Web proxy failures log only approved categories and return a fixed error
+or safe login redirect; callback query strings never enter diagnostics.

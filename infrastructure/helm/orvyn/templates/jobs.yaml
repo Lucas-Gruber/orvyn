@@ -2,10 +2,12 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ include "orvyn.fullname" . | trunc 39 | trimSuffix "-" }}-storage-init-{{ toJson (dict "fullname" (include "orvyn.fullname" .) "storage" .Values.storage.s3 "api" .Values.api "configuration" (pick .Values.configuration "resources" "activeDeadlineSeconds" "backoffLimit") "global" .Values.global "version" .Chart.AppVersion) | sha256sum | trunc 10 }}
+  name: {{ include "orvyn.fullname" . | trunc 39 | trimSuffix "-" }}-storage-init-{{ toJson (dict "fullname" (include "orvyn.fullname" .) "storage" .Values.storage.s3 "api" .Values.api "configuration" (pick .Values.configuration "resources" "activeDeadlineSeconds" "backoffLimit" "retryIntervalSeconds") "logging" .Values.logging "global" .Values.global "version" .Chart.AppVersion) | sha256sum | trunc 10 }}
   labels: {{- include "orvyn.labels" . | nindent 4 }}
 spec:
+  {{- if gt (int .Values.configuration.activeDeadlineSeconds) 0 }}
   activeDeadlineSeconds: {{ .Values.configuration.activeDeadlineSeconds }}
+  {{- end }}
   backoffLimit: {{ .Values.configuration.backoffLimit }}
   template:
     metadata:
@@ -30,7 +32,7 @@ spec:
         - name: storage-init
           image: {{ include "orvyn.image" (dict "root" . "image" .Values.api.image) | quote }}
           imagePullPolicy: {{ .Values.api.image.pullPolicy }}
-          command: [node, dist/commands/storage-init.js]
+          command: [node, dist/commands/storage-init.js, --wait]
           securityContext: {{- toYaml .Values.api.securityContext | nindent 12 }}
           resources: {{- toYaml .Values.configuration.resources | nindent 12 }}
           env:
@@ -38,6 +40,8 @@ spec:
               value: production
             - name: ORVYN_LOG_LEVEL
               value: {{ .Values.logging.level | quote }}
+            - name: ORVYN_CONFIGURATION_RETRY_SECONDS
+              value: {{ .Values.configuration.retryIntervalSeconds | quote }}
             {{- include "orvyn.storageEnv" . | nindent 12 }}
           volumeMounts:
             - name: tmp

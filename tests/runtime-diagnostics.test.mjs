@@ -74,6 +74,14 @@ test("structured diagnostics classify dependency errors without serializing secr
   );
   assert.equal(diagnosticCode({ code: secret }), "UNKNOWN");
   assert.equal(
+    diagnosticCode({ name: "ReplyError", message: "WRONGPASS " + secret }),
+    "VALKEY_AUTH_FAILED",
+  );
+  assert.equal(
+    diagnosticCode({ $metadata: { httpStatusCode: 403 }, message: secret }),
+    "S3_AUTH_DENIED",
+  );
+  assert.equal(
     diagnosticCode(
       Object.defineProperty({}, "code", {
         get() {

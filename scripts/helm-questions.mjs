@@ -21,6 +21,10 @@ const enums = {
   ],
 };
 const info = {
+  "configuration.activeDeadlineSeconds": [
+    "Internal storage bootstrap deadline",
+    "Zero keeps retrying while the private storage backend recovers, without exhausting a completed failed Job. A positive value sets a Kubernetes deadline. Helm/Rancher wait timeouts remain independent; atomic install failure may remove the release.",
+  ],
   "volumePermissions.strategy": [
     "Persistent volume permission strategy",
     "Auto probes as the application UID, attempts narrowly scoped root repair only if needed, and verifies as the application. fsGroup uses backend ownership plus a non-root preparation/probe and supports Restricted Pod Security. initContainer explicitly prepares ownership; none leaves preparation to the operator. Root-squashed NFS may require server-side numeric ownership/ACLs.",
