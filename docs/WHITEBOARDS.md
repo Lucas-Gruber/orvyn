@@ -4,6 +4,15 @@ Create a whiteboard from the space's creation menu, or use `/Whiteboard` in a do
 
 The drawing interface embeds Excalidraw 0.18.1 through an isolated, lazy-loaded React adapter. It supports shapes, arrows, free drawing, text, frames, grouping, layering, per-user undo/redo, zoom/pan and authenticated live pointers. Keyboard handling stays inside the focused canvas. Local preferences such as camera position/selection are not shared. Browser fonts/assets are copied from the pinned package for local serving; the server-side Liberation font is excluded. Notices are in `apps/web/public/licenses`.
 
+The canvas uses Orvyn's interface fonts, theme colors, borders and menu surfaces.
+The empty state and canvas menu are integrated through Excalidraw's supported
+React components. Import/export and history remain in **Whiteboard actions**;
+the canvas menu contains drawing/search/help controls. Embedded previews hide
+the drawing toolbar until **Edit whiteboard** is selected. These changes affect
+interface chrome only: authored backgrounds, element colors, drawing fonts,
+keyboard shortcuts, exports and collaborative scene data keep their original
+meaning. All workspace themes apply to the controls without changing the drawing.
+
 Images use private, sniffed PNG/JPEG/GIF/WebP attachments owned by the board. Data URLs stay in the browser and portable exports, not the persisted scene. Pasted/imported images are uploaded and rebound to new owned file IDs. Cross-board imports copy bytes independently. Existing image previews still require current page/file access. SVG uploads, arbitrary web embeds, generated HTML/AI frames and server-synchronized shape libraries are outside this slice.
 
 PNG, SVG and portable `.excalidraw` exports are produced by the native drawing library. Version-2 Excalidraw files can replace the current drawing after a recovery checkpoint; their shapes/settings are validated and their image payloads are copied to private storage. Imports are limited to 35 MB before parsing, with existing per-file upload limits still authoritative.

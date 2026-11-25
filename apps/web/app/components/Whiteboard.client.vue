@@ -658,7 +658,7 @@ defineExpose({ flush, openHistory });
       <header class="whiteboard-header">
         <div class="whiteboard-location">
           <AppIcon name="whiteboard" :size="17" /><strong>{{
-            meta?.title || "Whiteboard"
+            embedded ? meta?.title || "Whiteboard" : "Canvas"
           }}</strong
           ><span class="whiteboard-save" role="status">{{ saveLabel }}</span>
         </div>
@@ -684,9 +684,10 @@ defineExpose({ flush, openHistory });
             v-if="embedded"
             class="icon-button"
             aria-label="Open whiteboard page"
+            title="Open whiteboard page"
             @click="navigate?.(pageId)"
           >
-            <AppIcon name="expand" :size="16" />
+            <AppIcon name="external" :size="16" />
           </button>
           <UiMenu label="Whiteboard actions"
             ><button
@@ -883,9 +884,7 @@ defineExpose({ flush, openHistory });
   font-size: 0.8rem;
 }
 .whiteboard .excalidraw {
-  --ui-font: "Inter Variable", sans-serif;
-  --border-radius-lg: 8px;
-  --color-primary: var(--accent);
+  font-family: "Inter Variable", sans-serif;
 }
 .whiteboard .excalidraw [data-testid="toolbar-embeddable"],
 .whiteboard .excalidraw [data-testid="toolbar-magicframe"] {

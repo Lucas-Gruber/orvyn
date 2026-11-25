@@ -2,6 +2,8 @@ import { createElement } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Excalidraw,
+  MainMenu,
+  WelcomeScreen,
   CaptureUpdateAction,
   reconcileElements,
   exportToBlob,
@@ -18,6 +20,7 @@ import type {
 import type { OrderedExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import type { WhiteboardScene } from "@orvyn/editor/whiteboards";
 import "@excalidraw/excalidraw/index.css";
+import "./orvyn.css";
 
 export function mountWhiteboard(
   element: HTMLElement,
@@ -40,39 +43,99 @@ export function mountWhiteboard(
   const root = createRoot(element);
   const render = () =>
     root.render(
-      createElement(Excalidraw, {
-        initialData: {
-          elements: options.scene.elements as OrderedExcalidrawElement[],
-          appState: {
-            viewBackgroundColor: options.scene.backgroundColor,
-            gridSize: options.scene.gridSize ?? 20,
-            gridModeEnabled: options.scene.gridSize !== null,
+      createElement(
+        Excalidraw,
+        {
+          initialData: {
+            elements: options.scene.elements as OrderedExcalidrawElement[],
+            appState: {
+              viewBackgroundColor: options.scene.backgroundColor,
+              gridSize: options.scene.gridSize ?? 20,
+              gridModeEnabled: options.scene.gridSize !== null,
+            },
+          },
+          excalidrawAPI(value) {
+            api = value;
+            options.onReady();
+          },
+          onChange: options.onChange,
+          onPointerUpdate: options.onPointer,
+          viewModeEnabled: !editable,
+          theme,
+          isCollaborating: true,
+          handleKeyboardGlobally: false,
+          autoFocus: false,
+          validateEmbeddable: false,
+          aiEnabled: false,
+          UIOptions: {
+            canvasActions: {
+              loadScene: false,
+              saveToActiveFile: false,
+              saveAsImage: false,
+              export: false,
+              toggleTheme: false,
+            },
+            tools: { image: editable },
           },
         },
-        excalidrawAPI(value) {
-          api = value;
-          options.onReady();
-        },
-        onChange: options.onChange,
-        onPointerUpdate: options.onPointer,
-        viewModeEnabled: !editable,
-        theme,
-        isCollaborating: true,
-        handleKeyboardGlobally: false,
-        autoFocus: false,
-        validateEmbeddable: false,
-        aiEnabled: false,
-        UIOptions: {
-          canvasActions: {
-            loadScene: false,
-            saveToActiveFile: false,
-            saveAsImage: false,
-            export: false,
-            toggleTheme: false,
-          },
-          tools: { image: editable },
-        },
-      }),
+        createElement(
+          MainMenu,
+          { key: "canvas-menu" },
+          createElement(MainMenu.DefaultItems.SearchMenu),
+          createElement(MainMenu.DefaultItems.CommandPalette),
+          createElement(MainMenu.DefaultItems.Help),
+          createElement(MainMenu.Separator),
+          createElement(MainMenu.DefaultItems.ClearCanvas),
+          createElement(MainMenu.DefaultItems.ChangeCanvasBackground),
+        ),
+        createElement(
+          WelcomeScreen,
+          { key: "canvas-welcome" },
+          createElement(
+            WelcomeScreen.Center,
+            null,
+            createElement(
+              "div",
+              { className: "orvyn-canvas-welcome" },
+              createElement(
+                "span",
+                { className: "orvyn-canvas-symbol", "aria-hidden": true },
+                createElement("img", {
+                  src: "/branding/icon-192.png",
+                  alt: "",
+                  width: 28,
+                  height: 28,
+                  draggable: false,
+                }),
+              ),
+              createElement(
+                "h2",
+                null,
+                editable ? "A canvas for your ideas" : "This canvas is empty",
+              ),
+              createElement(
+                "p",
+                null,
+                editable
+                  ? "Sketch a thought, connect the dots, or map out what’s next."
+                  : "There’s nothing on this canvas yet.",
+              ),
+              editable
+                ? createElement(
+                    "p",
+                    { className: "orvyn-canvas-keys" },
+                    createElement("kbd", null, "R"),
+                    " Rectangle ",
+                    createElement("kbd", null, "A"),
+                    " Arrow ",
+                    createElement("kbd", null, "T"),
+                    " Text",
+                  )
+                : null,
+            ),
+          ),
+        ),
+      ),
     );
   render();
   return {

@@ -526,6 +526,56 @@ test("Chromium: draw, save, undo, export and embed a real Excalidraw canvas with
       path: ".local/ui-review/whiteboard-canvas.png",
       fullPage: true,
     });
+    const nativePanel = async () =>
+      page.evaluate(() => {
+        const panel = document.querySelector(".whiteboard .excalidraw .Island");
+        const frame = document.querySelector(".whiteboard");
+        return {
+          panel: getComputedStyle(panel).backgroundColor,
+          frame: getComputedStyle(frame).backgroundColor,
+          font: getComputedStyle(panel).fontFamily,
+        };
+      });
+    let colors = await nativePanel();
+    assert.equal(
+      colors.panel,
+      colors.frame,
+      "Drawing controls follow the workspace surface",
+    );
+    assert.match(colors.font, /Inter/);
+    const background = (await f.get()).data.scene.backgroundColor;
+    async function setTheme(name) {
+      await page
+        .getByRole("button", { name: "Account menu", exact: true })
+        .click();
+      await page
+        .getByRole("menuitem", { name: "Appearance", exact: true })
+        .click();
+      const dialog = page.getByRole("dialog", {
+        name: "Appearance",
+        exact: true,
+      });
+      await dialog.getByRole("button", { name, exact: true }).click();
+      await dialog
+        .getByRole("button", { name: "Close dialog", exact: true })
+        .click();
+    }
+    await setTheme("Graphite");
+    await expect(page.locator(".whiteboard .excalidraw")).toHaveClass(
+      /theme--dark/,
+    );
+    colors = await nativePanel();
+    assert.equal(colors.panel, colors.frame);
+    assert.equal(
+      (await f.get()).data.scene.backgroundColor,
+      background,
+      "Changing the UI theme must preserve the authored background",
+    );
+    await page.screenshot({
+      path: ".local/ui-review/whiteboard-native-dark.png",
+      fullPage: true,
+    });
+    await setTheme("Light");
     await page
       .getByRole("button", { name: "Whiteboard actions", exact: true })
       .click();
@@ -540,6 +590,16 @@ test("Chromium: draw, save, undo, export and embed a real Excalidraw canvas with
       (await f.get()).data.scene.elements.filter((e) => !e.isDeleted).length,
       elements.length + 1,
     );
+    const empty = (await f.create("Room for a new idea")).data;
+    await page.goto(`${base}/?page=${empty.id}`);
+    await expect(
+      page.locator(".whiteboard .orvyn-canvas-welcome h2"),
+    ).toHaveText("A canvas for your ideas");
+    await expect(page.locator(".whiteboard .ExcalidrawLogo")).toHaveCount(0);
+    await page.screenshot({
+      path: ".local/ui-review/whiteboard-native-empty.png",
+      fullPage: true,
+    });
     const source = (await f.create("A page with a shared canvas", "page")).data;
     await page.goto(`${base}/?page=${source.id}`);
     const doc = page.getByRole("textbox", { name: "Document", exact: true });
@@ -561,6 +621,19 @@ test("Chromium: draw, save, undo, export and embed a real Excalidraw canvas with
     await expect(
       page.getByRole("button", { name: "Edit whiteboard", exact: true }),
     ).toBeVisible();
+    await expect(
+      page.locator(".embedded-whiteboard .App-menu_top"),
+    ).not.toBeVisible();
+    await page
+      .getByRole("button", { name: "Edit whiteboard", exact: true })
+      .click();
+    await expect(page.getByTestId("toolbar-rectangle")).toBeVisible();
+    await page
+      .getByRole("button", { name: "Done drawing", exact: true })
+      .click();
+    await expect(
+      page.locator(".embedded-whiteboard .whiteboard-save"),
+    ).toHaveText("All changes saved");
     await page.screenshot({
       path: ".local/ui-review/whiteboard-embedded.png",
       fullPage: true,

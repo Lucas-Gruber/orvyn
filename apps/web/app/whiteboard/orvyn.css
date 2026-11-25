@@ -1,0 +1,150 @@
+/* Scope the engine's UI to Orvyn. Authored canvas colors and drawing fonts
+   remain scene data; never recolor or restyle the drawing itself. */
+.whiteboard .excalidraw,
+.whiteboard .excalidraw.theme--dark {
+  --ui-font: "Inter Variable", sans-serif;
+  --color-primary: var(--accent);
+  --color-primary-darker: var(--accent-solid);
+  --color-primary-darkest: var(--accent-solid);
+  --color-primary-hover: var(--accent-solid);
+  --color-primary-light: var(--accent-soft);
+  --color-primary-light-darker: var(--accent-soft);
+  --color-selection: var(--accent);
+  --color-brand-hover: var(--surface-hover);
+  --color-brand-active: var(--accent);
+  --color-on-primary-container: var(--accent);
+  --color-surface-primary-container: var(--accent-soft);
+  --color-surface-lowest: var(--bg);
+  --color-surface-low: var(--surface);
+  --color-surface-mid: var(--surface-hover);
+  --color-surface-high: var(--surface-hover);
+  --color-on-surface: var(--text);
+  --text-primary-color: var(--text);
+  --color-border-outline: var(--line);
+  --color-border-outline-variant: var(--line-soft);
+  --color-disabled: var(--faint);
+  --default-bg-color: var(--bg);
+  --island-bg-color: var(--bg);
+  --popup-bg-color: var(--elevated);
+  --popup-secondary-bg-color: var(--surface);
+  --popup-text-color: var(--text);
+  --popup-text-inverted-color: var(--bg);
+  --input-bg-color: var(--surface);
+  --input-border-color: var(--line);
+  --input-hover-bg-color: var(--surface-hover);
+  --input-label-color: var(--muted);
+  --default-border-color: var(--line);
+  --dialog-border-color: var(--line);
+  --button-hover-bg: var(--surface-hover);
+  --button-active-bg: var(--accent-soft);
+  --button-active-border: var(--accent);
+  --button-gray-1: var(--surface);
+  --button-gray-2: var(--surface-hover);
+  --button-gray-3: var(--line);
+  --focus-highlight-color: var(--accent);
+  --keybinding-color: var(--faint);
+  --link-color: var(--accent);
+  --scrollbar-thumb: var(--line);
+  --scrollbar-thumb-hover: var(--muted);
+  --color-slider-track: var(--accent-soft);
+  --color-slider-thumb: var(--accent);
+  --border-radius-md: 5px;
+  --border-radius-lg: 6px;
+  --shadow-island: 0 2px 8px color-mix(in srgb, var(--text) 7%, transparent);
+  --modal-shadow: var(--shadow);
+}
+
+.whiteboard .excalidraw .Island,
+.whiteboard .excalidraw .App-toolbar,
+.whiteboard .excalidraw .layer-ui__library,
+.whiteboard .excalidraw .dropdown-menu-container {
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-island);
+}
+
+.whiteboard .excalidraw .App-toolbar {
+  padding: 4px;
+}
+
+.whiteboard .excalidraw .App-menu__left .Island {
+  border-radius: 8px;
+}
+
+.whiteboard .excalidraw .ToolIcon__keybinding,
+.whiteboard .excalidraw .HintViewer {
+  color: var(--faint);
+}
+
+.whiteboard .excalidraw .dropdown-menu-item,
+.whiteboard .excalidraw .buttonList,
+.whiteboard .excalidraw .library-button,
+.whiteboard .excalidraw .Island {
+  font-family: var(--ui-font);
+}
+
+.whiteboard.embedded .whiteboard-stage.view-only .App-menu_top {
+  display: none;
+}
+
+.whiteboard .excalidraw .welcome-screen-center {
+  margin: 0;
+}
+
+.orvyn-canvas-welcome {
+  max-width: 360px;
+  padding: 24px;
+  text-align: center;
+  color: var(--muted);
+  font-family: "Inter Variable", sans-serif;
+}
+.orvyn-canvas-symbol {
+  display: grid;
+  place-items: center;
+  margin: 0 auto 18px;
+  width: 48px;
+  height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-size: 30px;
+}
+.orvyn-canvas-welcome h2 {
+  margin: 0 0 10px;
+  font:
+    550 20px/1.3 "Inter Variable",
+    sans-serif;
+  color: var(--text);
+  letter-spacing: -0.4px;
+}
+.orvyn-canvas-welcome p {
+  margin: 0;
+  font:
+    13px/1.7 "Inter Variable",
+    sans-serif;
+}
+.orvyn-canvas-welcome .orvyn-canvas-keys {
+  margin-top: 18px;
+  font-size: 11px;
+  color: var(--faint);
+}
+.orvyn-canvas-keys kbd {
+  margin: 0 2px 0 8px;
+  padding: 2px 4px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-family: inherit;
+  color: var(--muted);
+}
+@media (max-width: 520px) {
+  .whiteboard .orvyn-canvas-welcome {
+    max-width: 260px;
+    padding: 16px;
+  }
+  .whiteboard .orvyn-canvas-welcome h2 {
+    font-size: 17px;
+  }
+  .whiteboard .orvyn-canvas-keys {
+    display: none;
+  }
+}
