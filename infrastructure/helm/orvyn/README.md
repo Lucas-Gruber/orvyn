@@ -2,7 +2,7 @@
 
 This chart runs Web, API, email/attachment Worker, and Collaboration. PostgreSQL, authenticated Valkey, and private SeaweedFS can run inside the release or be replaced independently. Native filesystem attachments are also supported. Only Web is exposed through ingress; its Nuxt routes proxy `/api` and `/collaboration` to ClusterIP services. Worker has no Service. This is a single-instance internal infrastructure topology, **not a verified HA configuration**.
 
-Chart `version`, `appVersion`, and all owned Node package versions are synchronized by `pnpm release:version`. An empty application image tag resolves to the exact `appVersion`; a digest takes precedence. SemVer build metadata (`+build`) maps to `_build` in Docker tags while the chart/package version retains the original SemVer. Published charts never resolve application images to `latest`. The current source prepares **0.2.0**; an OCI version becomes installable only after its release workflow finishes.
+Chart `version`, `appVersion`, and all owned Node package versions are synchronized by `pnpm release:version`. An empty application image tag resolves to the exact `appVersion`; a digest takes precedence. SemVer build metadata (`+build`) maps to `_build` in Docker tags while the chart/package version retains the original SemVer. Published charts never resolve application images to `latest`. Version **0.2.0** is [released](https://github.com/Lucas-Gruber/orvyn/releases/tag/v0.2.0), with publicly pullable OCI chart and application images. Future versions become installable only after their release workflow finishes.
 
 ## Requirements and first installation
 
@@ -20,7 +20,7 @@ helm upgrade --install orvyn ./infrastructure/helm/orvyn \
   --set ingress.className=traefik
 ```
 
-The bare defaults intentionally fail with a useful error until SMTP is supplied. After an authorized release is published, install from OCI with the same configuration:
+The bare defaults intentionally fail with a useful error until SMTP is supplied. Install the published OCI chart with the same configuration:
 
 ```sh
 helm upgrade --install orvyn oci://ghcr.io/lucas-gruber/charts/orvyn \

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="77" height="20" role="img" aria-label="SSO: OIDC">
+  <title>SSO: OIDC</title>
+  <clipPath id="clip"><rect width="77" height="20" rx="3"/></clipPath>
+  <g clip-path="url(#clip)">
+    <path fill="#555" d="M0 0h34v20H0z"/>
+    <path fill="#8057e8" d="M34 0h43v20H34z"/>
+  </g>
+  <g fill="#fff" text-anchor="middle" font-family="Verdana,DejaVu Sans,sans-serif" font-size="11">
+    <text x="17" y="14">SSO</text>
+    <text x="55.5" y="14">OIDC</text>
+  </g>
+</svg>
