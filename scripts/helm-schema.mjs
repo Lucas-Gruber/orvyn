@@ -316,6 +316,25 @@ Object.assign(property("smtp.from"), {
   minLength: 3,
   pattern: "^[^\\r\\n]+@[^\\r\\n]+$",
 });
+Object.assign(property("backup.schedule"), {
+  pattern: "^([0-9*/,-]+[ \\t]+){4}[0-9*/,-]+$",
+  description: "Five numeric cron fields, interpreted in backup.timeZone.",
+});
+Object.assign(property("backup.timeZone"), { minLength: 1 });
+Object.assign(property("backup.retentionCount"), { minimum: 1, maximum: 365 });
+Object.assign(property("backup.activeDeadlineSeconds"), {
+  minimum: 30,
+  maximum: 86400,
+});
+Object.assign(property("backup.startingDeadlineSeconds"), {
+  minimum: 10,
+  maximum: 86400,
+});
+rule(
+  "backup.enabled",
+  { const: true },
+  at("backup.persistence.enabled", { const: true }),
+);
 for (const p of ["api.service.type", "collaboration.service.type"])
   Object.assign(property(p), { const: "ClusterIP" });
 Object.assign(property("web.service.type"), {

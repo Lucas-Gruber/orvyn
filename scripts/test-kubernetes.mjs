@@ -268,6 +268,7 @@ try {
     },
     ingress: { enabled: false },
     smtp: { url: "smtp://mailpit:1025", from: "orvyn@example.test" },
+    backup: { enabled: true, suspend: true },
   };
   for (const component of ["web", "api", "worker", "collaboration"])
     base[component] = {
@@ -324,6 +325,94 @@ try {
   );
   console.log(
     "PASS Kubernetes: atomic internal PostgreSQL, Valkey, SeaweedFS install; readiness, private upload and download",
+  );
+  await kubectl([
+    "-n",
+    namespace,
+    "create",
+    "job",
+    "database-backup-smoke",
+    "--from=cronjob/s3-orvyn-db-backup",
+  ]);
+  await kubectl([
+    "-n",
+    namespace,
+    "wait",
+    "--for=condition=complete",
+    "job/database-backup-smoke",
+    "--timeout=180s",
+  ]);
+  const backupLog = await kubectl([
+    "-n",
+    namespace,
+    "logs",
+    "job/database-backup-smoke",
+  ]);
+  const snapshot = backupLog.match(
+    /Database snapshot completed: (postgresql-[0-9]{8}T[0-9]{15}Z-[A-Za-z0-9]{8})/,
+  );
+  if (!snapshot)
+    throw Error(
+      "The Kubernetes database backup did not publish a completed snapshot",
+    );
+  const cron = JSON.parse(
+    await kubectl([
+      "-n",
+      namespace,
+      "get",
+      "cronjob",
+      "s3-orvyn-db-backup",
+      "-o",
+      "json",
+    ]),
+  );
+  const restore = {
+    apiVersion: "batch/v1",
+    kind: "Job",
+    metadata: { name: "database-restore-smoke", namespace },
+    spec: structuredClone(cron.spec.jobTemplate.spec),
+  };
+  const restoreContainer = restore.spec.template.spec.containers[0];
+  restoreContainer.command = ["/bin/bash", "/scripts/restore-postgresql.sh"];
+  restoreContainer.env.push(
+    { name: "ORVYN_RESTORE_BACKUP", value: snapshot[1] },
+    { name: "ORVYN_RESTORE_DATABASE", value: "orvyn_restore_kubernetes" },
+  );
+  await kubectl(["create", "-f", "-"], JSON.stringify(restore));
+  await kubectl([
+    "-n",
+    namespace,
+    "wait",
+    "--for=condition=complete",
+    "job/database-restore-smoke",
+    "--timeout=180s",
+  ]);
+  if (!/^[0-9a-f-]{36}$/.test(state.file))
+    throw Error("Invalid Kubernetes fixture file ID");
+  const recovered = await kubectl([
+    "-n",
+    namespace,
+    "exec",
+    "statefulset/s3-orvyn-postgresql",
+    "--",
+    "psql",
+    "-X",
+    "--no-password",
+    "-U",
+    "orvyn",
+    "-d",
+    "orvyn_restore_kubernetes",
+    "-At",
+    "-c",
+    `SELECT count(*) FROM files WHERE id='${state.file}'`,
+  ]);
+  if (recovered.trim() !== "1")
+    throw Error(
+      "The recovered Kubernetes database is missing its private attachment metadata",
+    );
+  await smoke("s3", state);
+  console.log(
+    "PASS Kubernetes: real CronJob archive on retained PVC, non-root isolated restore Job and preserved source attachment",
   );
   await helm([
     "upgrade",

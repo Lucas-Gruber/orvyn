@@ -83,6 +83,21 @@ try {
   }
   const cases = [
     ["all-in-one", {}, "all-in-one"],
+    ["database-backup", { backup: { enabled: true } }, "all-in-one"],
+    ["local-database-backup", { backup: { enabled: true } }, "local-storage"],
+    ["gitops-database-backup", { backup: { enabled: true } }, "gitops"],
+    [
+      "external-database-backup",
+      {
+        backup: {
+          enabled: true,
+          timeZone: "Europe/Berlin",
+          persistence: { existingClaim: "private-database-backups" },
+          ca: { existingSecret: "postgres-ca" },
+        },
+      },
+      "external-postgresql",
+    ],
     ["local-storage", {}, "local-storage"],
     [
       "local-rwx",
@@ -184,6 +199,7 @@ try {
         },
       },
       fullnameOverride: "orvyn-" + "x".repeat(39),
+      backup: { enabled: true },
       smtp: { existingSecret: "mail" },
       ingress: {
         tls: { issuer: "company" },
@@ -215,6 +231,11 @@ try {
       resource.metadata.name.length <= 63,
       "Resource names must fit Kubernetes Job/service limits",
     );
+    if (resource.kind === "CronJob")
+      assert.ok(
+        resource.metadata.name.length <= 52,
+        "CronJob names must leave room for generated Job names",
+      );
     for (const value of Object.values(resource.metadata.labels || {}))
       assert.ok(
         value.length <= 63 &&
@@ -269,13 +290,14 @@ try {
       ),
     );
     for (const r of resources.filter((r) =>
-      ["Deployment", "StatefulSet", "Job"].includes(r.kind),
+      ["Deployment", "StatefulSet", "Job", "CronJob"].includes(r.kind),
     )) {
-      assert.equal(r.spec.template.spec.automountServiceAccountToken, false);
-      for (const c of [
-        ...r.spec.template.spec.containers,
-        ...(r.spec.template.spec.initContainers || []),
-      ]) {
+      const pod =
+        r.kind === "CronJob"
+          ? r.spec.jobTemplate.spec.template.spec
+          : r.spec.template.spec;
+      assert.equal(pod.automountServiceAccountToken, false);
+      for (const c of [...pod.containers, ...(pod.initContainers || [])]) {
         assert.equal(c.securityContext.allowPrivilegeEscalation, false);
         assert.ok(
           c.image.includes("@sha256:") || c.image.endsWith(":" + version),
@@ -311,7 +333,7 @@ try {
         "random secrets must not perturb rollout checksums",
       );
     }
-    if (name === "gitops") {
+    if (name === "gitops" || name === "gitops-database-backup") {
       assert.equal(
         resources.some((r) => r.kind === "Secret"),
         false,
@@ -344,6 +366,67 @@ try {
             .requiredDuringSchedulingIgnoredDuringExecution.length,
         );
     }
+    const backup = resources.find((r) => r.kind === "CronJob");
+    if (overlay.backup?.enabled) {
+      assert.ok(backup);
+      assert.equal(backup.spec.concurrencyPolicy, "Forbid");
+      assert.equal(backup.spec.jobTemplate.spec.backoffLimit, 0);
+      const pod = backup.spec.jobTemplate.spec.template.spec;
+      assert.equal(pod.restartPolicy, "Never");
+      assert.equal(pod.securityContext.fsGroup, 999);
+      const job = pod.containers[0];
+      assert.deepEqual(job.command, [
+        "/bin/bash",
+        "/scripts/backup-postgresql.sh",
+      ]);
+      assert.equal(job.securityContext.readOnlyRootFilesystem, true);
+      assert.ok(
+        !job.env.some((e) =>
+          /ENCRYPTION|S3_|SMTP|OIDC|VALKEY|REDIS/.test(e.name),
+        ),
+        "Backup jobs receive database credentials only",
+      );
+      const scripts = resources.find(
+        (r) =>
+          r.kind === "ConfigMap" && r.metadata.name === backup.metadata.name,
+      );
+      for (const file of [
+        "postgresql-common.sh",
+        "backup-postgresql.sh",
+        "restore-postgresql.sh",
+      ])
+        assert.equal(
+          scripts.data[file],
+          await readFile(join(root, chart, "files", file), "utf8"),
+        );
+      const claim = pod.volumes.find((v) => v.name === "backups")
+        .persistentVolumeClaim.claimName;
+      if (name === "external-database-backup") {
+        assert.equal(claim, "private-database-backups");
+        assert.ok(
+          !resources.some(
+            (r) =>
+              r.kind === "PersistentVolumeClaim" && r.metadata.name === claim,
+          ),
+        );
+        assert.ok(
+          job.env.find((e) => e.name === "DATABASE_URL")?.valueFrom
+            .secretKeyRef,
+        );
+        assert.equal(
+          pod.volumes.find((v) => v.name === "database-ca").secret.secretName,
+          "postgres-ca",
+        );
+      } else {
+        assert.equal(
+          resources.find(
+            (r) =>
+              r.kind === "PersistentVolumeClaim" && r.metadata.name === claim,
+          ).metadata.annotations["helm.sh/resource-policy"],
+          "keep",
+        );
+      }
+    } else assert.equal(backup, undefined, "Backups are opt-in");
 
     await writeFile(join(temp, name + ".yaml"), rendered.stdout, {
       mode: 0o600,
@@ -354,6 +437,28 @@ try {
     );
   }
   const invalid = [
+    [
+      "ephemeral backup storage",
+      {
+        smtp: { existingSecret: "mail" },
+        backup: { enabled: true, persistence: { enabled: false } },
+      },
+    ],
+    [
+      "zero backup retention",
+      { smtp: { existingSecret: "mail" }, backup: { retentionCount: 0 } },
+    ],
+    [
+      "unbounded backup retention",
+      { smtp: { existingSecret: "mail" }, backup: { retentionCount: 366 } },
+    ],
+    [
+      "invalid backup cron fields",
+      {
+        smtp: { existingSecret: "mail" },
+        backup: { schedule: "every midnight" },
+      },
+    ],
     [
       "different local worker UID",
       {

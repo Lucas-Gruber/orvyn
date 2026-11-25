@@ -265,6 +265,60 @@ externalPostgresql:
   url: ""
   existingSecret: ""
   secretKey: DATABASE_URL
+# PostgreSQL snapshots only. Protect attachments and the encryption key separately.
+backup:
+  enabled: false
+  schedule: "17 2 * * *"
+  timeZone: Etc/UTC
+  suspend: false
+  retentionCount: 7
+  startingDeadlineSeconds: 600
+  activeDeadlineSeconds: 1800
+  backoffLimit: 0
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  image:
+    repository: docker.io/library/postgres
+    tag: "17"
+    digest: sha256:0d938e975177bef9f1f61f3f9dbcf2e0aa0a139568f66d3415ed8892eb97f6ac
+    pullPolicy: IfNotPresent
+  persistence:
+    enabled: true
+    existingClaim: ""
+    storageClass: ""
+    accessMode: ReadWriteOnce
+    size: 20Gi
+    annotations: {}
+    retain: true
+  ca:
+    existingSecret: ""
+    secretKey: ca.crt
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+      cpu: "1"
+  nodeSelector: {}
+  affinity: {}
+  tolerations: []
+  podLabels: {}
+  podAnnotations: {}
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 999
+    runAsGroup: 999
+    fsGroup: 999
+    fsGroupChangePolicy: OnRootMismatch
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
 valkey:
   enabled: true
   image:

@@ -151,6 +151,7 @@ try {
           "tests/local-storage.test.mjs",
           "tests/database-configuration.test.mjs",
           "tests/restore.test.mjs",
+          "tests/postgresql-backups.test.mjs",
           "tests/databases.test.mjs",
           "tests/database-events.test.mjs",
           "tests/database-browser.test.mjs",

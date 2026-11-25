@@ -13,6 +13,7 @@
     "collaboration",
     "postgresql",
     "externalPostgresql",
+    "backup",
     "valkey",
     "externalValkey",
     "storage",
@@ -770,6 +771,174 @@
           "type": "string",
           "minLength": 1,
           "pattern": "^[A-Za-z0-9._-]+$"
+        }
+      }
+    },
+    "backup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "schedule",
+        "timeZone",
+        "suspend",
+        "retentionCount",
+        "startingDeadlineSeconds",
+        "activeDeadlineSeconds",
+        "backoffLimit",
+        "successfulJobsHistoryLimit",
+        "failedJobsHistoryLimit",
+        "image",
+        "persistence",
+        "ca",
+        "resources",
+        "nodeSelector",
+        "affinity",
+        "tolerations",
+        "podLabels",
+        "podAnnotations",
+        "podSecurityContext",
+        "securityContext"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "schedule": {
+          "type": "string",
+          "pattern": "^([0-9*/,-]+[ \\t]+){4}[0-9*/,-]+$",
+          "description": "Five numeric cron fields, interpreted in backup.timeZone."
+        },
+        "timeZone": {
+          "type": "string",
+          "minLength": 1
+        },
+        "suspend": {
+          "type": "boolean"
+        },
+        "retentionCount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 365
+        },
+        "startingDeadlineSeconds": {
+          "type": "integer",
+          "minimum": 10,
+          "maximum": 86400
+        },
+        "activeDeadlineSeconds": {
+          "type": "integer",
+          "minimum": 30,
+          "maximum": 86400
+        },
+        "backoffLimit": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "successfulJobsHistoryLimit": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failedJobsHistoryLimit": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "image": {
+          "$ref": "#/definitions/image"
+        },
+        "persistence": {
+          "$ref": "#/definitions/persistence"
+        },
+        "ca": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "existingSecret",
+            "secretKey"
+          ],
+          "properties": {
+            "existingSecret": {
+              "type": "string",
+              "maxLength": 253,
+              "pattern": "^$|^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$"
+            },
+            "secretKey": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._-]+$"
+            }
+          }
+        },
+        "resources": {
+          "$ref": "#/definitions/resources"
+        },
+        "nodeSelector": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "affinity": {
+          "type": "object"
+        },
+        "tolerations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "operator": {
+                "enum": [
+                  "Exists",
+                  "Equal"
+                ]
+              },
+              "value": {
+                "type": "string"
+              },
+              "effect": {
+                "enum": [
+                  "NoSchedule",
+                  "PreferNoSchedule",
+                  "NoExecute"
+                ]
+              },
+              "tolerationSeconds": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        },
+        "podLabels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "propertyNames": {
+            "not": {
+              "pattern": "^(app\\.kubernetes\\.io/|orvyn\\.io/)"
+            }
+          }
+        },
+        "podAnnotations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "propertyNames": {
+            "not": {
+              "const": "checksum/config"
+            }
+          }
+        },
+        "podSecurityContext": {
+          "$ref": "#/definitions/podSecurityContext"
+        },
+        "securityContext": {
+          "$ref": "#/definitions/securityContext"
         }
       }
     },
@@ -1722,6 +1891,49 @@
     }
   },
   "allOf": [
+    {
+      "if": {
+        "properties": {
+          "backup": {
+            "properties": {
+              "enabled": {
+                "const": true
+              }
+            },
+            "required": [
+              "enabled"
+            ]
+          }
+        },
+        "required": [
+          "backup"
+        ]
+      },
+      "then": {
+        "properties": {
+          "backup": {
+            "properties": {
+              "persistence": {
+                "properties": {
+                  "enabled": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "enabled"
+                ]
+              }
+            },
+            "required": [
+              "persistence"
+            ]
+          }
+        },
+        "required": [
+          "backup"
+        ]
+      }
+    },
     {
       "if": {
         "properties": {

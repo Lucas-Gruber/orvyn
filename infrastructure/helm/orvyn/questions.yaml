@@ -1136,6 +1136,285 @@ questions:
     default: DATABASE_URL
     group: PostgreSQL
     show_if: postgresql.enabled=false
+  - variable: backup.enabled
+    label: Schedule PostgreSQL backups
+    type: boolean
+    default: false
+    group: Database backups
+    description: Creates verified custom-format database snapshots on a dedicated
+      retained PVC. Attachments, encryption keys and offsite copies require
+      separate coordinated protection.
+  - variable: backup.schedule
+    label: Database backup schedule
+    type: string
+    default: 17 2 * * *
+    group: Database backups
+    description: Five numeric cron fields; default 17 2 * * * runs daily at 02:17 in
+      the selected time zone.
+    show_if: backup.enabled=true
+  - variable: backup.timeZone
+    label: Backup time zone
+    type: string
+    default: Etc/UTC
+    group: Database backups
+    description: IANA time zone, e.g. Etc/UTC or Europe/Berlin. Requires Kubernetes
+      1.27 or later.
+    show_if: backup.enabled=true
+  - variable: backup.suspend
+    label: Backup / suspend
+    type: boolean
+    default: false
+    group: Database backups
+    show_if: backup.enabled=true
+  - variable: backup.retentionCount
+    label: Completed snapshots to retain
+    type: int
+    default: 7
+    group: Database backups
+    description: Keep 1–365 completed database snapshots. Old snapshots are removed
+      only after a new archive passes verification.
+    show_if: backup.enabled=true
+  - variable: backup.startingDeadlineSeconds
+    label: Backup / starting Deadline Seconds
+    type: int
+    default: 600
+    group: Database backups
+    show_if: backup.enabled=true
+  - variable: backup.activeDeadlineSeconds
+    label: Backup / active Deadline Seconds
+    type: int
+    default: 1800
+    group: Database backups
+    show_if: backup.enabled=true
+  - variable: backup.backoffLimit
+    label: Backup / backoff Limit
+    type: int
+    default: 0
+    group: Database backups
+    show_if: backup.enabled=true
+  - variable: backup.successfulJobsHistoryLimit
+    label: Backup / successful Jobs History Limit
+    type: int
+    default: 1
+    group: Database backups
+    show_if: backup.enabled=true
+  - variable: backup.failedJobsHistoryLimit
+    label: Backup / failed Jobs History Limit
+    type: int
+    default: 3
+    group: Database backups
+    show_if: backup.enabled=true
+  - variable: backup.image.repository
+    label: Backup / image / repository
+    type: string
+    default: docker.io/library/postgres
+    group: Database backups
+    show_if: global.showAdvanced=true&&backup.enabled=true
+  - variable: backup.image.tag
+    label: Backup / image / tag
+    type: string
+    default: "17"
+    group: Database backups
+    show_if: global.showAdvanced=true&&backup.enabled=true
+  - variable: backup.image.digest
+    label: PostgreSQL client image digest
+    type: string
+    default: sha256:0d938e975177bef9f1f61f3f9dbcf2e0aa0a139568f66d3415ed8892eb97f6ac
+    group: Database backups
+    description: Use pg_dump/pg_restore compatible with the database server.
+      PostgreSQL 17 is pinned by default; override both tag and digest for a
+      newer external server.
+    show_if: global.showAdvanced=true&&backup.enabled=true
+  - variable: backup.image.pullPolicy
+    label: Backup / image / pull Policy
+    type: enum
+    default: IfNotPresent
+    group: Database backups
+    options:
+      - IfNotPresent
+      - Always
+      - Never
+    show_if: global.showAdvanced=true&&backup.enabled=true
+  - variable: backup.persistence.enabled
+    label: Backup / persistence / enabled
+    type: boolean
+    default: true
+    group: Database backups
+    show_if: backup.enabled=true
+  - variable: backup.persistence.existingClaim
+    label: Backup / persistence / existing Claim
+    type: pvc
+    default: ""
+    group: Database backups
+    show_if: backup.enabled=true
+  - variable: backup.persistence.storageClass
+    label: Backup / persistence / storage Class
+    type: storageclass
+    default: ""
+    group: Database backups
+    show_if: backup.enabled=true
+  - variable: backup.persistence.accessMode
+    label: Backup / persistence / access Mode
+    type: enum
+    default: ReadWriteOnce
+    group: Database backups
+    options:
+      - ReadWriteOnce
+      - ReadWriteMany
+    show_if: backup.enabled=true
+  - variable: backup.persistence.size
+    label: Backup / persistence / size
+    type: string
+    default: 20Gi
+    group: Database backups
+    show_if: backup.enabled=true
+  - variable: backup.persistence.annotations
+    label: Backup / persistence / annotations
+    type: map[string]
+    default: {}
+    group: Database backups
+    show_if: backup.enabled=true
+  - variable: backup.persistence.retain
+    label: Backup / persistence / retain
+    type: boolean
+    default: true
+    group: Database backups
+    show_if: backup.enabled=true
+  - variable: backup.ca.existingSecret
+    label: Backup / ca / existing Secret
+    type: secret
+    default: ""
+    group: Database backups
+    description: Existing Secret in the release namespace; use the key field below
+      for a custom key.
+    show_if: backup.enabled=true
+  - variable: backup.ca.secretKey
+    label: Backup / ca / secret Key
+    type: string
+    default: ca.crt
+    group: Database backups
+    show_if: backup.enabled=true
+  - variable: backup.resources.requests.cpu
+    label: Backup / resources / requests / cpu
+    type: string
+    default: 100m
+    group: Resources
+    show_if: backup.enabled=true
+  - variable: backup.resources.requests.memory
+    label: Backup / resources / requests / memory
+    type: string
+    default: 128Mi
+    group: Resources
+    show_if: backup.enabled=true
+  - variable: backup.resources.limits.memory
+    label: Backup / resources / limits / memory
+    type: string
+    default: 512Mi
+    group: Resources
+    show_if: backup.enabled=true
+  - variable: backup.resources.limits.cpu
+    label: Backup / resources / limits / cpu
+    type: string
+    default: "1"
+    group: Resources
+    show_if: backup.enabled=true
+  - variable: backup.nodeSelector
+    label: Backup / node Selector
+    type: map[string]
+    default: {}
+    group: Database backups
+    show_if: global.showAdvanced=true&&backup.enabled=true
+  - variable: backup.affinity
+    label: Backup / affinity
+    type: yaml
+    default: {}
+    group: Database backups
+    description: Optional native Kubernetes settings. Standard installation,
+      secrets, storage, SSO, scaling and resource fields have individual
+      controls.
+    show_if: global.showAdvanced=true&&backup.enabled=true
+  - variable: backup.tolerations
+    label: Backup / tolerations
+    type: yaml
+    default: []
+    group: Database backups
+    description: Optional native Kubernetes settings. Standard installation,
+      secrets, storage, SSO, scaling and resource fields have individual
+      controls.
+    show_if: global.showAdvanced=true&&backup.enabled=true
+  - variable: backup.podLabels
+    label: Backup / pod Labels
+    type: map[string]
+    default: {}
+    group: Database backups
+    show_if: global.showAdvanced=true&&backup.enabled=true
+  - variable: backup.podAnnotations
+    label: Backup / pod Annotations
+    type: map[string]
+    default: {}
+    group: Database backups
+    show_if: global.showAdvanced=true&&backup.enabled=true
+  - variable: backup.podSecurityContext.runAsNonRoot
+    label: Backup / pod Security Context / run As Non Root
+    type: boolean
+    default: true
+    group: Database backups
+    show_if: global.showAdvanced=true&&backup.enabled=true
+  - variable: backup.podSecurityContext.runAsUser
+    label: Backup / pod Security Context / run As User
+    type: int
+    default: 999
+    group: Database backups
+    show_if: global.showAdvanced=true&&backup.enabled=true
+  - variable: backup.podSecurityContext.runAsGroup
+    label: Backup / pod Security Context / run As Group
+    type: int
+    default: 999
+    group: Database backups
+    show_if: global.showAdvanced=true&&backup.enabled=true
+  - variable: backup.podSecurityContext.fsGroup
+    label: Backup / pod Security Context / fs Group
+    type: int
+    default: 999
+    group: Database backups
+    show_if: global.showAdvanced=true&&backup.enabled=true
+  - variable: backup.podSecurityContext.fsGroupChangePolicy
+    label: Backup / pod Security Context / fs Group Change Policy
+    type: enum
+    default: OnRootMismatch
+    group: Database backups
+    options:
+      - OnRootMismatch
+      - Always
+    show_if: global.showAdvanced=true&&backup.enabled=true
+  - variable: backup.podSecurityContext.seccompProfile.type
+    label: Backup / pod Security Context / seccomp Profile / type
+    type: enum
+    default: RuntimeDefault
+    group: Database backups
+    options:
+      - RuntimeDefault
+      - Localhost
+    show_if: global.showAdvanced=true&&backup.enabled=true
+  - variable: backup.securityContext.allowPrivilegeEscalation
+    label: Backup / security Context / allow Privilege Escalation
+    type: boolean
+    default: false
+    group: Database backups
+    show_if: global.showAdvanced=true&&backup.enabled=true
+  - variable: backup.securityContext.readOnlyRootFilesystem
+    label: Backup / security Context / read Only Root Filesystem
+    type: boolean
+    default: true
+    group: Database backups
+    show_if: global.showAdvanced=true&&backup.enabled=true
+  - variable: backup.securityContext.capabilities.drop
+    label: Backup / security Context / capabilities / drop
+    type: array[string]
+    default:
+      - ALL
+    group: Database backups
+    show_if: global.showAdvanced=true&&backup.enabled=true
   - variable: valkey.enabled
     label: Valkey / enabled
     type: boolean

@@ -59,7 +59,8 @@ Work through these areas in order, preserving working features and committing/pu
 7. Localization, branding and administration
    - [ ] Runtime German/English/system language and synchronized preferences.
    - [ ] Instance/organization/space appearance, complete administration.
-   - [ ] Identity linking, OIDC group mapping, real-provider validation and ownership transfer.
+   - [x] Real OIDC provider validation with a pinned Keycloak instance, including deployment-managed setup and administrator subject checks.
+   - [ ] Identity linking, OIDC group mapping, additional provider validation and ownership transfer.
 8. Import/export
    - [x] Single-page Markdown import with a complete preview, native editable blocks, permanent heading links, current destination checks and retry recovery.
    - [x] Reviewed Markdown document export with ordinary block conversion, optional current people names, protected reference/file links and fresh checked downloads.
@@ -70,5 +71,7 @@ Work through these areas in order, preserving working features and committing/pu
 9. Desktop and operation
    - [x] Server CI, four production images with HTTPS integration checks, synchronized Node manifest versioning and a tag-triggered signed release pipeline.
    - [ ] Tauri clients, releases, update distribution and signing.
-   - [ ] Kubernetes/Helm, observability, automated backup scheduling and production recovery.
+   - [x] Kubernetes/Helm with Rancher configuration, deployment-managed OIDC and internal/external services.
+   - [x] Scheduled PostgreSQL snapshots on retained PVCs, integrity checks, bounded retention and isolated new-database restore tooling (development chart).
+   - [ ] Coordinated scheduled attachment/key backups, encrypted offsite copies, observability and production disaster recovery.
    - [ ] Load testing, object-store deployment policies, accessibility and broader browser validation.

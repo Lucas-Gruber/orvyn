@@ -18,6 +18,26 @@ const enums = {
   ],
 };
 const info = {
+  "backup.enabled": [
+    "Schedule PostgreSQL backups",
+    "Creates verified custom-format database snapshots on a dedicated retained PVC. Attachments, encryption keys and offsite copies require separate coordinated protection.",
+  ],
+  "backup.schedule": [
+    "Database backup schedule",
+    "Five numeric cron fields; default 17 2 * * * runs daily at 02:17 in the selected time zone.",
+  ],
+  "backup.timeZone": [
+    "Backup time zone",
+    "IANA time zone, e.g. Etc/UTC or Europe/Berlin. Requires Kubernetes 1.27 or later.",
+  ],
+  "backup.retentionCount": [
+    "Completed snapshots to retain",
+    "Keep 1–365 completed database snapshots. Old snapshots are removed only after a new archive passes verification.",
+  ],
+  "backup.image.digest": [
+    "PostgreSQL client image digest",
+    "Use pg_dump/pg_restore compatible with the database server. PostgreSQL 17 is pinned by default; override both tag and digest for a newer external server.",
+  ],
   "global.origin": [
     "Public application URL",
     "One public HTTPS origin without path or trailing slash. Controls secure cookies, ingress and OIDC callbacks. TLS may terminate at the ingress or an upstream load balancer.",
@@ -114,6 +134,8 @@ function visibility(path) {
     conditions.push("storage.s3.internal.enabled=false");
   if (path.startsWith("sso.oidc.") && path !== "sso.oidc.enabled")
     conditions.push("sso.oidc.enabled=true");
+  if (path.startsWith("backup.") && path !== "backup.enabled")
+    conditions.push("backup.enabled=true");
   if (path.startsWith("ingress.") && path !== "ingress.enabled")
     conditions.push("ingress.enabled=true");
   if (path.startsWith("ingress.tls.") && path !== "ingress.tls.enabled")
@@ -154,9 +176,11 @@ function walk(value, path = []) {
               ? "SMTP"
               : path[0] === "sso"
                 ? "SSO (OIDC)"
-                : path[0] === "ingress"
-                  ? "Networking"
-                  : "Advanced";
+                : path[0] === "backup"
+                  ? "Database backups"
+                  : path[0] === "ingress"
+                    ? "Networking"
+                    : "Advanced";
   if (name === "replicaCount") group = "Scaling";
   if (path.includes("resources")) group = "Resources";
   let type =

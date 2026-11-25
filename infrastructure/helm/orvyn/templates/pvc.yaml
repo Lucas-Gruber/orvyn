@@ -3,6 +3,7 @@
   (dict "component" "valkey" "enabled" .Values.valkey.enabled "persistence" .Values.valkey.persistence)
   (dict "component" "storage" "enabled" (and (eq .Values.storage.driver "s3") .Values.storage.s3.internal.enabled) "persistence" .Values.storage.s3.internal.persistence)
   (dict "component" "attachments" "enabled" (eq .Values.storage.driver "local") "persistence" .Values.storage.local.persistence)
+  (dict "component" "backups" "enabled" .Values.backup.enabled "persistence" .Values.backup.persistence)
 }}
 {{- range $claim := $claims }}
 {{- $p := $claim.persistence }}

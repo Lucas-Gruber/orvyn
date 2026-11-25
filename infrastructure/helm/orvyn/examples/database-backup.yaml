@@ -1,0 +1,12 @@
+# Merge with an installation example; SMTP/TLS/storage still need configuration.
+# Database snapshots do not include attachment bytes or ORVYN_ENCRYPTION_KEY.
+backup:
+  enabled: true
+  schedule: "17 2 * * *"
+  timeZone: Etc/UTC
+  retentionCount: 7
+  persistence:
+    size: 20Gi
+    retain: true
+    # existingClaim: private-database-backups
+    # storageClass: encrypted-backup-storage
