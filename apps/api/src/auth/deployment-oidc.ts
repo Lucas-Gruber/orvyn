@@ -2,6 +2,7 @@ import { createHash, createHmac } from "node:crypto";
 import type { Pool } from "pg";
 import { encrypt, decrypt, encryptionKey, audit } from "./security.js";
 import { validateIssuer } from "./oidc.js";
+import { applyIssuerRepair, prepareIssuerRepair } from "./issuer-repair.js";
 
 export class DeploymentConfigurationError extends Error {}
 export type OidcClientAuth =
@@ -19,6 +20,7 @@ export type DeploymentOidc =
       scopes: string;
       autoProvision: boolean;
       adminSubject: string | null;
+      repairLegacyIssuer: boolean;
     };
 const problem = (message: string): never => {
   throw new DeploymentConfigurationError(message);
@@ -51,9 +53,8 @@ export function readDeploymentOidc(
   if (!boolean(env, "ORVYN_OIDC_ENABLED", false)) return { enabled: false };
   let issuer: string;
   try {
-    issuer = validateIssuer(value(env, "ORVYN_OIDC_ISSUER", 2000), env)
-      .toString()
-      .replace(/\/$/, "");
+    issuer = value(env, "ORVYN_OIDC_ISSUER", 2000);
+    validateIssuer(issuer, env);
   } catch {
     return problem("ORVYN_OIDC_ISSUER must be a valid HTTPS issuer URL");
   }
@@ -114,31 +115,72 @@ export function readDeploymentOidc(
     scopes: scopes.join(" "),
     autoProvision: boolean(env, "ORVYN_OIDC_AUTO_PROVISION", false),
     adminSubject,
+    repairLegacyIssuer: boolean(env, "ORVYN_OIDC_REPAIR_LEGACY_ISSUER", false),
   };
 }
 export function deploymentOidcFingerprint(config: DeploymentOidc) {
+  const canonical = config.enabled
+    ? {
+        enabled: true,
+        name: config.name,
+        issuer: config.issuer,
+        clientId: config.clientId,
+        clientSecret: config.clientSecret,
+        clientAuthMethod: config.clientAuthMethod,
+        scopes: config.scopes,
+        autoProvision: config.autoProvision,
+        adminSubject: config.adminSubject,
+      }
+    : { enabled: false };
   return createHmac("sha256", encryptionKey())
-    .update(JSON.stringify(config))
+    .update(JSON.stringify(canonical))
     .digest("hex");
 }
 export async function configureDeploymentOidc(
   pool: Pool,
   config = readDeploymentOidc(),
 ) {
+  // Network verification happens before taking configuration/database locks.
+  const candidates = config.enabled
+    ? (
+        await pool.query(
+          "SELECT * FROM oidc_providers WHERE managed_by='deployment' AND issuer=$1 AND client_id=$2 AND legacy_issuer_normalized",
+          [config.issuer.slice(0, -1), config.clientId],
+        )
+      ).rows.filter((row) => config.issuer === row.issuer + "/")
+    : [];
+  const repair = candidates.length
+    ? await prepareIssuerRepair(
+        pool,
+        candidates[0],
+        config.enabled ? config.issuer : "",
+        config.enabled && config.repairLegacyIssuer,
+      )
+    : undefined;
   const fingerprint = deploymentOidcFingerprint(config),
     c = await pool.connect();
   try {
     await c.query("BEGIN");
     await c.query("SELECT pg_advisory_xact_lock(782945)");
+    if (repair) await applyIssuerRepair(c, repair);
     const previous = await c.query(
       "SELECT fingerprint FROM deployment_configuration WHERE name='oidc' FOR UPDATE",
     );
     const current = await c.query(
       "SELECT * FROM oidc_providers WHERE managed_by='deployment' FOR UPDATE",
     );
+    let providerId = config.enabled ? config.id : null;
+    if (config.enabled) {
+      const match = current.rows.find((row) => row.issuer === config.issuer);
+      if (match && match.client_id !== config.clientId)
+        problem(
+          "An existing issuer cannot change its client identity. Plan an explicit identity migration.",
+        );
+      if (match) providerId = match.id;
+    }
     const disabled = await c.query(
       "UPDATE oidc_providers SET enabled=false,config_version=config_version+1 WHERE managed_by='deployment' AND enabled AND ($1::uuid IS NULL OR id<>$1) RETURNING id",
-      [config.enabled ? config.id : null],
+      [providerId],
     );
     let changed = !!disabled.rowCount;
     if (config.enabled) {
@@ -149,12 +191,12 @@ export async function configureDeploymentOidc(
       if (
         collision.rowCount &&
         (collision.rows[0].managed_by !== "deployment" ||
-          collision.rows[0].id !== config.id)
+          collision.rows[0].id !== providerId)
       )
         return problem(
           "This issuer already has a different provider identity. Keep its existing configuration or plan an explicit identity migration.",
         );
-      const existing = current.rows.find((row) => row.id === config.id);
+      const existing = current.rows.find((row) => row.id === providerId);
       let existingSecret: string | null = null;
       try {
         existingSecret = existing?.encrypted_secret
@@ -180,7 +222,7 @@ export async function configureDeploymentOidc(
           VALUES($1,$2,$3,$4,$5,$6,true,$7,'deployment',$8,$9)
           ON CONFLICT(id) DO UPDATE SET name=excluded.name,encrypted_secret=excluded.encrypted_secret,scopes=excluded.scopes,enabled=true,auto_provision=excluded.auto_provision,admin_subject=excluded.admin_subject,auth_method=excluded.auth_method,config_version=oidc_providers.config_version+1`,
           [
-            config.id,
+            providerId,
             config.name,
             config.issuer,
             config.clientId,
@@ -192,7 +234,7 @@ export async function configureDeploymentOidc(
           ],
         );
         await c.query("DELETE FROM oidc_flows WHERE provider_id=$1", [
-          config.id,
+          providerId,
         ]);
       }
     }

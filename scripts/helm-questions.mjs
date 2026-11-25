@@ -85,7 +85,7 @@ const info = {
   ],
   "sso.oidc.issuer": [
     "OIDC issuer URL",
-    "HTTPS issuer discovery URL, e.g. https://login.example.org/realms/company.",
+    "Exact HTTPS issuer from provider metadata. Preserve trailing slashes, e.g. https://auth.example.org/application/o/orvyn/ for Authentik or https://login.example.org/realms/company for Keycloak.",
   ],
   "sso.oidc.clientAuthMethod": [
     "OIDC client authentication",
@@ -93,7 +93,11 @@ const info = {
   ],
   "sso.oidc.autoProvision": [
     "Provision verified identities",
-    "Creates accounts only when the provider verifies their email. Existing local accounts are not linked by matching email.",
+    "Creates new SSO accounts only with a verified provider email. When disabled, unlinked SSO users cannot sign in; existing linked identities still work. Existing local accounts are never linked by matching email.",
+  ],
+  "sso.oidc.repairLegacyIssuer": [
+    "Approve verified legacy issuer repair",
+    "Only for an issuer whose final slash was removed by an older Orvyn version. With linked accounts, explicitly approves a TLS-verified correction to old issuer + '/'. Preserves provider/user IDs, revokes old provider sessions and records the repair. Other issuer/client changes are never repaired automatically.",
   ],
   "sso.oidc.adminSubject": [
     "Administrator subject (optional)",
@@ -101,7 +105,7 @@ const info = {
   ],
   "sso.oidc.ca.existingSecret": [
     "Private IdP CA Secret (optional)",
-    "PEM CA certificate for API discovery, token and JWKS requests. Does not disable TLS verification.",
+    "PEM CA certificate for API discovery/token/JWKS requests and configuration-time issuer repair. Does not disable TLS verification.",
   ],
   "smtp.url": [
     "SMTP connection URL",

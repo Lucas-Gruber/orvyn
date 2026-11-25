@@ -1392,6 +1392,7 @@
             "secretKey",
             "scopes",
             "autoProvision",
+            "repairLegacyIssuer",
             "adminSubject",
             "ca"
           ],
@@ -1433,6 +1434,9 @@
               "type": "string"
             },
             "autoProvision": {
+              "type": "boolean"
+            },
+            "repairLegacyIssuer": {
               "type": "boolean"
             },
             "adminSubject": {

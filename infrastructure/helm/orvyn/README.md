@@ -105,7 +105,18 @@ To close local signup after establishing administrator access, set `enabled: fal
 
 ## OIDC single sign-on
 
-Use `examples/oidc.yaml` as an overlay. Configure `sso.oidc.enabled`, `issuer`, `clientId`, `clientAuthMethod`, and either `clientSecret` or `existingSecret` with optional custom `secretKey`. Methods are `client_secret_basic`, `client_secret_post`, and `none` for public clients using PKCE. Public clients cannot have a secret. Register this **exact** callback at the IdP:
+Use `examples/oidc.yaml` as an overlay. Configure `sso.oidc.enabled`, `issuer`, `clientId`, `clientAuthMethod`, and either `clientSecret` or `existingSecret` with optional custom `secretKey`. Methods are `client_secret_basic`, `client_secret_post`, and `none` for public clients using PKCE. Public clients cannot have a secret.
+
+Preserve the exact discovery issuer, including trailing slashes. To repair an
+issuer whose final slash was removed by older Orvyn versions, set the corrected
+`issuer`; when linked identities exist, also explicitly set
+`sso.oidc.repairLegacyIssuer: true`. Repair requires trusted metadata at the old
+well-known endpoint, the same client ID and no duplicate provider. It preserves
+historical provider UUIDs and external identities, revokes old provider sessions
+and records an audit event. Restore the approval flag to `false` afterward while
+keeping the corrected issuer. Other issuer/client changes do not use this repair.
+
+Register this **exact** callback at the IdP:
 
 ```text
 https://notes.example.org/api/v1/oidc/deployment/callback
@@ -113,7 +124,7 @@ https://notes.example.org/api/v1/oidc/deployment/callback
 
 `name` controls the sign-in button, `scopes` must include `openid`, and `autoProvision` defaults to false. When enabled it provisions only identities whose provider verifies their email. It never automatically links an existing local account by email. Optionally set `adminSubject` to an exact immutable subject from your IdP; this grants application administration to that identity only, not to every SSO user. Removing the value revokes that declarative grant. Existing locally granted administrators are preserved.
 
-For a private CA, set `sso.oidc.ca.existingSecret` and `secretKey` to a PEM certificate. API mounts it using `NODE_EXTRA_CA_CERTS`; TLS verification remains enabled. All API replicas read the provider from PostgreSQL. A post-install/post-upgrade/post-rollback configuration Job runs advisory-locked migrations and applies the desired provider once. API uses `ORVYN_OIDC_BOOTSTRAP_MODE=external` and does not rewrite configuration or wait for this hook during readiness. **Only the Job receives the OIDC client secret.** Provider secrets are encrypted in the database using the persistent encryption key. The managed provider is read-only in the application administrator UI; manually configured providers remain supported. Disabling deployment SSO disables/revokes only its managed provider/sessions. Issuer/client identity changes do not relink existing users.
+For a private CA, set `sso.oidc.ca.existingSecret` and `secretKey` to a PEM certificate. API and configuration workloads mount it using `NODE_EXTRA_CA_CERTS`; TLS verification remains enabled. All API replicas read the provider from PostgreSQL. A post-install/post-upgrade/post-rollback configuration Job runs advisory-locked migrations and applies the desired provider once. API uses `ORVYN_OIDC_BOOTSTRAP_MODE=external` and does not rewrite configuration or wait for this hook during readiness. **Only the Job receives the OIDC client secret.** Provider secrets are encrypted in the database using the persistent encryption key. The managed provider is read-only in the application administrator UI; manually configured providers remain supported. Disabling deployment SSO disables/revokes only its managed provider/sessions. Issuer/client identity changes do not relink existing users.
 
 This is OIDC, not SAML, group synchronization or SCIM. Local account recovery remains available. A real Keycloak login with discovery, PKCE, signed tokens/JWKS, verified provisioning and subject-specific administration is covered by application integration tests.
 

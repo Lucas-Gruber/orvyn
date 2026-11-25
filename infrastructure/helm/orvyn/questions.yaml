@@ -2051,7 +2051,9 @@ questions:
     type: string
     default: ""
     group: SSO (OIDC)
-    description: HTTPS issuer discovery URL, e.g. https://login.example.org/realms/company.
+    description: Exact HTTPS issuer from provider metadata. Preserve trailing
+      slashes, e.g. https://auth.example.org/application/o/orvyn/ for Authentik
+      or https://login.example.org/realms/company for Keycloak.
     show_if: sso.oidc.enabled=true
   - variable: sso.oidc.clientId
     label: Sso / oidc / client Id
@@ -2102,8 +2104,20 @@ questions:
     type: boolean
     default: false
     group: SSO (OIDC)
-    description: Creates accounts only when the provider verifies their email.
-      Existing local accounts are not linked by matching email.
+    description: Creates new SSO accounts only with a verified provider email. When
+      disabled, unlinked SSO users cannot sign in; existing linked identities
+      still work. Existing local accounts are never linked by matching email.
+    show_if: sso.oidc.enabled=true
+  - variable: sso.oidc.repairLegacyIssuer
+    label: Approve verified legacy issuer repair
+    type: boolean
+    default: false
+    group: SSO (OIDC)
+    description: Only for an issuer whose final slash was removed by an older Orvyn
+      version. With linked accounts, explicitly approves a TLS-verified
+      correction to old issuer + '/'. Preserves provider/user IDs, revokes old
+      provider sessions and records the repair. Other issuer/client changes are
+      never repaired automatically.
     show_if: sso.oidc.enabled=true
   - variable: sso.oidc.adminSubject
     label: Administrator subject (optional)
@@ -2119,8 +2133,8 @@ questions:
     type: secret
     default: ""
     group: SSO (OIDC)
-    description: PEM CA certificate for API discovery, token and JWKS requests. Does
-      not disable TLS verification.
+    description: PEM CA certificate for API discovery/token/JWKS requests and
+      configuration-time issuer repair. Does not disable TLS verification.
     show_if: sso.oidc.enabled=true
   - variable: sso.oidc.ca.secretKey
     label: Sso / oidc / ca / secret Key

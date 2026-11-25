@@ -113,6 +113,8 @@ valueFrom:
   value: {{ $o.scopes | quote }}
 - name: ORVYN_OIDC_AUTO_PROVISION
   value: {{ $o.autoProvision | quote }}
+- name: ORVYN_OIDC_REPAIR_LEGACY_ISSUER
+  value: {{ $o.repairLegacyIssuer | quote }}
 - name: ORVYN_OIDC_ADMIN_SUBJECT
   value: {{ $o.adminSubject | quote }}
 {{- end }}

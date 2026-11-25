@@ -455,6 +455,7 @@ sso:
     secretKey: ORVYN_OIDC_CLIENT_SECRET
     scopes: openid email profile
     autoProvision: false
+    repairLegacyIssuer: false
     adminSubject: ""
     ca:
       existingSecret: ""

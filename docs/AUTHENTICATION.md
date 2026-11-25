@@ -70,6 +70,43 @@ External identities are keyed by provider ID and subject. An existing local acco
 
 ## Deployment-managed OIDC
 
+### Exact issuers and legacy slash repair
+
+Issuer identity is preserved exactly, including a root or path's final slash.
+Use the `issuer` value in the provider's metadata: for example Authentik
+`https://auth.example.org/application/o/orvyn/` or Keycloak
+`https://auth.example.org/realms/company`. URL equivalence is not identity
+equivalence. Discovery explicitly checks the exact string in addition to the
+library's TLS, nonce, PKCE and token-signature validation.
+
+Migration 47 marks pre-existing providers as possibly affected by the former
+normalization bug. New providers are never eligible for this exception. A
+legacy correction is allowed only from the stored issuer to that issuer plus
+one final `/`, with the same client ID and strict, trusted discovery proving
+the corrected issuer at the old issuer's well-known endpoint. Providers whose
+stored issuer already ends in `/` require an explicit identity migration;
+ambiguous URL changes are never guessed.
+
+For an unlinked legacy manual provider, sign-in can perform that verified
+correction automatically. For a deployment-managed provider, set the exact
+corrected issuer in Helm/environment configuration. If any accounts are already
+linked, explicitly approve the repair using `sso.oidc.repairLegacyIssuer: true`
+or `ORVYN_OIDC_REPAIR_LEGACY_ISSUER=true`. Manual-provider administrators use the
+repair checkbox in SSO administration. Approval alone does not bypass discovery.
+
+The repair retains the original provider UUID and all external identity/user
+IDs, including historical deployment-derived UUIDs. It invalidates in-progress
+flows and old provider sessions, records the correction in `oidc_issuer_repairs`
+and the audit trail, and is idempotent across replicas and retries. It refuses
+collisions with another provider. Real issuer or client-ID changes retain their
+normal identity-change semantics; accounts are never moved by matching email.
+After repair, leave the corrected issuer configured. The one-time approval flag
+can return to `false` without changing credentials or configuration revisions.
+
+Discovery logs distinguish exact issuer mismatch, invalid metadata, unsupported
+client authentication, decryption, DNS/network, timeout and TLS failures. Logs
+omit metadata bodies, raw exceptions, client secrets, claims and tokens.
+
 OIDC can also be configured declaratively. The stable redirect URI is **`<ORVYN_ORIGIN>/api/v1/oidc/deployment/callback`**. Register that exact URL at the provider before enabling sign-in. The normal administration screen still manages other providers.
 
 | Variable                        | Meaning                                                                                                                                                               |

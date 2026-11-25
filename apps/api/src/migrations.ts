@@ -686,6 +686,16 @@ UPDATE comment_mentions cm SET label=u.email FROM users u WHERE u.id=cm.user_id;
       }
     },
   },
+  {
+    version: 47,
+    sql: `ALTER TABLE oidc_providers ADD COLUMN legacy_issuer_normalized boolean NOT NULL DEFAULT true;
+ALTER TABLE oidc_providers ALTER COLUMN legacy_issuer_normalized SET DEFAULT false;
+CREATE TABLE oidc_issuer_repairs (
+ provider_id uuid NOT NULL,old_issuer text NOT NULL,new_issuer text NOT NULL,
+ actor_id uuid REFERENCES users(id) ON DELETE SET NULL,verified_at timestamptz NOT NULL DEFAULT now(),
+ PRIMARY KEY(provider_id,old_issuer,new_issuer)
+);`,
+  },
 ] as const;
 
 export async function migrate(pool: Pool, target = migrations.at(-1)!.version) {

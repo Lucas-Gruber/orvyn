@@ -152,6 +152,24 @@ export function diagnosticCode(error: unknown): string {
   }
 }
 const actions: Record<string, string> = {
+  OIDC_ISSUER_MISMATCH:
+    "Copy the exact issuer from the provider metadata, including trailing slashes. Repair legacy normalization explicitly for linked identities; keep issuer validation enabled.",
+  OIDC_METADATA_INVALID:
+    "Check the HTTPS discovery response and its issuer, authorization, token and JWKS endpoints. Keep TLS and signature verification enabled.",
+  OIDC_CLIENT_AUTH_UNSUPPORTED:
+    "Choose a token-endpoint authentication method advertised by the provider and registered for this client.",
+  OIDC_CLIENT_AUTH_INVALID:
+    "Configure a client secret for Basic/POST authentication, or choose a registered public PKCE client with method none.",
+  OIDC_SECRET_DECRYPTION_FAILED:
+    "Restore the original encryption key and verify the stored credential. Never replace an existing encryption key to work around this error.",
+  OIDC_REPAIR_APPROVAL_REQUIRED:
+    "This legacy provider has linked identities. Review its exact issuer and enable repairLegacyIssuer for a verified slash correction; other issuer changes require a separate identity migration.",
+  OIDC_REPAIR_NOT_ELIGIBLE:
+    "Only the single trailing slash removed by legacy normalization can be repaired. Keep provider/client identity stable or plan an explicit migration.",
+  OIDC_REPAIR_COLLISION:
+    "Another provider already owns the corrected issuer. Resolve the duplicate identity configuration explicitly; existing identities were not moved.",
+  OIDC_REPAIR_CONFLICT:
+    "Provider settings changed during verification. Reload the configuration and retry the verified repair.",
   ENCRYPTION_KEY_INVALID:
     "ORVYN_ENCRYPTION_KEY must contain exactly 64 hexadecimal characters (32 bytes). Restore the existing key; never generate a replacement for existing data.",
   REGISTRATION_CONFIGURATION_INVALID:

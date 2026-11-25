@@ -23,12 +23,24 @@ import {
   audit,
   rateLimit,
 } from "./auth/security.js";
-import { configuration, redirectUri, validateIssuer } from "./auth/oidc.js";
+import {
+  configuration,
+  redirectUri,
+  validateIssuer,
+  OidcDiscoveryError,
+} from "./auth/oidc.js";
+import {
+  applyIssuerRepair,
+  prepareIssuerRepair,
+  type IssuerRepair,
+  IssuerRepairError,
+} from "./auth/issuer-repair.js";
+import { createDiagnostics } from "@orvyn/shared/server";
 import {
   administratorSql,
   type OidcClientAuth,
 } from "./auth/deployment-oidc.js";
-const safeFields = `id,name,issuer,client_id AS "clientId",scopes,enabled,auto_provision AS "autoProvision",encrypted_secret IS NOT NULL AS "hasClientSecret",managed_by IS NOT NULL AS managed,coalesce(auth_method,CASE WHEN encrypted_secret IS NULL THEN 'none' ELSE 'client_secret_post' END) AS "clientAuthMethod"`;
+const safeFields = `id,name,issuer,legacy_issuer_normalized AS "legacyIssuerNormalized",client_id AS "clientId",scopes,enabled,auto_provision AS "autoProvision",encrypted_secret IS NOT NULL AS "hasClientSecret",managed_by IS NOT NULL AS managed,coalesce(auth_method,CASE WHEN encrypted_secret IS NULL THEN 'none' ELSE 'client_secret_post' END) AS "clientAuthMethod"`;
 async function admin(req: any) {
   const uid = await user(req);
   const r = await db.query(
@@ -39,9 +51,8 @@ async function admin(req: any) {
   return uid;
 }
 function providerInput(body: any) {
-  const issuer = validateIssuer(text(body?.issuer, 2000))
-    .toString()
-    .replace(/\/$/, "");
+  const issuer = text(body?.issuer, 2000);
+  validateIssuer(issuer);
   const name = text(body?.name, 120),
     clientId = text(body?.clientId, 300);
   const scopes = text(body?.scopes || "openid email profile", 500).split(/\s+/);
@@ -158,7 +169,62 @@ class OidcController {
     mutation(req);
     const uid = await admin(req),
       p = providerInput(body);
+    if (
+      body?.repairLegacyIssuer !== undefined &&
+      typeof body.repairLegacyIssuer !== "boolean"
+    )
+      fail(400, "Choose whether to repair the legacy issuer");
+    const snapshot = (
+      await db.query("SELECT * FROM oidc_providers WHERE id::text=$1", [id])
+    ).rows[0];
+    if (!snapshot) fail(404, "Provider not found");
+    if (snapshot.managed_by)
+      fail(
+        409,
+        "This provider is managed by deployment configuration; update its Helm values or environment settings",
+      );
+    if (snapshot.client_id !== p.clientId)
+      fail(
+        400,
+        "Issuer and client identity are immutable; create a new provider",
+      );
+    let repair: IssuerRepair | undefined;
+    if (snapshot.issuer !== p.issuer) {
+      try {
+        repair = await prepareIssuerRepair(
+          db,
+          snapshot,
+          p.issuer,
+          body.repairLegacyIssuer === true,
+        );
+      } catch (error) {
+        createDiagnostics("oidc", process.env).error("issuer.repair_failed", {
+          stage: "oidc_configuration",
+          error,
+        });
+        fail(
+          409,
+          "Issuer repair was not verified. Confirm repair for linked accounts and check the issuer metadata and diagnostics; other identity changes require a new provider.",
+        );
+      }
+    }
     return transaction(async (c) => {
+      await c.query("SELECT pg_advisory_xact_lock(782945)");
+      if (repair) {
+        try {
+          await applyIssuerRepair(c, repair, uid);
+        } catch (error) {
+          if (!(error instanceof IssuerRepairError)) throw error;
+          createDiagnostics("oidc", process.env).error("issuer.repair_failed", {
+            stage: "oidc_configuration",
+            error,
+          });
+          fail(
+            409,
+            "Issuer repair conflicts with current provider settings. Reload and inspect the configuration diagnostics.",
+          );
+        }
+      }
       const existing = await c.query(
         "SELECT issuer,client_id,enabled,managed_by,encrypted_secret,auth_method FROM oidc_providers WHERE id::text=$1 FOR UPDATE",
         [id],
@@ -215,8 +281,37 @@ class OidcController {
     let config;
     try {
       config = await configuration(r.rows[0]);
-    } catch {
-      return fail(502, "Identity provider discovery failed");
+    } catch (error) {
+      const provider = r.rows[0];
+      if (
+        !provider.managed_by &&
+        provider.legacy_issuer_normalized &&
+        error instanceof OidcDiscoveryError &&
+        error.actualIssuer === provider.issuer + "/"
+      ) {
+        try {
+          const proof = await prepareIssuerRepair(
+            db,
+            provider,
+            error.actualIssuer,
+          );
+          const repaired = await transaction(async (c) => {
+            await c.query("SELECT pg_advisory_xact_lock(782945)");
+            return applyIssuerRepair(c, proof);
+          });
+          r.rows[0] = repaired;
+          config = await configuration(repaired);
+        } catch (repairError) {
+          createDiagnostics("oidc", process.env).error("issuer.repair_failed", {
+            stage: "oidc_configuration",
+            error: repairError,
+          });
+          return fail(
+            502,
+            "Identity provider discovery failed; contact your administrator",
+          );
+        }
+      } else return fail(502, "Identity provider discovery failed");
     }
     const state = client.randomState(),
       nonce = client.randomNonce(),

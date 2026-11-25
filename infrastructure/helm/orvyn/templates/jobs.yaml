@@ -55,15 +55,32 @@ spec:
             {{- include "orvyn.databaseEnv" $ | nindent 12 }}
             {{- include "orvyn.encryptionEnv" $ | nindent 12 }}
             {{- include "orvyn.oidcEnv" $ | nindent 12 }}
+            {{- if $.Values.sso.oidc.ca.existingSecret }}
+            - name: NODE_EXTRA_CA_CERTS
+              value: /etc/orvyn/oidc/ca.crt
+            {{- end }}
             {{- else }}
             {{- include "orvyn.storageEnv" $ | nindent 12 }}
             {{- end }}
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            {{- if and (eq $purpose "configuration") $.Values.sso.oidc.ca.existingSecret }}
+            - name: oidc-ca
+              mountPath: /etc/orvyn/oidc
+              readOnly: true
+            {{- end }}
       volumes:
         - name: tmp
           emptyDir:
             sizeLimit: 64Mi
+        {{- if and (eq $purpose "configuration") $.Values.sso.oidc.ca.existingSecret }}
+        - name: oidc-ca
+          secret:
+            secretName: {{ $.Values.sso.oidc.ca.existingSecret | quote }}
+            items:
+              - key: {{ $.Values.sso.oidc.ca.secretKey | quote }}
+                path: ca.crt
+        {{- end }}
 {{- end }}
 {{- end }}

@@ -13,6 +13,8 @@ const defaults = () => ({
   enabled: false,
   autoProvision: false,
   clientAuthMethod: "client_secret_post",
+  repairLegacyIssuer: false,
+  legacyIssuerNormalized: false,
 });
 const form = reactive(defaults());
 const managed = computed(
@@ -23,7 +25,7 @@ async function load() {
 }
 function choose(p?: any) {
   selected.value = p?.id || "";
-  Object.assign(form, p ? { ...p, clientSecret: "" } : defaults());
+  Object.assign(form, defaults(), p ? { ...p, clientSecret: "" } : {});
   notice.value = "";
 }
 async function save() {
@@ -32,6 +34,7 @@ async function save() {
   error.value = "";
   try {
     const body: any = { ...form };
+    if (body.repairLegacyIssuer) body.issuer = form.issuer + "/";
     if (!body.clientSecret) delete body.clientSecret;
     await $fetch(
       "/api/v1/admin/oidc/providers" +
@@ -108,6 +111,20 @@ onMounted(async () => {
           :disabled="!!selected"
           required
         /><label for="oidc-method">Client authentication</label>
+        <label
+          v-if="
+            selected &&
+            form.legacyIssuerNormalized &&
+            !form.issuer.endsWith('/')
+          "
+          class="check"
+        >
+          <input v-model="form.repairLegacyIssuer" type="checkbox" />
+          Repair the trailing slash removed by older Orvyn versions. Verify
+          {{ form.issuer }}/ against this provider's metadata, preserve linked
+          identities and sign out existing provider sessions. Other issuer or
+          client changes are not allowed.
+        </label>
         <select id="oidc-method" v-model="form.clientAuthMethod">
           <option value="client_secret_post">
             Client secret in token request (POST)

@@ -128,6 +128,18 @@ try {
     ["gitops", {}, "gitops"],
     ["oidc", {}, "oidc"],
     [
+      "oidc-legacy-repair-private-ca",
+      {
+        sso: {
+          oidc: {
+            repairLegacyIssuer: true,
+            ca: { existingSecret: "identity-ca", secretKey: "trust.pem" },
+          },
+        },
+      },
+      "oidc",
+    ],
+    [
       "public-oidc",
       {
         sso: {
@@ -294,6 +306,27 @@ try {
       config.metadata.annotations["helm.sh/hook"],
       "post-install,post-upgrade,post-rollback",
     );
+    if (name === "oidc-legacy-repair-private-ca") {
+      const pod = config.spec.template.spec,
+        container = pod.containers[0];
+      assert.equal(
+        container.env.find((e) => e.name === "ORVYN_OIDC_REPAIR_LEGACY_ISSUER")
+          .value,
+        "true",
+      );
+      assert.equal(
+        container.env.find((e) => e.name === "NODE_EXTRA_CA_CERTS").value,
+        "/etc/orvyn/oidc/ca.crt",
+      );
+      assert.equal(
+        container.volumeMounts.find((m) => m.name === "oidc-ca").readOnly,
+        true,
+      );
+      assert.equal(
+        pod.volumes.find((v) => v.name === "oidc-ca").secret.items[0].key,
+        "trust.pem",
+      );
+    }
     assert.ok(
       !resources.some(
         (r) => r.kind === "Service" && r.metadata.name.endsWith("-worker"),

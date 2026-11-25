@@ -210,7 +210,14 @@ test(
         page.getByLabel("Display name", { exact: true }),
       ).toBeDisabled();
       await expect(
-        page.getByText("Managed by deployment", { exact: true }),
+        page
+          .locator(".providers li")
+          .filter({
+            has: page.getByRole("button", {
+              name: /Deployment Keycloak.*Enabled/,
+            }),
+          })
+          .getByText("Managed by deployment", { exact: true }),
       ).toBeVisible();
       await mkdir(".local/ui-review", { recursive: true });
       await page.screenshot({
