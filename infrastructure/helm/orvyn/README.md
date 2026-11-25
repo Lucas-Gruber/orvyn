@@ -32,7 +32,28 @@ The OCI chart and four application images are published by the **same** release 
 
 ## Rancher and graphical configuration
 
-Configure a Rancher OCI repository supporting `ghcr.io/lucas-gruber/charts` (or import the released chart through your organization's catalog), select Orvyn, and choose its version and namespace. OCI chart discovery varies by Rancher version; where catalog discovery is unavailable, install the OCI chart with Helm and manage the installed release from Rancher. Rancher metadata and `questions.yaml` are included in the package.
+For the source catalog, open **Apps → Repositories → Create**, choose **Git repository**, and enter:
+
+- Name: `orvyn`
+- Git repository URL: `https://github.com/Lucas-Gruber/orvyn.git`
+- Branch: `main`
+- Authentication: none (public repository)
+
+Use the Git repository root, without a chart-directory suffix. Rancher scans chart directories recursively and discovers `infrastructure/helm/orvyn/Chart.yaml`, including its `questions.yaml`. This is an Apps catalog repository, not a Fleet GitRepo. The equivalent resource is:
+
+```yaml
+apiVersion: catalog.cattle.io/v1
+kind: ClusterRepo
+metadata:
+  name: orvyn
+spec:
+  gitRepo: https://github.com/Lucas-Gruber/orvyn.git
+  gitBranch: main
+```
+
+Catalog discovery and image availability are separate: `main` may contain a prepared version whose container images and OCI chart have not been published yet. Before installing, check that the matching `v<appVersion>` release has completed. Do not substitute older application images: the chart's configuration commands and migrations require the matching application version.
+
+After the OCI chart is published and its GHCR package is public, Rancher versions with OCI catalog support can use the **exact chart** URL `oci://ghcr.io/lucas-gruber/charts/orvyn` (lowercase `oci://`). Do not use the parent `oci://ghcr.io/lucas-gruber/charts` as a catalog-discovery endpoint on GHCR. A `403 Forbidden` fetching a GHCR pull token means the chart is not anonymously available: it may be unpublished or its package visibility may be private. A published private package requires registry credentials; an unpublished version requires a completed release. Changing TLS verification does not resolve either condition. Older Rancher versions can use the Git catalog or install the released chart with Helm.
 
 The form groups General, Networking, PostgreSQL, Valkey, Storage, SMTP, **SSO (OIDC)**, Scaling, Resources and Advanced. Choose an exact HTTPS URL, SMTP Secret, storage mode and optional SSO before installation. `global.showAdvanced` reveals images, probes, security and scheduling fields. Basic deployment, SSO, secrets, storage and resource settings have individual fields. Labels and node selectors use key/value controls. Arbitrary native Kubernetes affinity, toleration, probe and image-pull-secret structures use Rancher's supported YAML controls; these optional expert structures are not simulated as unsupported object selectors. StorageClass, Secret and PVC selectors use Rancher's actual reference field types. References must exist in the release namespace. Regeneration scripts and CI check all 279 questions against actual value paths/defaults.
 
