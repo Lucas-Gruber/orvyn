@@ -1,4 +1,7 @@
 import WebSocket from "ws";
+import { createDiagnostics, runtimeOrigin } from "@orvyn/shared/server";
+
+const log = createDiagnostics("web", process.env);
 
 const maxBytes = 4 * 1024 * 1024;
 interface Tunnel {
@@ -20,11 +23,13 @@ export default defineWebSocketHandler({
   upgrade(request) {
     // Keep the browser's origin intact. Never turn an arbitrary inbound origin
     // into the trusted upstream origin or infer trust from forwarded headers.
-    if (
-      request.headers.get("origin") !==
-      (process.env.ORVYN_ORIGIN || "http://localhost:3000")
-    )
+    if (request.headers.get("origin") !== runtimeOrigin(process.env)) {
+      log.warn("websocket.origin_rejected", {
+        stage: "websocket",
+        status: 403,
+      });
       return new Response("Invalid origin", { status: 403 });
+    }
     if (!request.headers.get("cookie")?.includes("orvyn_session="))
       return new Response("Sign in required", { status: 401 });
   },
@@ -69,6 +74,7 @@ export default defineWebSocketHandler({
       peer.close(closeCode(code), reason.toString());
     });
     socket.on("error", () => {
+      log.error("websocket.upstream_failed", { stage: "websocket" });
       tunnel.closed = true;
       tunnel.pending = [];
       tunnel.bytes = 0;

@@ -1,21 +1,22 @@
 # Environment variables
 
-| Variable                                           | Purpose                                                                                                                                    |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| DATABASE_URL                                       | PostgreSQL URL including TLS parameters; secret. Takes precedence over split PG fields.                                                    |
-| PGHOST / PGPORT / PGUSER / PGDATABASE / PGPASSWORD | Alternative database configuration for existing password Secrets; port defaults to 5432. API, Worker and Collaboration share these fields. |
-| ORVYN_DB_PASSWORD                                  | Local Compose password, matching DATABASE_URL; secret.                                                                                     |
-| ORVYN_ENCRYPTION_KEY                               | Required 32-byte hex encryption key for provider secrets and mail outbox; keep stable, back up securely, share across replicas.            |
-| ORVYN_ORIGIN                                       | Exact permitted browser origin and OIDC redirect origin; default http://localhost:3000.                                                    |
-| NUXT_API_URL                                       | Nuxt runtime upstream API; default http://127.0.0.1:3001.                                                                                  |
-| SMTP_URL                                           | SMTP transport URL for the email worker; may contain credentials.                                                                          |
-| MAIL_FROM                                          | Sender address; default orvyn@localhost.test for local development.                                                                        |
-| PORT                                               | API port; default 3001.                                                                                                                    |
-| NODE_ENV                                           | production enables Secure cookies; HTTPS required.                                                                                         |
-| ORVYN_OIDC_ALLOW_HTTP_LOCAL                        | Explicit development-only loopback HTTP issuer support; ignored in production. Test runner enables it only for isolated child processes.   |
-| CHROMIUM_PATH                                      | Browser test executable; default /usr/bin/chromium.                                                                                        |
-| TEST_URL / TEST_ORIGIN                             | Isolated runner's frontend URL and expected Origin.                                                                                        |
-| TEST_MAIL_URL                                      | Local test mailbox; default http://127.0.0.1:8025.                                                                                         |
+| Variable                                           | Purpose                                                                                                                                                   |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DATABASE_URL                                       | PostgreSQL URL including TLS parameters; secret. Takes precedence over split PG fields.                                                                   |
+| PGHOST / PGPORT / PGUSER / PGDATABASE / PGPASSWORD | Alternative database configuration for existing password Secrets; port defaults to 5432. API, Worker and Collaboration share these fields.                |
+| ORVYN_DB_PASSWORD                                  | Local Compose password, matching DATABASE_URL; secret.                                                                                                    |
+| ORVYN_ENCRYPTION_KEY                               | Required 32-byte hex encryption key for provider secrets and mail outbox; keep stable, back up securely, share across replicas.                           |
+| ORVYN_ORIGIN                                       | Exact public origin, required in production for Web, API, Worker and Collaboration. Production requires HTTPS; the localhost default is development-only. |
+| NUXT_API_URL                                       | Private Nuxt API upstream, required explicitly in production. Development default http://127.0.0.1:3001.                                                  |
+| ORVYN_LOG_LEVEL                                    | debug, info (default), warn or error. Structured diagnostics exclude raw error payloads, passwords, connection strings and tokens.                        |
+| SMTP_URL                                           | SMTP transport URL for the email worker; may contain credentials.                                                                                         |
+| MAIL_FROM                                          | Sender address; default orvyn@localhost.test for local development.                                                                                       |
+| PORT                                               | API port; default 3001.                                                                                                                                   |
+| NODE_ENV                                           | production enables Secure cookies; HTTPS required.                                                                                                        |
+| ORVYN_OIDC_ALLOW_HTTP_LOCAL                        | Explicit development-only loopback HTTP issuer support; ignored in production. Test runner enables it only for isolated child processes.                  |
+| CHROMIUM_PATH                                      | Browser test executable; default /usr/bin/chromium.                                                                                                       |
+| TEST_URL / TEST_ORIGIN                             | Isolated runner's frontend URL and expected Origin.                                                                                                       |
+| TEST_MAIL_URL                                      | Local test mailbox; default http://127.0.0.1:8025.                                                                                                        |
 
 | REDIS_URL | External Redis/Valkey coordination URL, including rediss:// TLS and optional credentials. Takes precedence over split fields. |
 | VALKEY_HOST / VALKEY_PORT / VALKEY_PASSWORD | Internal Valkey alternative used by the Helm chart; port defaults to 6379. |
@@ -23,7 +24,7 @@
 | COLLABORATION_NAMESPACE | Shared Redis key namespace; use one value per deployment. |
 | NUXT_PUBLIC_COLLABORATION_URL | Optional browser WebSocket override; leave empty to use the browser origin with /collaboration (including forwarded ports and HTTPS/WSS). |
 
-| NUXT_COLLABORATION_UPSTREAM | Private Nuxt WebSocket upstream; default ws://127.0.0.1:3002. Never point this at the public /collaboration route itself. |
+| NUXT_COLLABORATION_UPSTREAM | Private Nuxt WebSocket upstream, required explicitly in production. Development default ws://127.0.0.1:3002. Never point this at the public /collaboration route itself. |
 
 ## Attachments and deployment SSO
 

@@ -352,6 +352,18 @@ try {
     assert.ok(!api.env.some((e) => e.name === "ORVYN_OIDC_CLIENT_SECRET"));
     const web = deployments.find((d) => d.metadata.name.endsWith("-web")).spec
       .template.spec.containers[0];
+    for (const deployment of deployments) {
+      for (const container of deployment.spec.template.spec.containers) {
+        assert.equal(
+          container.env.find((e) => e.name === "ORVYN_ORIGIN")?.value,
+          "https://orvyn.example.org",
+        );
+        assert.equal(
+          container.env.find((e) => e.name === "ORVYN_LOG_LEVEL")?.value,
+          "info",
+        );
+      }
+    }
     assert.ok(!web.env.some((e) => e.valueFrom));
     const valkey = resources.find(
       (r) => r.kind === "StatefulSet" && r.metadata.name.endsWith("-valkey"),

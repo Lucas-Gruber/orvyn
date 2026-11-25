@@ -74,6 +74,19 @@ questions:
     default: ""
     group: Advanced
     show_if: global.showAdvanced=true
+  - variable: logging.level
+    label: Application log level
+    type: enum
+    default: info
+    group: Logging and diagnostics
+    description: Structured diagnostics for startup, storage, OIDC and dependency
+      failures. Debug logging excludes credentials, tokens and raw error
+      payloads.
+    options:
+      - debug
+      - info
+      - warn
+      - error
   - variable: auth.registration.enabled
     label: Allow local account creation
     type: boolean

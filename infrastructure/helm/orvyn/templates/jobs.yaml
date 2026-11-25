@@ -47,6 +47,8 @@ spec:
           env:
             - name: NODE_ENV
               value: production
+            - name: ORVYN_LOG_LEVEL
+              value: {{ $.Values.logging.level | quote }}
             {{- if eq $purpose "configuration" }}
             - name: ORVYN_ORIGIN
               value: {{ $.Values.global.origin | quote }}

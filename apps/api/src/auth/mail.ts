@@ -3,6 +3,7 @@ import { PoolClient } from "pg";
 import { randomBytes } from "node:crypto";
 import { hash, db } from "../runtime.js";
 import { encrypt, decrypt, origin, transaction } from "./security.js";
+import { createDiagnostics } from "@orvyn/shared/server";
 export async function queueMail(
   c: PoolClient,
   to: string,
@@ -72,12 +73,15 @@ export async function deliverMailBatch() {
             "UPDATE mail_outbox SET sent_at=now(),payload='' WHERE id=$1",
             [item.id],
           );
-        } catch {
+        } catch (error) {
           await c.query(
             "UPDATE mail_outbox SET attempts=attempts+1,available_at=now()+interval '1 minute'*least(60,power(2,least(attempts,6))) WHERE id=$1",
             [item.id],
           );
-          console.error("Mail delivery deferred");
+          createDiagnostics("worker", process.env).warn(
+            "smtp.delivery_deferred",
+            { stage: "smtp", error },
+          );
         }
         return true;
       });

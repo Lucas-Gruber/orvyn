@@ -1,6 +1,6 @@
 {{- range $component := list "web" "api" "worker" "collaboration" }}
 {{- $root := $ }}{{- $settings := index $.Values $component }}
-{{- $config := dict "settings" $settings "origin" $.Values.global.origin "secretRevision" $.Values.global.secretRevision }}
+{{- $config := dict "settings" $settings "origin" $.Values.global.origin "logging" $.Values.logging "secretRevision" $.Values.global.secretRevision }}
 {{- if eq $component "web" }}
 {{- $_ := set $config "upstreams" (list $.Values.api.service $.Values.collaboration.service) }}
 {{- else }}

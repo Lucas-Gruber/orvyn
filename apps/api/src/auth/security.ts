@@ -2,11 +2,15 @@ import { parseSessionCookie } from "@orvyn/auth";
 import { randomBytes, createCipheriv, createDecipheriv } from "node:crypto";
 import { db, hash, fail } from "../runtime.js";
 import type { PoolClient } from "pg";
-export const origin = () => process.env.ORVYN_ORIGIN || "http://localhost:3000";
+import { runtimeOrigin, RuntimeConfigurationError } from "@orvyn/shared/server";
+export const origin = () => runtimeOrigin(process.env);
 export function encryptionKey() {
   const key = process.env.ORVYN_ENCRYPTION_KEY;
-  if (!key || !/^[a-f0-9]{64}$/.test(key))
-    throw Error("ORVYN_ENCRYPTION_KEY must be a 32-byte hex key");
+  if (!key || !/^[a-fA-F0-9]{64}$/.test(key))
+    throw new RuntimeConfigurationError(
+      "ENCRYPTION_KEY_INVALID",
+      "ORVYN_ENCRYPTION_KEY must be a 32-byte hex key",
+    );
   return Buffer.from(key, "hex");
 }
 export function encrypt(value: string) {

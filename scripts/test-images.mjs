@@ -372,6 +372,17 @@ async function main() {
   assert.match(session, /; Secure/);
   assert.match(session, /HttpOnly/);
   const cookie = session.split(";")[0];
+  const ownerId = (await request("/api/v1/auth/me", { cookie })).data.id;
+  const second = await request("/api/v1/auth/register", {
+    method: "POST",
+    body: { email: randomUUID() + "@example.test", password: randomUUID() },
+  });
+  assert.equal(second.status, 201);
+  const editorCookie = second.headers["set-cookie"]
+    .find((value) => value.startsWith("orvyn_session="))
+    .split(";")[0];
+  const editorId = (await request("/api/v1/auth/me", { cookie: editorCookie }))
+    .data.id;
   const space = (
     await request("/api/v1/spaces", {
       method: "POST",
@@ -379,6 +390,21 @@ async function main() {
       body: { name: "Production image check" },
     })
   ).data;
+  const fixtureUrl = new URL(process.env.DATABASE_URL);
+  fixtureUrl.pathname = "/" + name;
+  const fixtureDb = new Pool({ connectionString: fixtureUrl.toString() });
+  try {
+    await fixtureDb.query(
+      "UPDATE spaces SET kind='team' WHERE id=$1 AND owner_id=$2",
+      [space.id, ownerId],
+    );
+    await fixtureDb.query(
+      "INSERT INTO space_members(space_id,user_id,role) VALUES($1,$2,'Editor')",
+      [space.id, editorId],
+    );
+  } finally {
+    await fixtureDb.end();
+  }
   const page = (
     await request(`/api/v1/spaces/${space.id}/pages`, {
       method: "POST",
@@ -413,15 +439,35 @@ async function main() {
     (await request(`/api/v1/files/${uploaded.data.id}/download`)).status,
     401,
   );
-  class Socket extends WS {
-    constructor(url, protocols) {
-      super(url, protocols, {
+  const rejectedOrigin = await new Promise((resolve, reject) => {
+    const socket = new WS(
+      origin.replace(/^https:/, "wss:") + "/collaboration",
+      {
         ca: cert,
-        headers: { Origin: origin, Cookie: cookie },
-      });
+        headers: { Origin: "https://untrusted.example.test", Cookie: cookie },
+      },
+    );
+    socket.on("unexpected-response", (_request, response) => {
+      response.resume();
+      resolve(response.statusCode);
+      socket.terminate();
+    });
+    socket.on("error", () => {});
+    socket.on("open", () => {
+      socket.close();
+      reject(Error("A foreign WebSocket origin was accepted"));
+    });
+  });
+  assert.equal(rejectedOrigin, 403);
+  function connect(clientCookie = cookie) {
+    class Socket extends WS {
+      constructor(url, protocols) {
+        super(url, protocols, {
+          ca: cert,
+          headers: { Origin: origin, Cookie: clientCookie },
+        });
+      }
     }
-  }
-  function connect() {
     const doc = new Y.Doc(),
       socket = new HocuspocusProviderWebsocket({
         url: origin.replace(/^https:/, "wss:") + "/collaboration",
@@ -442,7 +488,7 @@ async function main() {
     return peer;
   }
   const a = connect(),
-    b = connect(),
+    b = connect(editorCookie),
     text = (doc) => doc.getXmlFragment("default").toString();
   await waitFor(
     () => a.provider.synced && b.provider.synced,
@@ -459,6 +505,16 @@ async function main() {
       text(b.doc).includes("Release collaboration persisted") &&
       !a.provider.hasUnsyncedChanges,
     "Production collaboration edit was not acknowledged.",
+  );
+  b.doc.transact(() => {
+    const node = b.doc.getXmlFragment("default").get(0).get(0);
+    node.insert(node.length, " Editor collaboration persisted");
+  });
+  await waitFor(
+    () =>
+      text(a.doc).includes("Editor collaboration persisted") &&
+      !b.provider.hasUnsyncedChanges,
+    "A second authorized user did not synchronize through the public WSS origin",
   );
   assert.ok(
     JSON.stringify(

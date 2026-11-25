@@ -9,6 +9,7 @@ const readable = (s) =>
     .replace(/\./g, " / ")
     .replace(/^./, (c) => c.toUpperCase());
 const enums = {
+  "logging.level": ["debug", "info", "warn", "error"],
   "storage.driver": ["local", "s3"],
   "ingress.tls.issuerKind": ["Issuer", "ClusterIssuer"],
   "sso.oidc.clientAuthMethod": [
@@ -18,6 +19,10 @@ const enums = {
   ],
 };
 const info = {
+  "logging.level": [
+    "Application log level",
+    "Structured diagnostics for startup, storage, OIDC and dependency failures. Debug logging excludes credentials, tokens and raw error payloads.",
+  ],
   "auth.registration.enabled": [
     "Allow local account creation",
     "Controls local self-registration only. Existing password sign-in/recovery remains available; OIDC provisioning is controlled separately by the provider. Configure and test administrator access before disabling.",
@@ -176,23 +181,25 @@ function walk(value, path = []) {
   let group =
     path[0] === "global"
       ? "General"
-      : path[0] === "auth"
-        ? "Authentication"
-        : path[0] === "postgresql" || path[0] === "externalPostgresql"
-          ? "PostgreSQL"
-          : path[0] === "valkey" || path[0] === "externalValkey"
-            ? "Valkey"
-            : path[0] === "storage"
-              ? "Storage"
-              : path[0] === "smtp"
-                ? "SMTP"
-                : path[0] === "sso"
-                  ? "SSO (OIDC)"
-                  : path[0] === "backup"
-                    ? "Database backups"
-                    : path[0] === "ingress"
-                      ? "Networking"
-                      : "Advanced";
+      : path[0] === "logging"
+        ? "Logging and diagnostics"
+        : path[0] === "auth"
+          ? "Authentication"
+          : path[0] === "postgresql" || path[0] === "externalPostgresql"
+            ? "PostgreSQL"
+            : path[0] === "valkey" || path[0] === "externalValkey"
+              ? "Valkey"
+              : path[0] === "storage"
+                ? "Storage"
+                : path[0] === "smtp"
+                  ? "SMTP"
+                  : path[0] === "sso"
+                    ? "SSO (OIDC)"
+                    : path[0] === "backup"
+                      ? "Database backups"
+                      : path[0] === "ingress"
+                        ? "Networking"
+                        : "Advanced";
   if (name === "replicaCount") group = "Scaling";
   if (path.includes("resources")) group = "Resources";
   let type =

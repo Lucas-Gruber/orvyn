@@ -296,6 +296,9 @@ for (const name of ["nameOverride", "fullnameOverride"])
   });
 Object.assign(property("global.origin"), { pattern: "^https://[^/?#@]+$" });
 Object.assign(property("storage.driver"), { enum: ["local", "s3"] });
+Object.assign(property("logging.level"), {
+  enum: ["debug", "info", "warn", "error"],
+});
 Object.assign(property("storage.local.path"), {
   pattern: "^/[^\\x00]*$",
   minLength: 2,

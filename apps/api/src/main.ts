@@ -3,6 +3,8 @@ import { NestFactory } from "@nestjs/core";
 import { Module } from "@nestjs/common";
 import { migrate, db } from "./runtime.js";
 import { encryptionKey } from "./auth/security.js";
+import { createDiagnostics, runtimeOrigin } from "@orvyn/shared/server";
+import { SafeExceptionFilter } from "./diagnostics.js";
 import {
   readRegistrationPolicy,
   RegistrationConfigurationError,
@@ -55,13 +57,24 @@ import { WhiteboardsModule } from "./whiteboards.module.js";
   ],
 })
 class App {}
+let log = createDiagnostics("api", {});
 async function main() {
-  readRegistrationPolicy();
-  encryptionKey();
-  await migrate(db);
-  await initializeDeploymentOidc(db);
-  await storageHealth();
-  const app = await NestFactory.create(App);
+  log = createDiagnostics("api", process.env);
+  await log.stage("configuration", async () => {
+    runtimeOrigin(process.env);
+    readRegistrationPolicy();
+  });
+  await log.stage("encryption", async () => {
+    encryptionKey();
+  });
+  await log.stage("database", async () => {
+    await db.query("SELECT 1");
+  });
+  await log.stage("migrations", () => migrate(db));
+  await log.stage("oidc_configuration", () => initializeDeploymentOidc(db));
+  await log.stage("storage", storageHealth);
+  const app = await NestFactory.create(App, { logger: false });
+  app.useGlobalFilters(new SafeExceptionFilter());
   let stopping = false;
   const shutdown = async () => {
     if (stopping) return;
@@ -87,11 +100,6 @@ async function main() {
   console.log("ORVYN_READY " + (await app.getUrl()));
 }
 main().catch((error) => {
-  console.error(
-    error instanceof DeploymentConfigurationError ||
-      error instanceof RegistrationConfigurationError
-      ? error.message
-      : "API startup failed; verify database, storage and deployment configuration",
-  );
+  log.error("startup.failed", { stage: "startup", error });
   process.exit(1);
 });

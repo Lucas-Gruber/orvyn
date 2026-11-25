@@ -2,6 +2,7 @@ import { authenticateCookie, databaseConfiguration } from "@orvyn/auth";
 import { Pool } from "pg";
 import { HttpException } from "@nestjs/common";
 import { scrypt, createHash } from "node:crypto";
+import { runtimeOrigin } from "@orvyn/shared/server";
 export const derive = (password: string, salt: string) =>
   new Promise<Buffer>((resolve, reject) =>
     scrypt(password, salt, 64, (err, key) =>
@@ -19,9 +20,7 @@ export function text(value: unknown, max: number) {
   return (value as string).trim();
 }
 export function mutation(req: any) {
-  if (
-    req.headers.origin !== (process.env.ORVYN_ORIGIN || "http://localhost:3000")
-  )
+  if (req.headers.origin !== runtimeOrigin(process.env))
     fail(403, "Invalid origin");
   if (!req.is("application/json")) fail(415, "JSON required");
 }

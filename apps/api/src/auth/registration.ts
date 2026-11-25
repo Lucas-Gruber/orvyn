@@ -1,10 +1,15 @@
 import { domainToASCII } from "node:url";
+import { RuntimeConfigurationError } from "@orvyn/shared/server";
 
 export interface RegistrationPolicy {
   enabled: boolean;
   allowedEmailDomains: string[];
 }
-export class RegistrationConfigurationError extends Error {}
+export class RegistrationConfigurationError extends RuntimeConfigurationError {
+  constructor(message: string) {
+    super("REGISTRATION_CONFIGURATION_INVALID", message);
+  }
+}
 
 function canonicalDomain(value: string): string {
   if (/[\s/@:#?\\*%\[\]\u0000-\u001f\u007f]/u.test(value)) return "";

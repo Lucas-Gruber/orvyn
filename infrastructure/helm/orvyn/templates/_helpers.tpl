@@ -156,7 +156,11 @@ valueFrom:
   env:
     - name: NODE_ENV
       value: production
+    - name: ORVYN_LOG_LEVEL
+      value: {{ $root.Values.logging.level | quote }}
     {{- if eq $component "web" }}
+    - name: ORVYN_ORIGIN
+      value: {{ $root.Values.global.origin | quote }}
     - name: NITRO_HOST
       value: "0.0.0.0"
     - name: NITRO_PORT

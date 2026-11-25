@@ -19,6 +19,7 @@ import { documentPeople } from "@orvyn/editor/mentions";
 import { documentReferences, newDocumentAssets } from "@orvyn/editor/links";
 import { createHash } from "node:crypto";
 import { loadWhiteboard, saveWhiteboard } from "./whiteboards.js";
+import { runtimeOrigin } from "@orvyn/shared/server";
 
 type Identity = {
   userId: string;
@@ -41,7 +42,7 @@ let notificationsReady = false;
 let stopping = false,
   poisoned = false,
   revalidating = false;
-const origin = process.env.ORVYN_ORIGIN || "http://localhost:3000";
+const origin = runtimeOrigin(process.env);
 const redisOptions = { connectTimeout: 2000, maxRetriesPerRequest: 1 };
 const redis = process.env.REDIS_URL
   ? new RedisClient(process.env.REDIS_URL, redisOptions)

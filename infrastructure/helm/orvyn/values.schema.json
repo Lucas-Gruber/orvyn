@@ -7,6 +7,7 @@
     "global",
     "nameOverride",
     "fullnameOverride",
+    "logging",
     "auth",
     "web",
     "api",
@@ -108,6 +109,24 @@
       "type": "string",
       "maxLength": 45,
       "pattern": "^$|^[a-z]([a-z0-9-]*[a-z0-9])?$"
+    },
+    "logging": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "level"
+      ],
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": [
+            "debug",
+            "info",
+            "warn",
+            "error"
+          ]
+        }
+      }
     },
     "auth": {
       "type": "object",
