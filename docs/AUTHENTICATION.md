@@ -68,6 +68,35 @@ Administrators configure provider display name, issuer, client ID, encrypted cli
 
 External identities are keyed by provider ID and subject. An existing local account is **never** silently linked using a matching email. Automatic provisioning requires a provider-verified email that is not already registered. Explicit linking and administrator identity assignment are outstanding. Group mappings, provider logout/back-channel logout, SAML and desktop authentication are also outstanding.
 
+### Browser errors and SSO invitations
+
+Expected browser callback failures return to the regular login screen with a
+fixed `authError` identifier. Messages explain disabled provisioning, an unverified
+email, an existing account that cannot be linked automatically, an expired flow,
+provider changes or an unverifiable response. Callback responses set
+`Referrer-Policy: no-referrer`, clear the consumed flow's binding cookie, and never
+copy provider descriptions, authorization codes, tokens or client secrets into
+the return URL. JSON clients retain the corresponding HTTP error statuses.
+
+Invitation screens offer the same enabled SSO providers as normal login, including
+when local account registration is disabled. Before navigating to the provider,
+the API stores an encrypted invitation continuation for ten minutes, indexed by
+the hash of a random HttpOnly SameSite=Lax cookie (Secure in production). The
+invitation never enters the provider URL, browser storage or return query. Its
+receipt is bound to the OIDC flow and, after success, the resulting account.
+A same-origin JSON POST resumes the confirmation; a bound receipt also requires
+that account's session. Reloading the confirmation during its lifetime works.
+
+Login never accepts an invitation automatically. Acceptance still requires the
+exact invited, verified account email. A failed login, wrong account or unverified
+address leaves the invitation unused. The screen shows the current profile and
+offers Switch account; cancel clears the continuation. Acceptance or invitation
+revocation cascades to its encrypted continuations, and the worker removes expired
+records. The newest invitation login replaces the older continuation in that
+browser. After ten minutes, reopen the original seven-day invitation link.
+PKCE, nonce, state, issuer/TLS/signature checks, session authorization and
+the prohibition on email-only account linking remain in force.
+
 ## Deployment-managed OIDC
 
 ### Exact issuers and legacy slash repair

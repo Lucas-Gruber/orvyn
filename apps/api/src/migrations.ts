@@ -696,6 +696,18 @@ CREATE TABLE oidc_issuer_repairs (
  PRIMARY KEY(provider_id,old_issuer,new_issuer)
 );`,
   },
+  {
+    version: 48,
+    sql: `CREATE TABLE oidc_invitation_continuations (
+ browser_hash text PRIMARY KEY,
+ invitation_hash text NOT NULL REFERENCES space_invitations(token_hash) ON DELETE CASCADE,
+ encrypted_invitation text NOT NULL,
+ user_id uuid REFERENCES users(id) ON DELETE CASCADE,
+ expires_at timestamptz NOT NULL
+);
+CREATE INDEX oidc_invitation_continuations_expiry ON oidc_invitation_continuations(expires_at);
+ALTER TABLE oidc_flows ADD COLUMN invitation_continuation text REFERENCES oidc_invitation_continuations(browser_hash) ON DELETE SET NULL;`,
+  },
 ] as const;
 
 export async function migrate(pool: Pool, target = migrations.at(-1)!.version) {

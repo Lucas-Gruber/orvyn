@@ -8,6 +8,7 @@ import {
   Res,
   Body,
   Param,
+  Delete,
 } from "@nestjs/common";
 import { randomBytes } from "node:crypto";
 import * as client from "openid-client";
@@ -36,6 +37,19 @@ import {
   IssuerRepairError,
 } from "./auth/issuer-repair.js";
 import { createDiagnostics } from "@orvyn/shared/server";
+import {
+  OidcLoginError,
+  loginFail,
+  browserNavigation,
+} from "./auth/oidc-feedback.js";
+import {
+  prepareInvitation,
+  invitationCookie,
+  invitationBrowser,
+  bindInvitation,
+  resumeInvitation,
+  forgetInvitation,
+} from "./auth/oidc-invitations.js";
 import {
   administratorSql,
   type OidcClientAuth,
@@ -121,6 +135,20 @@ async function resolveProviderRoute(id: string) {
 }
 @Controller("api/v1")
 class OidcController {
+  @Post("oidc/invitation/resume") async resumeInvitation(
+    @Req() req: any,
+    @Res({ passthrough: true }) res: any,
+  ) {
+    mutation(req);
+    return resumeInvitation(req, res);
+  }
+  @Delete("oidc/invitation/resume") async forgetInvitation(
+    @Req() req: any,
+    @Res({ passthrough: true }) res: any,
+  ) {
+    mutation(req);
+    return forgetInvitation(req, res);
+  }
   @Get("oidc/providers") async available() {
     return (
       await db.query(
@@ -268,6 +296,7 @@ class OidcController {
   @Post("oidc/:id/start") async start(
     @Req() req: any,
     @Res({ passthrough: true }) res: any,
+    @Body() body: any,
     @Param("id") id: string,
   ) {
     mutation(req);
@@ -317,18 +346,28 @@ class OidcController {
       nonce = client.randomNonce(),
       verifier = client.randomPKCECodeVerifier(),
       browser = randomBytes(32).toString("hex");
-    await db.query(
-      "INSERT INTO oidc_flows(state_hash,provider_id,browser_hash,encrypted_verifier,nonce,expires_at,provider_version) VALUES($1,$2,$3,$4,$5,now()+interval '10 minutes',$6)",
-      [
-        hash(state),
-        id,
-        hash(browser),
-        encrypt(verifier),
-        nonce,
-        r.rows[0].config_version,
-      ],
-    );
-    res.setHeader(
+    const invitation = await transaction(async (c) => {
+      const continuation = await prepareInvitation(
+        c,
+        req,
+        body?.invitationToken,
+      );
+      await c.query(
+        "INSERT INTO oidc_flows(state_hash,provider_id,browser_hash,encrypted_verifier,nonce,expires_at,provider_version,invitation_continuation) VALUES($1,$2,$3,$4,$5,now()+interval '10 minutes',$6,$7)",
+        [
+          hash(state),
+          id,
+          hash(browser),
+          encrypt(verifier),
+          nonce,
+          r.rows[0].config_version,
+          continuation ? hash(continuation) : null,
+        ],
+      );
+      return continuation;
+    });
+    if (invitation) invitationCookie(res, invitation);
+    res.append(
       "Set-Cookie",
       cookie("orvyn_oidc_" + state.slice(0, 16), browser, 600, "Lax"),
     );
@@ -350,23 +389,69 @@ class OidcController {
     @Res() res: any,
     @Param("id") id: string,
   ) {
-    id = await resolveProviderRoute(id);
     const callback = new URL(req.originalUrl, origin()),
       state = callback.searchParams.get("state");
+    const cookieName =
+      state && /^[a-zA-Z0-9_-]{20,128}$/.test(state)
+        ? "orvyn_oidc_" + state.slice(0, 16)
+        : null;
+    const clearBinding = () => {
+      if (cookieName)
+        res.append("Set-Cookie", cookie(cookieName, "", 0, "Lax"));
+    };
+    res.setHeader("Referrer-Policy", "no-referrer");
+    try {
+      const resume = await this.completeLogin(req, res, id, callback, state);
+      clearBinding();
+      return res.redirect(
+        303,
+        origin() + (resume ? "/?resume=invitation" : ""),
+      );
+    } catch (error) {
+      clearBinding();
+      const code =
+        error instanceof OidcLoginError
+          ? error.feedback
+          : "provider_unavailable";
+      const log = createDiagnostics("oidc", process.env);
+      if (error instanceof OidcLoginError)
+        log.warn("login.failed", {
+          stage: "oidc_callback",
+          code: "OIDC_" + code.toUpperCase(),
+        });
+      else log.error("login.failed", { stage: "oidc_callback", error });
+      if (!browserNavigation(req)) throw error;
+      const destination = new URL(origin());
+      destination.searchParams.set("authError", code);
+      if (invitationBrowser(req))
+        destination.searchParams.set("resume", "invitation");
+      return res.redirect(303, destination.toString());
+    }
+  }
+  private async completeLogin(
+    req: any,
+    res: any,
+    id: string,
+    callback: URL,
+    state: string | null,
+  ) {
+    id = await resolveProviderRoute(id);
     if (!state || !/^[a-zA-Z0-9_-]{20,128}$/.test(state))
-      return fail(400, "Invalid login state");
+      return loginFail(400, "invalid_login", "Invalid login state");
     const cookieName = "orvyn_oidc_" + state.slice(0, 16);
     const browser = (req.headers.cookie || "")
       .split(";")
       .map((s: string) => s.trim())
       .find((s: string) => s.startsWith(cookieName + "="))
       ?.slice(cookieName.length + 1);
-    if (!browser) return fail(400, "Missing login browser binding");
+    if (!browser)
+      return loginFail(400, "invalid_login", "Missing login browser binding");
     const flow = await db.query(
       "DELETE FROM oidc_flows WHERE state_hash=$1 AND provider_id::text=$2 AND browser_hash=$3 AND expires_at>now() RETURNING *",
       [hash(state), id, hash(browser)],
     );
-    if (!flow.rowCount) return fail(400, "Invalid or expired login");
+    if (!flow.rowCount)
+      return loginFail(400, "invalid_login", "Invalid or expired login");
     const r = await db.query(
       "SELECT * FROM oidc_providers WHERE id::text=$1 AND enabled=true",
       [id],
@@ -375,7 +460,11 @@ class OidcController {
       !r.rowCount ||
       r.rows[0].config_version !== flow.rows[0].provider_version
     )
-      return fail(400, "Provider configuration changed");
+      return loginFail(
+        400,
+        "provider_changed",
+        "Provider configuration changed",
+      );
     let claims: ReturnType<
       Awaited<ReturnType<typeof client.authorizationCodeGrant>>["claims"]
     >;
@@ -388,8 +477,14 @@ class OidcController {
         idTokenExpected: true,
       });
       claims = tokens.claims();
-    } catch {
-      return fail(401, "Identity provider response could not be verified");
+    } catch (error) {
+      return loginFail(
+        401,
+        error instanceof OidcDiscoveryError
+          ? "provider_unavailable"
+          : "provider_response",
+        "Identity provider response could not be verified",
+      );
     }
     if (
       !claims ||
@@ -397,7 +492,8 @@ class OidcController {
       !claims.sub ||
       claims.sub.length > 1000
     )
-      return fail(401, "Invalid identity");
+      return loginFail(401, "provider_response", "Invalid identity");
+    let resume = false;
     await transaction(async (c) => {
       // Serialize provisioning and provider disabling; never link a local account solely by email.
       const p = await c.query(
@@ -408,7 +504,7 @@ class OidcController {
         !p.rows[0]?.enabled ||
         p.rows[0].config_version !== flow.rows[0].provider_version
       )
-        fail(401, "Provider configuration changed");
+        loginFail(401, "provider_changed", "Provider configuration changed");
       const identity = await c.query(
         "SELECT user_id FROM external_identities WHERE provider_id::text=$1 AND subject=$2",
         [id, claims!.sub],
@@ -416,7 +512,11 @@ class OidcController {
       let uid = identity.rows[0]?.user_id;
       if (!uid) {
         if (!p.rows[0].auto_provision)
-          fail(403, "Automatic account creation is disabled");
+          loginFail(
+            403,
+            "provisioning_disabled",
+            "Automatic account creation is disabled",
+          );
         const email = claims!.email;
         if (
           typeof email !== "string" ||
@@ -424,7 +524,11 @@ class OidcController {
           !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
           claims!.email_verified !== true
         )
-          return fail(403, "A verified email address is required");
+          return loginFail(
+            403,
+            "email_unverified",
+            "A verified email address is required",
+          );
         const created = await c.query(
           "INSERT INTO users(email,email_verified,display_name,display_name_source) VALUES($1,true,$2,$3) ON CONFLICT DO NOTHING RETURNING id",
           [
@@ -434,8 +538,9 @@ class OidcController {
           ],
         );
         if (!created.rowCount)
-          fail(
+          loginFail(
             409,
+            "account_exists",
             "Email belongs to an existing account; automatic account linking is prohibited",
           );
         uid = created.rows[0].id;
@@ -453,10 +558,15 @@ class OidcController {
           [uid, displayName],
         );
       await issueSession(c, uid, res, id);
+      resume = await bindInvitation(
+        c,
+        req,
+        flow.rows[0].invitation_continuation,
+        uid,
+      );
       await audit(c, uid, "account.oidc_login");
     });
-    res.append("Set-Cookie", cookie(cookieName, "", 0, "Lax"));
-    return res.redirect(303, origin());
+    return resume;
   }
 }
 @Module({ controllers: [OidcController] })

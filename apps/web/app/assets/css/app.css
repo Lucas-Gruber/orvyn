@@ -1582,6 +1582,57 @@ dialog.link-database-dialog::backdrop {
   border-top: 1px solid var(--line);
   padding-top: 20px;
 }
+.auth-feedback {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  margin-bottom: 24px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.auth-feedback > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--muted);
+}
+.auth-feedback strong {
+  font-weight: 600;
+}
+.auth-feedback p {
+  margin: 5px 0 0;
+}
+.invite-account {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0;
+  margin: 0 0 12px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.invite-account > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+.invite-account strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+.invite-account span {
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.invite-account button {
+  font-size: 12px;
+  padding: 6px 8px;
+}
 .auth-sso h3 {
   font-size: 0.75rem;
   color: var(--muted);

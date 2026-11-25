@@ -152,6 +152,18 @@ export function diagnosticCode(error: unknown): string {
   }
 }
 const actions: Record<string, string> = {
+  OIDC_PROVISIONING_DISABLED:
+    "Enable provider autoProvision explicitly if new verified SSO users should be created. Already-linked identities continue to work; do not link accounts solely by matching email.",
+  OIDC_EMAIL_UNVERIFIED:
+    "Configure the IdP to supply a verified email claim and have the user complete provider-side verification. Keep email verification required for provisioning and invitation acceptance.",
+  OIDC_ACCOUNT_EXISTS:
+    "Use the existing account's sign-in method or arrange an explicit identity-linking process. Matching email alone is insufficient to attach a new identity.",
+  OIDC_INVALID_LOGIN:
+    "Restart sign-in from the application in the same browser. Check cookie and proxy settings; retain state, nonce, PKCE and browser binding checks.",
+  OIDC_PROVIDER_CHANGED:
+    "Restart login after the provider configuration update. In-flight logins are intentionally invalidated by identity-provider changes.",
+  OIDC_PROVIDER_RESPONSE:
+    "Check the identity provider's sign-in outcome, registered redirect URI, signing keys and client settings. Never copy authorization codes, tokens or provider error descriptions into logs.",
   STORAGE_PATH_UNSAFE:
     "Keep the attachment mount and its private directories free of symlinks and group/world write access. Select volume permission preparation or correct numeric ownership/ACLs on the server; retain existing files.",
   STORAGE_CONFIGURATION_INVALID:

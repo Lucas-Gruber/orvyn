@@ -133,6 +133,14 @@ During Helm upgrades, a short compatibility hook with the legacy Job name lets H
 
 This is OIDC, not SAML, group synchronization or SCIM. Local account recovery remains available. A real Keycloak login with discovery, PKCE, signed tokens/JWKS, verified provisioning and subject-specific administration is covered by application integration tests.
 
+Browser callback failures appear in the ordinary login UI, including disabled
+provisioning and unverified email. An already-linked identity can still sign in
+when `autoProvision=false`; new identities cannot. SSO buttons are also available
+on invitation screens when local registration is disabled. A short-lived encrypted,
+browser-bound continuation preserves the invitation across redirects, and users
+still explicitly accept with the exact verified invited email. See
+[authentication details](../../../docs/AUTHENTICATION.md#browser-errors-and-sso-invitations).
+
 ## Storage modes and persistence
 
 - **Internal S3:** `storage.driver=s3`, `storage.s3.internal.enabled=true`. SeaweedFS runs as UID 1000 with a dedicated PVC. An init container creates private `s3.json` from Secret references into an in-memory volume. A **normal Job**, not a post-install hook, creates/checks the bucket and tests object writes/reads. API readiness can therefore become healthy during `--wait --atomic`. Job names include their configuration hash so upgrades never patch immutable Job pod templates.

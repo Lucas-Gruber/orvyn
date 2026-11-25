@@ -27,6 +27,13 @@ API/storage startup failures no longer require a second Helm upgrade to apply
 SSO settings. Reconciliation/retry intervals are available under Configuration;
 matching development images are required.
 
+Space invitations also offer enabled SSO providers. Users return to an explicit
+confirmation after login; a short-lived encrypted browser continuation preserves
+the invitation. Accepting still requires the exact verified invited email.
+Expected sign-in failures are explained in the login screen. If provisioning is
+disabled, only already-linked SSO identities can sign in; enabling local signup
+does not change that separate provider setting.
+
 The **Volume permissions** section supports auto, fsGroup, explicit initContainer
 or operator-managed preparation for every persistent data mount. Auto probes as
 the service UID and repairs only when necessary; it requires admission of a

@@ -5,7 +5,12 @@ import {
   pendingWritesKey,
   type WriteFlusher,
 } from "../composables/pendingWrites";
-import { z, type RecordOpenMode } from "@orvyn/shared";
+import {
+  z,
+  oidcFeedback,
+  type RecordOpenMode,
+  type OidcFeedbackCode,
+} from "@orvyn/shared";
 import type { DatabaseRecord } from "@orvyn/shared";
 import { shortcutLabel } from "../utils/shortcuts";
 import { headingFromHash, validHeadingId, pageLink } from "@orvyn/editor/links";
@@ -99,7 +104,9 @@ async function sidebarAction(action: string) {
 }
 const linkAction = ref(""),
   linkToken = ref(""),
+  authFeedback = ref(""),
   newPassword = ref("");
+let authOptionsTimer: ReturnType<typeof setInterval> | undefined;
 const sidebarOpen = ref(true),
   mobile = ref(false),
   showSpaceCreate = ref(false),
@@ -481,6 +488,7 @@ async function login(action: string) {
     requestedHeading = headingFromHash(route.hash),
     requestedPeek = { ...route.query };
   await run(async () => {
+    authFeedback.value = "";
     await api("auth/" + action, "POST", {
       email: email.value,
       password: password.value,
@@ -502,8 +510,40 @@ async function login(action: string) {
   });
 }
 async function startOidc(id: string) {
-  const result = await api("oidc/" + id + "/start", "POST", {});
+  authFeedback.value = "";
+  const result = await api(
+    "oidc/" + id + "/start",
+    "POST",
+    linkAction.value === "accept-invitation"
+      ? { invitationToken: linkToken.value }
+      : {},
+  );
   window.location.assign(result.url);
+}
+async function refreshAuthOptions() {
+  if (signedIn.value && linkAction.value !== "accept-invitation") return;
+  await Promise.allSettled([
+    api("oidc/providers").then((list) => {
+      providers.value = list;
+    }),
+    loadRegistrationOptions(),
+  ]);
+}
+async function cancelAccountLink() {
+  await run(async () => {
+    if (linkAction.value === "accept-invitation")
+      await api("oidc/invitation/resume", "DELETE", {});
+    linkAction.value = "";
+    linkToken.value = "";
+    authFeedback.value = "";
+  });
+}
+async function switchInvitationAccount() {
+  await run(async () => {
+    await api("auth/logout", "POST", {});
+    await api("oidc/invitation/resume", "DELETE", {});
+    signedOut();
+  });
 }
 async function loadPages(after = "") {
   if (!space.value) return;
@@ -1054,6 +1094,7 @@ async function completeLink() {
       await api("spaces/invitations/accept", "POST", {
         token: linkToken.value,
       });
+      await api("oidc/invitation/resume", "DELETE", {}).catch(() => {});
       await refreshSpace();
       notice.value = "Invitation accepted. Your team space is ready.";
     } else {
@@ -1093,6 +1134,18 @@ onMounted(async () => {
   window.addEventListener("beforeunload", beforeUnload);
   window.addEventListener("resize", resizePageTitle);
   await readAccountLink();
+  if (
+    typeof route.query.authError === "string" &&
+    Object.hasOwn(oidcFeedback, route.query.authError)
+  )
+    authFeedback.value =
+      oidcFeedback[route.query.authError as OidcFeedbackCode];
+  if (route.query.authError || route.query.resume) {
+    const query = { ...route.query };
+    delete query.authError;
+    delete query.resume;
+    await router.replace({ path: route.path, hash: route.hash, query });
+  }
   const requestedSpace = String(route.query.space || ""),
     requestedPage = String(route.query.page || "");
   const result = await Promise.allSettled([
@@ -1100,7 +1153,20 @@ onMounted(async () => {
     api("spaces"),
     api("oidc/providers"),
     loadRegistrationOptions(),
+    api("oidc/invitation/resume", "POST", {}),
   ]);
+  const continuation = result[4];
+  if (
+    !linkAction.value &&
+    continuation.status === "fulfilled" &&
+    continuation.value.invitationToken
+  ) {
+    linkAction.value = "accept-invitation";
+    linkToken.value = continuation.value.invitationToken;
+  }
+  if (continuation.status === "rejected")
+    authFeedback.value ||=
+      "Your invitation sign-in context could not be resumed. Sign in with the same account or reopen the original invitation link.";
   if (result[2].status === "fulfilled") providers.value = result[2].value;
   if (result[0].status === "fulfilled" && result[1].status === "fulfilled") {
     me.value = result[0].value;
@@ -1124,8 +1190,14 @@ onMounted(async () => {
       });
   }
   booting.value = false;
+  window.addEventListener("focus", refreshAuthOptions);
+  authOptionsTimer = setInterval(() => {
+    void refreshAuthOptions();
+  }, 15000);
 });
 onBeforeUnmount(() => {
+  clearInterval(authOptionsTimer);
+  window.removeEventListener("focus", refreshAuthOptions);
   clearTimeout(titleTimer);
   clearTimeout(noticeTimer);
   window.removeEventListener("keydown", globalKeys);
@@ -1188,6 +1260,13 @@ onBeforeUnmount(() => {
         <AppIcon name="palette" />
       </button>
       <section class="auth-panel">
+        <div v-if="authFeedback" class="auth-feedback" role="alert">
+          <AppIcon name="shield" :size="19" />
+          <div>
+            <strong>We couldn’t complete sign-in</strong>
+            <p>{{ authFeedback }}</p>
+          </div>
+        </div>
         <template v-if="linkAction"
           ><h2>
             {{
@@ -1218,6 +1297,24 @@ onBeforeUnmount(() => {
               Join with your invited, verified email address. Private pages
               remain restricted.
             </p>
+            <div
+              v-if="linkAction === 'accept-invitation' && me"
+              class="invite-account"
+            >
+              <AppIcon name="users" :size="18" />
+              <div>
+                <strong>{{ me.displayName }}</strong
+                ><span>{{ me.email }}</span>
+              </div>
+              <button
+                type="button"
+                class="ghost"
+                :disabled="busy"
+                @click="switchInvitationAccount"
+              >
+                Switch account
+              </button>
+            </div>
             <button class="primary" :disabled="busy">
               {{
                 linkAction === "verify-email"
@@ -1247,12 +1344,17 @@ onBeforeUnmount(() => {
               autocomplete="current-password"
             /><button class="primary" :disabled="busy">Sign in</button>
           </form>
+          <AuthProviders
+            v-if="linkAction === 'accept-invitation' && !signedIn"
+            :providers="providers"
+            :disabled="busy"
+            invitation
+            @select="(id) => run(() => startOidc(id))"
+          />
           <button
             class="ghost auth-forgot"
-            @click="
-              linkAction = '';
-              linkToken = '';
-            "
+            :disabled="busy"
+            @click="cancelAccountLink"
           >
             Cancel
           </button></template
@@ -1350,17 +1452,11 @@ onBeforeUnmount(() => {
           >
             Forgot password?
           </button>
-          <div v-if="providers.length" class="auth-sso">
-            <h3>Or continue with your organization</h3>
-            <button
-              v-for="provider in providers"
-              :key="provider.id"
-              @click="run(() => startOidc(provider.id))"
-            >
-              <AppIcon name="shield" :size="16" />Continue with
-              {{ provider.name }}
-            </button>
-          </div>
+          <AuthProviders
+            :providers="providers"
+            :disabled="busy"
+            @select="(id) => run(() => startOidc(id))"
+          />
           <p class="auth-footnote">
             Your pages start private.<br />You choose what to share, and with
             whom.

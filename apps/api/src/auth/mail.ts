@@ -96,6 +96,9 @@ export async function cleanupAuth() {
   await db.query("DELETE FROM sessions WHERE expires_at<now()");
   await db.query("DELETE FROM account_tokens WHERE expires_at<now()");
   await db.query("DELETE FROM oidc_flows WHERE expires_at<now()");
+  await db.query(
+    "DELETE FROM oidc_invitation_continuations WHERE expires_at<now()",
+  );
   await db.query("DELETE FROM space_invitations WHERE expires_at<now()");
   await db.query("DELETE FROM auth_limits WHERE reset_at<now()");
   await db.query(
