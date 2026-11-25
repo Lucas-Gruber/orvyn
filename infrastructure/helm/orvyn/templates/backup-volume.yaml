@@ -1,0 +1,64 @@
+{{- if .Values.backup.enabled }}
+{{- $backup := .Values.backup }}
+{{- $scripts := printf "%s%s" (.Files.Get "files/postgresql-common.sh") (.Files.Get "files/prepare-backup-volume.sh") }}
+{{- $revision := toJson (dict "backup" $backup "registry" .Values.global.imageRegistry "pullSecrets" .Values.global.imagePullSecrets "serviceAccount" .Values.serviceAccount "version" .Chart.AppVersion "scripts" $scripts) | sha256sum | trunc 10 }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "orvyn.fullname" . | trunc 35 | trimSuffix "-" }}-backup-volume-{{ $revision }}
+  labels: {{- include "orvyn.labels" . | nindent 4 }}
+spec:
+  activeDeadlineSeconds: {{ $backup.activeDeadlineSeconds }}
+  backoffLimit: {{ $backup.backoffLimit }}
+  template:
+    metadata:
+      labels:
+        {{- include "orvyn.selector" (dict "root" . "component" "database-backup") | nindent 8 }}
+        {{- with $backup.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with $backup.podAnnotations }}
+      annotations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "orvyn.serviceAccount" . }}
+      automountServiceAccountToken: false
+      securityContext: {{- toYaml $backup.podSecurityContext | nindent 8 }}
+      {{- with $backup.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $backup.affinity }}
+      affinity: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $backup.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: backup-volume
+          image: {{ include "orvyn.image" (dict "root" . "image" $backup.image) | quote }}
+          imagePullPolicy: {{ $backup.image.pullPolicy }}
+          command: [/bin/bash, /scripts/prepare-backup-volume.sh]
+          securityContext: {{- toYaml $backup.securityContext | nindent 12 }}
+          resources: {{- toYaml $backup.resources | nindent 12 }}
+          env:
+            - name: ORVYN_BACKUP_DIRECTORY
+              value: {{ printf "/backups/%s/postgresql" (include "orvyn.fullname" .) | quote }}
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+            - name: backups
+              mountPath: /backups
+      volumes:
+        - name: scripts
+          configMap:
+            name: {{ include "orvyn.fullname" . | trunc 42 | trimSuffix "-" }}-db-backup
+            defaultMode: 0444
+        - name: backups
+          persistentVolumeClaim:
+            claimName: {{ include "orvyn.claimName" (dict "root" . "component" "backups" "persistence" $backup.persistence) }}
+{{- end }}

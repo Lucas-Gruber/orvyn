@@ -3,14 +3,9 @@ set -euo pipefail
 source "$(dirname -- "${BASH_SOURCE[0]}")/postgresql-common.sh"
 
 configure_connection
-directory=${ORVYN_BACKUP_DIRECTORY:-}
 retention=${ORVYN_BACKUP_RETENTION_COUNT:-7}
-[[ "$directory" == /* && "$directory" != / ]] || fail 'A dedicated absolute backup directory is required.'
 [[ "$retention" =~ ^[1-9][0-9]{0,2}$ && "$retention" -le 365 ]] || fail 'Backup retention must be between 1 and 365 snapshots.'
-mkdir -p -- "$directory"
-directory=$(cd -- "$directory" && pwd -P)
-[[ "$directory" != / ]] || fail 'The filesystem root cannot be a backup directory.'
-chmod 700 -- "$directory"
+prepare_backup_directory
 exec 9>"$directory/.lock"
 flock --nonblock 9 || fail 'Another database backup or restore is using this directory.'
 

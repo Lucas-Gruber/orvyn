@@ -42,4 +42,6 @@ The development chart now adds opt-in scheduled PostgreSQL custom-format snapsho
 
 Development source 0.3.0-dev.0 also adds server-enforced local signup controls and exact canonical email-domain restrictions, public credential-free account options and login-screen policy/retry handling. Existing password login/recovery and provider-controlled OIDC provisioning remain independent. Helm/Rancher configure the rules and roll API replicas on changes. Tests cover direct API rejection, domain boundaries, existing-account access, mobile UI, failed option loads/retry and value-free startup errors. A dedicated CI invocation exercises actual Keycloak provisioning with local signup disabled and a different local email-domain restriction. These features are not included in published 0.2.0. See AUTHENTICATION.md.
 
-Next: continue production operations, registration controls and the remaining checklist in ROADMAP.md. Preserve all master requirements in PRODUCT.md.
+The backup volume also has a credential-free initialization Job for delayed-binding StorageClasses, with non-root filesystem checks and configuration-addressed names. The Kubernetes regression explicitly selects `WaitForFirstConsumer` and suspends scheduled backups during install/upgrade. This storage-class expansion requires its own successful CI result.
+
+Next: observability, coordinated attachment/key protection and the remaining checklist in ROADMAP.md. Preserve all master requirements in PRODUCT.md.

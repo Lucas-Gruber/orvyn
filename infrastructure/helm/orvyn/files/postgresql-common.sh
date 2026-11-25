@@ -9,6 +9,15 @@ fail() {
   exit 1
 }
 
+prepare_backup_directory() {
+  directory=${ORVYN_BACKUP_DIRECTORY:-}
+  [[ "$directory" == /* && "$directory" != / ]] || fail 'A dedicated absolute backup directory is required.'
+  mkdir -p -- "$directory"
+  directory=$(cd -- "$directory" && pwd -P)
+  [[ "$directory" != / ]] || fail 'The filesystem root cannot be a backup directory.'
+  chmod 700 -- "$directory"
+}
+
 configure_connection() {
   connection_args=()
   if [[ -n "${DATABASE_URL:-}" ]]; then

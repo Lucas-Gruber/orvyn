@@ -221,6 +221,30 @@ try {
       cluster,
     ]);
   await kubectl(["create", "namespace", namespace]);
+  const storageClasses = JSON.parse(
+    await kubectl(["get", "storageclasses", "-o", "json"]),
+  );
+  const defaultClass = storageClasses.items.find(
+    (s) =>
+      s.metadata.annotations?.[
+        "storageclass.kubernetes.io/is-default-class"
+      ] === "true",
+  );
+  if (!defaultClass)
+    throw Error("The test cluster needs a default StorageClass");
+  await kubectl(
+    ["create", "-f", "-"],
+    JSON.stringify({
+      apiVersion: "storage.k8s.io/v1",
+      kind: "StorageClass",
+      metadata: { name: "orvyn-backup-delayed" },
+      provisioner: defaultClass.provisioner,
+      parameters: defaultClass.parameters,
+      reclaimPolicy: "Delete",
+      volumeBindingMode: "WaitForFirstConsumer",
+      allowedTopologies: defaultClass.allowedTopologies,
+    }),
+  );
   await kubectl(
     ["apply", "-f", "-"],
     YAML.stringify({
@@ -268,7 +292,11 @@ try {
     },
     ingress: { enabled: false },
     smtp: { url: "smtp://mailpit:1025", from: "orvyn@example.test" },
-    backup: { enabled: true, suspend: true },
+    backup: {
+      enabled: true,
+      suspend: true,
+      persistence: { storageClass: "orvyn-backup-delayed" },
+    },
   };
   for (const component of ["web", "api", "worker", "collaboration"])
     base[component] = {
@@ -309,6 +337,22 @@ try {
     ...args,
   ]);
   const state = await smoke("s3");
+  const initialized = JSON.parse(
+    await kubectl(["-n", namespace, "get", "jobs", "-o", "json"]),
+  );
+  if (
+    !initialized.items.some(
+      (job) =>
+        job.metadata.name.includes("-backup-volume-") &&
+        job.status.succeeded === 1,
+    )
+  )
+    throw Error(
+      "The delayed-binding backup volume was not initialized before installation completed",
+    );
+  console.log(
+    "PASS Kubernetes: suspended backup CronJob with WaitForFirstConsumer PVC and credential-free volume initialization",
+  );
   const secretBefore = JSON.parse(
     await kubectl([
       "-n",

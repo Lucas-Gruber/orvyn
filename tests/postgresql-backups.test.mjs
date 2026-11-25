@@ -79,6 +79,10 @@ test(
     external.searchParams.set("dbname", connection.PGDATABASE);
     async function job(script, overrides = {}, fileLimit = false) {
       const values = { ...connection, ...overrides };
+      const scriptFile =
+        script === "prepare"
+          ? "prepare-backup-volume.sh"
+          : `${script}-postgresql.sh`;
       const result = await run(
         "docker",
         [
@@ -93,9 +97,9 @@ test(
                 "-c",
                 'ulimit -f 1; exec bash "$1"',
                 "_",
-                `${directory}/scripts/${script}-postgresql.sh`,
+                `${directory}/scripts/${scriptFile}`,
               ]
-            : ["bash", `${directory}/scripts/${script}-postgresql.sh`]),
+            : ["bash", `${directory}/scripts/${scriptFile}`]),
         ],
         { ...process.env, ...values },
       );
@@ -138,6 +142,7 @@ test(
       );
       for (const file of [
         "postgresql-common.sh",
+        "prepare-backup-volume.sh",
         "backup-postgresql.sh",
         "restore-postgresql.sh",
       ])
@@ -154,6 +159,30 @@ test(
       assert.equal(
         (await docker(["chown", "-R", "999:999", directory])).code,
         0,
+      );
+      await t.test(
+        "volume initialization works without database access and leaves no snapshot or probe files",
+        async () => {
+          const result = await job("prepare", {
+            DATABASE_URL: "",
+            PGDATABASE: "",
+            PGHOST: "unavailable.invalid",
+            PGUSER: "",
+            PGPASSWORD: "",
+          });
+          assert.equal(result.code, 0, result.stderr);
+          assert.match(result.stdout, /No database snapshot was created/);
+          assert.equal(
+            (await docker(["stat", "-c", "%a", snapshots])).stdout.trim(),
+            "700",
+          );
+          assert.equal(
+            (
+              await docker(["find", snapshots, "-mindepth", "1", "-print"])
+            ).stdout.trim(),
+            "",
+          );
+        },
       );
       const registered = await request("auth/register", {
         method: "POST",

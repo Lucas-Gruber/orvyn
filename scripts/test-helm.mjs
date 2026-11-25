@@ -435,6 +435,7 @@ try {
       );
       for (const file of [
         "postgresql-common.sh",
+        "prepare-backup-volume.sh",
         "backup-postgresql.sh",
         "restore-postgresql.sh",
       ])
@@ -444,6 +445,32 @@ try {
         );
       const claim = pod.volumes.find((v) => v.name === "backups")
         .persistentVolumeClaim.claimName;
+      const initialize = resources.find(
+        (r) => r.kind === "Job" && r.metadata.name.includes("-backup-volume-"),
+      );
+      assert.ok(
+        initialize,
+        "A regular volume initialization Job must bind delayed backup claims before Helm waits",
+      );
+      assert.equal(
+        initialize.metadata.annotations?.["helm.sh/hook"],
+        undefined,
+      );
+      const initializer = initialize.spec.template.spec;
+      assert.deepEqual(initializer.containers[0].command, [
+        "/bin/bash",
+        "/scripts/prepare-backup-volume.sh",
+      ]);
+      assert.deepEqual(
+        initializer.containers[0].env.map((e) => e.name),
+        ["ORVYN_BACKUP_DIRECTORY"],
+        "Volume initialization needs no database or application credentials",
+      );
+      assert.equal(
+        initializer.volumes.find((v) => v.name === "backups")
+          .persistentVolumeClaim.claimName,
+        claim,
+      );
       if (name === "external-database-backup") {
         assert.equal(claim, "private-database-backups");
         assert.ok(
