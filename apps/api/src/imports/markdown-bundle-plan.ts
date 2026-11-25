@@ -183,14 +183,14 @@ export async function bundlePlan(
       const people = input.includePeopleNames
         ? (
             await c.query(
-              `SELECT u.id,u.email FROM users u JOIN spaces s ON s.id=$1
+              `SELECT u.id,u.display_name FROM users u JOIN spaces s ON s.id=$1
         WHERE u.id=ANY($2::uuid[]) AND (u.id=s.owner_id OR EXISTS(SELECT 1 FROM space_members m WHERE m.space_id=s.id AND m.user_id=u.id)) AND orvyn_page_role($3,u.id)>=10`,
               [page.space_id, documentPeople(page.document), page.id],
             )
           ).rows
         : [];
       const current = new Map<string, string>(
-        people.map((person) => [person.id, person.email]),
+        people.map((person) => [person.id, person.display_name]),
       );
       names.set(page.id, current);
       anchors.set(

@@ -422,8 +422,8 @@ test("Markdown names require explicit opt-in and current source membership/read 
       f.viewer.email,
     ])
       assert.ok(!JSON.stringify(anonymous.data).includes(identity));
-    assert.ok(named.data.markdown.includes(f.owner.email));
-    assert.ok(named.data.markdown.includes(f.viewer.email));
+    assert.ok(named.data.markdown.includes(f.owner.displayName));
+    assert.ok(named.data.markdown.includes(f.viewer.displayName));
     assert.equal(
       (await f.download(named, f.cookie, "&includePeopleNames=true")).response
         .status,
@@ -675,7 +675,9 @@ test("Chromium: export previews ignore late options, reject a concurrent change,
       await dialog
         .getByRole("checkbox", { name: /^Include visible people names/ })
         .check();
-      await expect.poll(() => content.inputValue()).toContain(f.owner.email);
+      await expect
+        .poll(() => content.inputValue())
+        .toContain(f.owner.displayName);
       const oldResponse = page.waitForResponse(
         (response) =>
           new URL(response.url()).pathname === "/api/v1/" + f.path &&
@@ -690,7 +692,9 @@ test("Chromium: export previews ignore late options, reject a concurrent change,
             requestAnimationFrame(() => requestAnimationFrame(resolve)),
           ),
       );
-      await expect.poll(() => content.inputValue()).toContain(f.owner.email);
+      await expect
+        .poll(() => content.inputValue())
+        .toContain(f.owner.displayName);
     } finally {
       release();
       await page.unroute(routePath);

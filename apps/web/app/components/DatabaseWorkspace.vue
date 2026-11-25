@@ -839,9 +839,10 @@ function format(record: DatabaseRecord, property: Property) {
   const value = record.values[property.id];
   if (value === null || value === undefined) return "—";
   if (property.type === "Title") return record.title;
-  if (property.type === "CreatedBy") return record.createdBy?.email || "—";
+  if (property.type === "CreatedBy")
+    return record.createdBy?.displayName || "—";
   if (property.type === "LastEditedBy")
-    return record.lastEditedBy?.email || "—";
+    return record.lastEditedBy?.displayName || "—";
   if (
     property.type === "Checkbox" ||
     (["Formula", "Rollup"].includes(property.type) &&
@@ -878,7 +879,7 @@ function format(record: DatabaseRecord, property: Property) {
       (value as string[])
         .map(
           (id) =>
-            directory.value.find((person) => person.id === id)?.email ||
+            directory.value.find((person) => person.id === id)?.displayName ||
             "Former member",
         )
         .join(", ") || "—"
@@ -966,7 +967,7 @@ function filterProperty(filter: any): Property | undefined {
       config: {
         options: directory.value.map((person) => ({
           id: person.id,
-          label: person.email,
+          label: person.displayName,
           color: "neutral",
         })),
       },
@@ -2239,7 +2240,7 @@ onBeforeUnmount(() => {
                 :key="person.id"
                 :value="person.id"
               >
-                {{ person.email }}
+                {{ person.displayName }}
               </option></select
             ><DatabaseRelationField
               v-if="

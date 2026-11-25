@@ -62,6 +62,7 @@ Work through these areas in order, preserving working features and committing/pu
    - [ ] Runtime German/English/system language and synchronized preferences.
    - [ ] Instance/organization/space appearance, complete administration.
    - [x] Real OIDC provider validation with a pinned Keycloak instance, including deployment-managed setup and administrator subject checks.
+   - [x] Editable display names across people, comments, mentions, database fields and authenticated presence, including OIDC name/username claims.
    - [ ] Identity linking, OIDC group mapping, additional provider validation and ownership transfer.
 8. Import/export
    - [x] Single-page Markdown import with a complete preview, native editable blocks, permanent heading links, current destination checks and retry recovery.

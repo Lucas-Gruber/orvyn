@@ -24,6 +24,7 @@ import { runtimeOrigin } from "@orvyn/shared/server";
 type Identity = {
   userId: string;
   email: string;
+  displayName: string;
   sessionHash: string;
   spaceId: string;
   kind: string;
@@ -92,10 +93,11 @@ async function authorization(
   lock = false,
 ) {
   const session = await c.query(
-    `SELECT user_id FROM sessions WHERE token_hash=$1 AND expires_at>now() ${lock ? "FOR SHARE" : ""}`,
+    `SELECT s.user_id,u.display_name FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() ${lock ? "FOR SHARE OF s" : ""}`,
     [identity.sessionHash],
   );
   if (!session.rowCount || session.rows[0].user_id !== identity.userId) deny();
+  identity.displayName = session.rows[0].display_name;
   if (lock)
     await c.query(
       "SELECT s.id FROM spaces s JOIN pages p ON p.space_id=s.id WHERE p.id=$1 FOR SHARE OF s",
@@ -560,7 +562,7 @@ const server = new Server<Identity>({
       ];
       states.set(id, {
         ...(state.cursor ? { cursor: state.cursor } : {}),
-        user: { id: context.userId, name: context.email, color },
+        user: { id: context.userId, name: context.displayName, color },
       });
     }
     for (const id of removedClients)

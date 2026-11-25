@@ -185,10 +185,12 @@ onBeforeUnmount(() => {
       >
         <button class="inbox-item" :disabled="busy" @click="visit(item)">
           <span class="inbox-avatar">{{
-            (item.actor.email || "Former member").slice(0, 2).toUpperCase()
+            (item.actor.displayName || "Former member")
+              .slice(0, 2)
+              .toUpperCase()
           }}</span><span
             ><span class="inbox-who">{{
-              item.actor.email || "Former member"
+              item.actor.displayName || "Former member"
             }}</span
             ><span class="inbox-kind">{{
               item.kind === "document_mention"

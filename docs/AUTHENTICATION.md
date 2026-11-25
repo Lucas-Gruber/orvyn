@@ -25,6 +25,35 @@ Helm values are `auth.registration.enabled` and `auth.registration.allowedEmailD
 
 The UI exposes email confirmation, password recovery, active sessions, individual revocation and logout of all sessions. Email links carry tokens in the URL fragment, which the application removes before submitting the token in a JSON body; reverse-proxy URL logs do not contain those tokens.
 
+## Profile names
+
+People appear by display name throughout the workspace, comments, mentions,
+activity, Person properties and editor presence. Change your name in **Account
+& security → Your profile**. Names support Unicode and up to 80 characters;
+email addresses and hidden control characters are rejected as labels.
+
+Existing and new local accounts without a chosen name initially use the part
+before `@` in their email (or `Member` if that is unsuitable). OIDC uses the
+verified ID token's `name`, then `preferred_username`, then the local fallback.
+Provider names refresh on sign-in until the user saves their own name. Missing
+or unsuitable claims do not erase a previously saved profile.
+
+Display names are not unique identity keys and never link accounts or grant
+permissions. User IDs, OIDC provider/subject pairs and invitation email checks
+remain authoritative. Existing mention IDs survive renaming; historical mention
+labels render using the current visible profile, or `Former member` after access
+is removed. Email remains available for sign-in, invitations and your account
+settings. Explicit Markdown people-name exports use display names. Public
+publications still require separately reviewed public aliases; private profiles
+are never automatically published.
+
+`GET /api/v1/auth/me` includes `displayName` and `displayNameSource`
+(`generated`, `provider`, or `user`). Authenticated, same-origin
+`PATCH /api/v1/auth/profile` accepts only `{displayName}`. Migration 46 adds the
+profile and mention-label fields without changing IDs, email, external
+identities or sessions. Apply it before rolling out the updated Collaboration
+service. Profile changes do not revoke sessions.
+
 ## Email delivery
 
 `pnpm dev:worker` runs the PostgreSQL-backed mail outbox worker and expired-authentication-state cleanup. Outbox payloads are AES-256-GCM encrypted with ORVYN_ENCRYPTION_KEY; successful delivery clears the payload. SMTP failure retries with bounded exponential delay. Delivery is at least once: a crash between SMTP delivery and database commit can duplicate an email, but its token remains one-use. Local Compose includes Mailpit, with SMTP on 127.0.0.1:1025 and its development mailbox on port 8025. Do not expose the development mailbox publicly.

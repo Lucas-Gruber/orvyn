@@ -1,9 +1,17 @@
 <script setup lang="ts">
 const props = defineProps<{
-  me: { id: string; email: string; emailVerified: boolean; isAdmin: boolean };
+  me: {
+    id: string;
+    email: string;
+    displayName: string;
+    displayNameSource: string;
+    emailVerified: boolean;
+    isAdmin: boolean;
+  };
 }>();
 const emit = defineEmits<{ changed: []; signedOut: [] }>();
 const sessions = ref<any[]>([]),
+  displayName = ref(props.me.displayName),
   error = ref(""),
   notice = ref(""),
   busy = ref(false);
@@ -37,6 +45,26 @@ async function revoke(s: any) {
   });
 }
 onMounted(() => run(load));
+watch(
+  () => props.me.displayName,
+  (value) => {
+    displayName.value = value;
+  },
+);
+async function saveProfile() {
+  await run(async () => {
+    const profile = await $fetch<{ displayName: string }>(
+      "/api/v1/auth/profile",
+      {
+        method: "PATCH",
+        body: { displayName: displayName.value },
+      },
+    );
+    displayName.value = profile.displayName;
+    emit("changed");
+    notice.value = "Display name saved.";
+  });
+}
 </script>
 <template>
   <section class="settings">
@@ -44,6 +72,42 @@ onMounted(() => run(load));
     <p>{{ props.me.email }}</p>
     <p v-if="error" role="alert" class="error">{{ error }}</p>
     <p v-if="notice" role="status">{{ notice }}</p>
+    <form class="settings-card profile-card" @submit.prevent="saveProfile">
+      <div class="profile-avatar" aria-hidden="true">
+        {{ displayName.slice(0, 2).toUpperCase() }}
+      </div>
+      <div class="profile-fields">
+        <h2>Your profile</h2>
+        <label for="profile-display-name">Display name</label>
+        <input
+          id="profile-display-name"
+          v-model="displayName"
+          required
+          maxlength="160"
+          autocomplete="nickname"
+          aria-describedby="profile-name-hint"
+        />
+        <p id="profile-name-hint">
+          How you appear to your team, in comments and in the editor. Up to 80
+          characters.
+        </p>
+        <p
+          v-if="props.me.displayNameSource === 'provider'"
+          class="profile-source"
+        >
+          Provided by your sign-in provider. Saving a name here keeps your
+          choice on future sign-ins.
+        </p>
+        <button
+          class="primary"
+          :disabled="
+            busy || !displayName.trim() || displayName === props.me.displayName
+          "
+        >
+          Save display name
+        </button>
+      </div>
+    </form>
     <div v-if="!props.me.emailVerified" class="settings-card">
       <h2>Verify your email</h2>
       <p>
@@ -120,6 +184,62 @@ onMounted(() => run(load));
 }
 .settings-card button + button {
   margin-left: 0.6rem;
+}
+.profile-card {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  max-width: none;
+  align-items: flex-start;
+  gap: 1.25rem;
+  margin: 1.5rem 0 2rem;
+}
+.profile-avatar {
+  flex: 0 0 48px;
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+.profile-fields {
+  flex: 1;
+  min-width: 0;
+}
+.profile-fields h2 {
+  margin: 0 0 1rem;
+}
+.profile-fields label {
+  display: block;
+  font-weight: 500;
+  font-size: 0.85rem;
+  margin-bottom: 0.5rem;
+}
+.profile-fields input {
+  width: 100%;
+  max-width: 360px;
+}
+.profile-fields p {
+  font-size: 0.8rem;
+  color: var(--muted);
+  line-height: 1.5;
+  max-width: 480px;
+}
+@media (max-width: 520px) {
+  .profile-card {
+    padding: 1rem;
+    gap: 0.75rem;
+  }
+  .profile-avatar {
+    flex-basis: 36px;
+    width: 36px;
+    height: 36px;
+    font-size: 0.8rem;
+  }
 }
 .session-list {
   padding: 0;

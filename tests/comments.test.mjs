@@ -338,7 +338,7 @@ test("thread/reply pagination stays scoped, authors become former members, and c
       [f.space.id, f.commenter.id],
     );
     assert.equal(
-      (await detail(ids[0], f.owner)).data.messages[0].author.email,
+      (await detail(ids[0], f.owner)).data.messages[0].author.displayName,
       null,
     );
     assert.equal((await detail(ids[0], f.commenter)).response.status, 404);

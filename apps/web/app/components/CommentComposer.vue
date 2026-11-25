@@ -68,13 +68,14 @@ function changed(event: Event) {
   emit(
     "update:mentions",
     props.mentions.filter(
-      (person) => person.email && value.includes("@" + person.email),
+      (person) =>
+        person.displayName && value.includes("@" + person.displayName),
     ),
   );
   void nextTick(query);
 }
 async function choose(person: CommentPerson) {
-  if (!person.email || props.disabled) return;
+  if (!person.displayName || props.disabled) return;
   if (
     props.mentions.length >= 20 &&
     !props.mentions.some((p) => p.id === person.id)
@@ -86,10 +87,10 @@ async function choose(person: CommentPerson) {
   const value =
       props.modelValue.slice(0, range.from) +
       "@" +
-      person.email +
+      person.displayName +
       " " +
       props.modelValue.slice(range.to),
-    cursor = range.from + person.email.length + 2;
+    cursor = range.from + person.displayName.length + 2;
   if (value.length > 10000) {
     message.value = "Keep the comment within 10,000 characters.";
     hide();
@@ -99,7 +100,10 @@ async function choose(person: CommentPerson) {
   emit("update:modelValue", value);
   emit("update:mentions", [
     ...props.mentions.filter(
-      (p) => p.id !== person.id && p.email && value.includes("@" + p.email),
+      (p) =>
+        p.id !== person.id &&
+        p.displayName &&
+        value.includes("@" + p.displayName),
     ),
     person,
   ]);
@@ -182,8 +186,8 @@ onBeforeUnmount(() => {
         @click="choose(person)"
       >
         <span class="mention-avatar">{{
-          person.email?.slice(0, 2).toUpperCase()
-        }}</span><span>{{ person.email }}</span>
+          person.displayName?.slice(0, 2).toUpperCase()
+        }}</span><span>{{ person.displayName }}</span>
       </button>
       <p v-if="!loading && !people.length">No matching page readers.</p>
     </div>

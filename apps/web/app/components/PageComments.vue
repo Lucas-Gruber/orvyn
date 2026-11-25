@@ -115,7 +115,7 @@ function requestKey(scope: string, body: string) {
     keys.set(scope, { body, key: crypto.randomUUID() });
   return keys.get(scope)!.key;
 }
-const author = (value: any) => value?.email || "Former member";
+const author = (value: any) => value?.displayName || "Former member";
 const date = (value: string) =>
   new Date(value).toLocaleString(undefined, {
     dateStyle: "medium",
@@ -481,8 +481,8 @@ onBeforeUnmount(() => {
                     editText = message.body;
                     editMentions = message.mentions.filter(
                       (person: CommentPerson) =>
-                        person.email &&
-                        message.body.includes('@' + person.email),
+                        person.displayName &&
+                        message.body.includes('@' + person.displayName),
                     );
                   "
                 >

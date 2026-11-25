@@ -319,7 +319,7 @@ const moveTargets = computed(() =>
   }),
 );
 const avatar = computed(
-  () => me.value?.email?.slice(0, 2).toUpperCase() || "O",
+  () => me.value?.displayName?.slice(0, 2).toUpperCase() || "O",
 );
 useHead(() => ({
   htmlAttrs: { "data-theme": theme.value },
@@ -1581,7 +1581,7 @@ onBeforeUnmount(() => {
           ><template #trigger
             ><span class="avatar">{{ avatar }}</span
             ><span class="profile-copy"
-              ><strong>{{ me?.email }}</strong
+              ><strong>{{ me?.displayName }}</strong
               ><small>Your account</small></span
             ><AppIcon name="chevronDown" :size="13" /></template
           ><button

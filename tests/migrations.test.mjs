@@ -77,6 +77,15 @@ test("migrations install, upgrade existing records, serialize and roll back fail
       )
     ).rows[0];
     await Promise.all([migrate(db), migrate(db)]);
+    assert.equal(
+      (
+        await db.query(
+          "SELECT display_name,display_name_source FROM users WHERE id=$1",
+          [account.rows[0].id],
+        )
+      ).rows[0].display_name,
+      "upgrade",
+    );
     assert.deepEqual(
       (
         await db.query(

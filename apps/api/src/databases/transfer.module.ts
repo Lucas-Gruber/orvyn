@@ -101,8 +101,9 @@ function csvValue(row: any, property: Property) {
         (id) => property.config.options?.find((o) => o.id === id)?.label || "",
       ),
     );
-  if (property.type === "CreatedBy") return row.createdBy?.email || "";
-  if (property.type === "LastEditedBy") return row.lastEditedBy?.email || "";
+  if (property.type === "CreatedBy") return row.createdBy?.displayName || "";
+  if (property.type === "LastEditedBy")
+    return row.lastEditedBy?.displayName || "";
   return value;
 }
 @Controller("api/v1/databases")

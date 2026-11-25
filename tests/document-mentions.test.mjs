@@ -139,7 +139,9 @@ test("document mention projections validate additions, preserve historical refer
       { cookie: f.reader.cookie },
     );
     assert.equal(labels.response.status, 200);
-    assert.deepEqual(labels.data, [{ id: f.reader.id, email: f.reader.email }]);
+    assert.deepEqual(labels.data, [
+      { id: f.reader.id, displayName: f.reader.displayName },
+    ]);
     assert.equal(
       (
         await request(path + "/people-references?ids=wrong", {
@@ -186,8 +188,8 @@ test("document mention projections validate additions, preserve historical refer
     assert.equal(feed.unread, 0);
     assert.equal(feed.notifications[0].id, n.id);
     assert.equal(feed.notifications[0].excerpt, "A current, updated excerpt.");
-    const renamed = "renamed-" + randomUUID() + "@example.test";
-    await db.query("UPDATE users SET email=$2 WHERE id=$1", [
+    const renamed = "Renamed " + randomUUID().slice(0, 8);
+    await db.query("UPDATE users SET display_name=$2 WHERE id=$1", [
       f.reader.id,
       renamed,
     ]);
@@ -196,7 +198,7 @@ test("document mention projections validate additions, preserve historical refer
         await request(path + "/people-references?ids=" + f.reader.id, {
           cookie: f.owner.cookie,
         })
-      ).data[0].email,
+      ).data[0].displayName,
       renamed,
     );
     assert.ok(
@@ -375,18 +377,18 @@ test("Chromium: type @ and choose an inline person, reload/live readers resolve 
     });
     await editor.locator("p").last().click();
     await owner.keyboard.press("End");
-    await owner.keyboard.type(" @" + f.reader.email.split("@")[0]);
+    await owner.keyboard.type(" @" + f.reader.displayName);
     const picker = owner.getByRole("listbox", {
       name: "Mention a page reader",
       exact: true,
     });
     await expect(
-      picker.getByRole("option", { name: f.reader.email, exact: false }),
+      picker.getByRole("option", { name: f.reader.displayName, exact: false }),
     ).toBeVisible();
     await owner.keyboard.press("ArrowDown");
     await owner.keyboard.press("Enter");
     await expect(editor.locator(".editor-person")).toContainText(
-      f.reader.email,
+      f.reader.displayName,
     );
     await expect(
       owner.getByText("All changes saved", { exact: true }),
@@ -405,7 +407,7 @@ test("Chromium: type @ and choose an inline person, reload/live readers resolve 
       timeout: 12000,
     });
     await expect(readEditor.locator(".editor-person")).toContainText(
-      f.reader.email,
+      f.reader.displayName,
     );
     await reader
       .getByRole("button", { name: "Notifications", exact: true })
@@ -426,7 +428,7 @@ test("Chromium: type @ and choose an inline person, reload/live readers resolve 
     });
     await owner.reload();
     await expect(editor.locator(".editor-person")).toContainText(
-      f.reader.email,
+      f.reader.displayName,
     );
     await db.query("UPDATE pages SET visibility='restricted' WHERE id=$1", [
       f.page.id,

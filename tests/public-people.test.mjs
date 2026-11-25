@@ -284,7 +284,7 @@ test("private public-name choices resolve only selected references and current r
     );
     assert.equal(
       choices.data.people.find((p) => p.id === f.colleague.id).privateLabel,
-      f.colleague.email,
+      f.colleague.displayName,
     );
     assert.ok(!JSON.stringify(choices.data).includes(outsider.email));
     assert.ok(
@@ -436,13 +436,13 @@ test("Chromium: choose public names without copying addresses, cancel drafts, pr
         exact: true,
       }),
       own = names.getByRole("checkbox", {
-        name: "Share public name for " + f.owner.email,
+        name: "Share public name for " + f.owner.displayName,
         exact: true,
       });
     await expect(own).not.toBeChecked();
     await own.check();
     const label = names.getByRole("textbox", {
-      name: "Public name for " + f.owner.email,
+      name: "Public name for " + f.owner.displayName,
       exact: true,
     });
     await expect(label).toHaveValue("");

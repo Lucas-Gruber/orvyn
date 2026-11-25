@@ -5,7 +5,7 @@ import { formatDatabaseValue, propertyIcon } from "../utils/databaseFields";
 defineProps<{
   entries: DatabaseDraft[];
   properties: Property[];
-  people: { id: string; email: string }[];
+  people: { id: string; displayName: string }[];
   databaseId: string;
 }>();
 const emit = defineEmits<{

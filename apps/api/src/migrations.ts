@@ -10,6 +10,7 @@ import { propertyConversionMigration } from "./databases/conversion-migration.js
 import { whiteboardMigration } from "./whiteboard-migration.js";
 import { publicationMigration } from "./publications/migration.js";
 import { pageImportMigration } from "./imports/migration.js";
+import { generatedProfileName } from "@orvyn/shared";
 export const migrations = [
   {
     version: 1,
@@ -650,6 +651,40 @@ ALTER TABLE oidc_providers ADD COLUMN auth_method text CHECK(auth_method IN ('no
 CREATE UNIQUE INDEX oidc_one_active_deployment ON oidc_providers(managed_by) WHERE managed_by='deployment' AND enabled;
 CREATE TABLE deployment_configuration(name text PRIMARY KEY, fingerprint text NOT NULL, updated_at timestamptz NOT NULL DEFAULT now());
 `,
+  },
+  {
+    version: 46,
+    sql: `ALTER TABLE users ADD COLUMN display_name text NOT NULL DEFAULT 'Member';
+ALTER TABLE users ADD COLUMN display_name_source text NOT NULL DEFAULT 'generated'
+ CHECK(display_name_source IN ('generated','provider','user'));
+ALTER TABLE users ADD CONSTRAINT users_display_name_length CHECK(char_length(display_name) BETWEEN 1 AND 80);
+ALTER TABLE comment_mentions ADD COLUMN label text;
+UPDATE comment_mentions cm SET label=u.email FROM users u WHERE u.id=cm.user_id;`,
+    async after(c: PoolClient) {
+      // Upgrade existing profiles without changing email, IDs, sessions or identities.
+      let cursor: string | null = null;
+      for (;;) {
+        const rows: { id: string; email: string }[] = (
+          await c.query<{ id: string; email: string }>(
+            "SELECT id,email FROM users WHERE $1::uuid IS NULL OR id>$1 ORDER BY id LIMIT 500",
+            [cursor],
+          )
+        ).rows;
+        if (!rows.length) break;
+        await c.query(
+          `UPDATE users u SET display_name=p.name FROM jsonb_to_recordset($1::jsonb) AS p(id uuid,name text) WHERE u.id=p.id`,
+          [
+            JSON.stringify(
+              rows.map((u) => ({
+                id: u.id,
+                name: generatedProfileName(u.email),
+              })),
+            ),
+          ],
+        );
+        cursor = rows.at(-1)!.id;
+      }
+    },
   },
 ] as const;
 

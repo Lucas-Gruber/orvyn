@@ -185,7 +185,7 @@ test("activity records committed page/discussion actions without bodies, coalesc
     const prior = (await feed(f, f.owner)).data.events.find(
       (e) => e.kind === "comment.thread_created",
     );
-    assert.equal(prior.actor.email, null);
+    assert.equal(prior.actor.displayName, null);
   } finally {
     await db.end();
   }

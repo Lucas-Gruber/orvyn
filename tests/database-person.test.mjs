@@ -268,17 +268,17 @@ test("Chromium: people property creation, multi-assignment, membership filtering
     });
     await picker
       .getByLabel("Search Assignees", { exact: true })
-      .fill(owner.email);
+      .fill(owner.displayName);
     await picker
       .getByLabel("Search Assignees", { exact: true })
       .press("ArrowDown");
     await expect(
-      picker.getByRole("option", { name: owner.email, exact: true }),
+      picker.getByRole("option", { name: owner.displayName, exact: true }),
     ).toBeFocused();
     await page.keyboard.press("Space");
     await picker.getByLabel("Search Assignees", { exact: true }).fill("");
     await picker
-      .getByRole("option", { name: member.email, exact: true })
+      .getByRole("option", { name: member.displayName, exact: true })
       .click();
     await picker.getByRole("button", { name: "Done", exact: true }).click();
     await page
@@ -294,8 +294,8 @@ test("Chromium: people property creation, multi-assignment, membership filtering
       name: "Assignees",
       exact: true,
     });
-    await expect(assigned).toContainText(owner.email);
-    await expect(assigned).toContainText(member.email);
+    await expect(assigned).toContainText(owner.displayName);
+    await expect(assigned).toContainText(member.displayName);
     await page
       .getByRole("button", { name: "View settings", exact: true })
       .click();
@@ -330,7 +330,7 @@ test("Chromium: people property creation, multi-assignment, membership filtering
     });
     await expect(former).toHaveAttribute("aria-selected", "true");
     await expect(
-      picker.getByRole("option", { name: member.email, exact: true }),
+      picker.getByRole("option", { name: member.displayName, exact: true }),
     ).toHaveCount(0);
     await former.click();
     await picker.getByRole("button", { name: "Done", exact: true }).click();

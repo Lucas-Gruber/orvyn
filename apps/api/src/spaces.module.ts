@@ -129,7 +129,7 @@ class SpacesController {
       s = await spaceAccess(db, uid, id);
     return (
       await db.query(
-        "SELECT u.id,u.email FROM users u LEFT JOIN space_members m ON m.user_id=u.id AND m.space_id=$1 WHERE u.id=$2 OR m.space_id=$1 ORDER BY u.email",
+        `SELECT u.id,u.display_name AS "displayName" FROM users u LEFT JOIN space_members m ON m.user_id=u.id AND m.space_id=$1 WHERE u.id=$2 OR m.space_id=$1 ORDER BY u.display_name,u.id`,
         [s.id, s.owner_id],
       )
     ).rows;
@@ -142,7 +142,7 @@ class SpacesController {
     const s = await spaceAccess(db, uid, id, 40);
     return (
       await db.query(
-        "SELECT u.id,u.email,CASE WHEN u.id=$2 THEN 'Owner' ELSE m.role END AS role FROM users u LEFT JOIN space_members m ON m.user_id=u.id AND m.space_id=$1 WHERE u.id=$2 OR m.space_id=$1 ORDER BY u.email",
+        `SELECT u.id,u.display_name AS "displayName",CASE WHEN u.id=$2 THEN 'Owner' ELSE m.role END AS role FROM users u LEFT JOIN space_members m ON m.user_id=u.id AND m.space_id=$1 WHERE u.id=$2 OR m.space_id=$1 ORDER BY u.display_name,u.id`,
         [s.id, s.owner_id],
       )
     ).rows;

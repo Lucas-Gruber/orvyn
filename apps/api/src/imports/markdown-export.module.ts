@@ -93,14 +93,14 @@ async function prepare(actor: string, id: string, query: unknown) {
         input.includePeopleNames === "true"
           ? (
               await c.query(
-                `SELECT u.id,u.email FROM users u JOIN spaces s ON s.id=$1
+                `SELECT u.id,u.display_name FROM users u JOIN spaces s ON s.id=$1
       WHERE u.id=ANY($2::uuid[]) AND (u.id=s.owner_id OR EXISTS(SELECT 1 FROM space_members m WHERE m.space_id=s.id AND m.user_id=u.id))
         AND orvyn_page_role($3,u.id)>=10`,
                 [source.space_id, documentPeople(source.document), source.id],
               )
             ).rows
           : [],
-      names = new Map(people.map((person) => [person.id, person.email]));
+      names = new Map(people.map((person) => [person.id, person.display_name]));
     let result;
     try {
       result = exportMarkdown(source.document, {

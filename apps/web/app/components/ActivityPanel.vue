@@ -166,10 +166,10 @@ onBeforeUnmount(() => {
     <ol class="activity-events">
       <li v-for="item in items" :key="item.id">
         <span class="activity-avatar">{{
-          (item.actor.email || "Former member").slice(0, 2).toUpperCase()
+          (item.actor.displayName || "Former member").slice(0, 2).toUpperCase()
         }}</span>
         <div>
-          <strong>{{ item.actor.email || "Former member" }}</strong>
+          <strong>{{ item.actor.displayName || "Former member" }}</strong>
           <p>{{ labels[item.kind] || "Updated this item" }}</p>
           <button
             v-if="item.pageId"

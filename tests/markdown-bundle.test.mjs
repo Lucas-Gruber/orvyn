@@ -410,7 +410,7 @@ test("Markdown hierarchy ZIP exports only the reviewed readable selection, relat
     assert.ok(
       strFromU8(
         namedZip[named.data.pages.find((page) => page.id === f.first.id).path],
-      ).includes(f.owner.email),
+      ).includes(f.owner.displayName),
     );
   } finally {
     await db.end();

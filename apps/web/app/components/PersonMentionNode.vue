@@ -13,9 +13,11 @@ const props = defineProps<NodeViewProps>(),
     :data-person-id="node.attrs.userId"
     contenteditable="false"
     tabindex="-1"
-    :title="person?.email || 'Person unavailable or no longer a page reader'"
+    :title="
+      person?.displayName || 'Person unavailable or no longer a page reader'
+    "
     ><span aria-hidden="true">@</span
-    >{{ person?.email || "Person unavailable" }}</NodeViewWrapper
+    >{{ person?.displayName || "Person unavailable" }}</NodeViewWrapper
   >
 </template>
 <style scoped>

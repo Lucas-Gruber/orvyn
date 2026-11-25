@@ -681,7 +681,7 @@ function initialize() {
         provider,
         user: {
           id: props.user.id,
-          name: props.user.email,
+          name: props.user.displayName,
           color:
             getComputedStyle(window.document.documentElement)
               .getPropertyValue("--accent")

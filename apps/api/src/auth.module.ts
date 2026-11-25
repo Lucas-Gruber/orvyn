@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Delete,
   Req,
   Res,
@@ -23,6 +24,7 @@ import {
 } from "./auth/security.js";
 import { accountLink } from "./auth/mail.js";
 import { administratorSql } from "./auth/deployment-oidc.js";
+import { generatedProfileName, profileName, z } from "@orvyn/shared";
 import {
   readRegistrationPolicy,
   registrationAllowsEmail,
@@ -95,10 +97,24 @@ class AuthController {
     await rateLimit("credentials-account-peer:" + req.ip + ":" + email, 30);
     await rateLimit("credentials-account:" + email, 100);
     const digest = await passwordHash(password);
+    const displayName =
+      body?.displayName === undefined
+        ? generatedProfileName(email)
+        : profileName(body.displayName);
+    if (!displayName)
+      fail(
+        400,
+        "Use a display name of 1–80 characters, without an email address or control characters",
+      );
     return transaction(async (c) => {
       const r = await c.query(
-        "INSERT INTO users(email,password_hash) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING id",
-        [email, digest],
+        "INSERT INTO users(email,password_hash,display_name,display_name_source) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING RETURNING id",
+        [
+          email,
+          digest,
+          displayName,
+          body?.displayName === undefined ? "generated" : "user",
+        ],
       );
       if (!r.rowCount)
         return fail(409, "Account cannot be created with these details");
@@ -106,7 +122,7 @@ class AuthController {
       await accountLink(c, uid, email, "verify-email");
       await audit(c, uid, "account.registered");
       await issueSession(c, uid, res);
-      return { email, emailVerified: false };
+      return { email, displayName, emailVerified: false };
     });
   }
   @Post("login") async login(
@@ -122,7 +138,7 @@ class AuthController {
     await rateLimit("credentials-account:" + email, 100);
     return transaction(async (c) => {
       const r = await c.query(
-        "SELECT id,password_hash,email_verified FROM users WHERE email=$1 FOR NO KEY UPDATE",
+        "SELECT id,password_hash,email_verified,display_name FROM users WHERE email=$1 FOR NO KEY UPDATE",
         [email],
       );
       if (!(await validPassword(password, r.rows[0]?.password_hash))) {
@@ -131,7 +147,11 @@ class AuthController {
       }
       await issueSession(c, r.rows[0].id, res);
       await audit(c, r.rows[0].id, "account.login");
-      return { email, emailVerified: r.rows[0].email_verified };
+      return {
+        email,
+        displayName: r.rows[0].display_name,
+        emailVerified: r.rows[0].email_verified,
+      };
     }).then((result) => {
       if ("invalid" in result) return fail(401, "Invalid credentials");
       return result;
@@ -156,10 +176,33 @@ class AuthController {
   }
   @Get("me") async me(@Req() req: any) {
     const r = await db.query(
-      `SELECT u.id,u.email,u.email_verified AS "emailVerified",${administratorSql} AS "isAdmin" FROM users u WHERE u.id=$1`,
+      `SELECT u.id,u.email,u.display_name AS "displayName",u.display_name_source AS "displayNameSource",u.email_verified AS "emailVerified",${administratorSql} AS "isAdmin" FROM users u WHERE u.id=$1`,
       [await user(req)],
     );
     return r.rows[0];
+  }
+  @Patch("profile") async profile(@Req() req: any, @Body() body: unknown) {
+    mutation(req);
+    const uid = await user(req),
+      input = z
+        .object({ displayName: z.string().max(320) })
+        .strict()
+        .safeParse(body);
+    const name = input.success ? profileName(input.data.displayName) : null;
+    if (!name)
+      fail(
+        400,
+        "Use a display name of 1–80 characters, without an email address or control characters",
+      );
+    await rateLimit("profile:" + uid, 60);
+    return transaction(async (c) => {
+      await c.query(
+        "UPDATE users SET display_name=$2,display_name_source='user' WHERE id=$1",
+        [uid, name],
+      );
+      await audit(c, uid, "account.profile_updated");
+      return { displayName: name, displayNameSource: "user" };
+    });
   }
   @Get("sessions") async sessions(@Req() req: any) {
     const uid = await user(req);

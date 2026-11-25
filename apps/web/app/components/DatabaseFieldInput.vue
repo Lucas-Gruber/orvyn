@@ -5,7 +5,7 @@ const props = defineProps<{
   modelValue: unknown;
   id?: string;
   disabled?: boolean;
-  people?: { id: string; email: string }[];
+  people?: { id: string; displayName: string }[];
   databaseId?: string;
   emptyLabel?: string;
 }>();
@@ -14,7 +14,7 @@ const options = computed(() =>
     ? [
         ...(props.people || []).map((person) => ({
           id: person.id,
-          label: person.email,
+          label: person.displayName,
         })),
         ...(Array.isArray(props.modelValue) ? props.modelValue : [])
           .filter((id) => !props.people?.some((p) => p.id === id))

@@ -1,3 +1,4 @@
+import { commentBody, commentPeopleSql } from "./comment-people.js";
 import {
   Module,
   Controller,
@@ -132,15 +133,18 @@ function threadDTO(t: any, page: any, uid: string) {
     canResolve:
       page.access_rank >= 30 ||
       (page.access_rank >= 20 && t.created_by === uid),
-    preview: t.preview || "",
+    preview: commentBody(t.preview || "", t.preview_mentions || []).slice(
+      0,
+      280,
+    ),
     deletedPreview: !!t.deleted_preview,
     replyCount: Math.max(0, Number(t.message_count || 1) - 1),
-    author: { id: t.created_by, email: t.author_email || null },
+    author: { id: t.created_by, displayName: t.author_name || null },
   };
 }
 const authorName =
-  "CASE WHEN u.id=s.owner_id OR EXISTS(SELECT 1 FROM space_members m WHERE m.space_id=s.id AND m.user_id=u.id) THEN u.email ELSE NULL END";
-const threadColumns = `t.*,${authorName} AS author_email,(SELECT left(c.body,280) FROM comments c WHERE c.thread_id=t.id ORDER BY c.created_at,c.id LIMIT 1) AS preview,(SELECT c.deleted_at IS NOT NULL FROM comments c WHERE c.thread_id=t.id ORDER BY c.created_at,c.id LIMIT 1) AS deleted_preview,(SELECT count(*) FROM comments c WHERE c.thread_id=t.id) AS message_count`;
+  "CASE WHEN u.id=s.owner_id OR EXISTS(SELECT 1 FROM space_members m WHERE m.space_id=s.id AND m.user_id=u.id) THEN u.display_name ELSE NULL END";
+const threadColumns = `t.*,${authorName} AS author_name,(SELECT c.body FROM comments c WHERE c.thread_id=t.id ORDER BY c.created_at,c.id LIMIT 1) AS preview,(SELECT ${commentPeopleSql("c.id")} FROM comments c WHERE c.thread_id=t.id ORDER BY c.created_at,c.id LIMIT 1) AS preview_mentions,(SELECT c.deleted_at IS NOT NULL FROM comments c WHERE c.thread_id=t.id ORDER BY c.created_at,c.id LIMIT 1) AS deleted_preview,(SELECT count(*) FROM comments c WHERE c.thread_id=t.id) AS message_count`;
 const threadFrom =
   "FROM comment_threads t JOIN pages p ON p.id=t.page_id JOIN spaces s ON s.id=p.space_id LEFT JOIN users u ON u.id=t.created_by";
 async function detail(
@@ -160,7 +164,7 @@ async function detail(
   if (!t) fail(404, "Thread not found");
   const messages = (
     await c.query(
-      `SELECT c.*,${authorName} AS author_email,(SELECT coalesce(jsonb_agg(jsonb_build_object('id',u.id,'email',CASE WHEN (u.id=s.owner_id OR EXISTS(SELECT 1 FROM space_members m WHERE m.space_id=s.id AND m.user_id=u.id)) AND orvyn_page_role(p.id,u.id)>=10 THEN u.email ELSE NULL END)),'[]'::jsonb) FROM comment_mentions cm JOIN users u ON u.id=cm.user_id WHERE cm.comment_id=c.id) AS mentions FROM comments c JOIN comment_threads t ON t.id=c.thread_id JOIN pages p ON p.id=t.page_id JOIN spaces s ON s.id=p.space_id LEFT JOIN users u ON u.id=c.author_id WHERE c.thread_id=$1 AND ($2='' OR (c.created_at,c.id)<(SELECT a.created_at,a.id FROM comments a WHERE a.thread_id=$1 AND a.id::text=$2)) ORDER BY c.created_at DESC,c.id DESC LIMIT $3`,
+      `SELECT c.*,${authorName} AS author_name,${commentPeopleSql("c.id")} AS mentions FROM comments c JOIN comment_threads t ON t.id=c.thread_id JOIN pages p ON p.id=t.page_id JOIN spaces s ON s.id=p.space_id LEFT JOIN users u ON u.id=c.author_id WHERE c.thread_id=$1 AND ($2='' OR (c.created_at,c.id)<(SELECT a.created_at,a.id FROM comments a WHERE a.thread_id=$1 AND a.id::text=$2)) ORDER BY c.created_at DESC,c.id DESC LIMIT $3`,
       [threadId, before, limit + 1],
     )
   ).rows;
@@ -174,12 +178,15 @@ async function detail(
     messages: messages.reverse().map((m) => ({
       id: m.id,
       version: m.version,
-      mentions: m.mentions,
-      body: m.deleted_at ? null : m.body,
+      mentions: m.mentions.map((p: any) => ({
+        id: p.id,
+        displayName: p.displayName,
+      })),
+      body: m.deleted_at ? null : commentBody(m.body, m.mentions),
       createdAt: m.created_at,
       editedAt: m.edited_at,
       deleted: !!m.deleted_at,
-      author: { id: m.author_id, email: m.author_email || null },
+      author: { id: m.author_id, displayName: m.author_name || null },
       canEdit: !m.deleted_at && page.access_rank >= 20 && m.author_id === uid,
       canDelete:
         !m.deleted_at &&

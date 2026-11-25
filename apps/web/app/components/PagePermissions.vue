@@ -67,7 +67,7 @@ const roles = ["Admin", "Editor", "Commenter", "Viewer"],
     </p>
     <template v-if="visibility === 'restricted'"
       ><label v-for="m in members" :key="m.id"
-        >{{ m.email
+        >{{ m.displayName
         }}<select v-model="grants[m.id]">
           <option value="">No access</option>
           <option

@@ -104,13 +104,13 @@ onMounted(refresh);
       <ul class="members">
         <li v-for="member in members" :key="member.id">
           <div>
-            <strong>{{ member.email }}</strong>
+            <strong>{{ member.displayName }}</strong>
             <p>{{ member.role }}</p>
           </div>
           <template v-if="member.role !== 'Owner'"
             ><select
               v-if="space.role === 'Owner'"
-              :aria-label="'Role for ' + member.email"
+              :aria-label="'Role for ' + member.displayName"
               :value="member.role"
               @change="
                 run(async () => {

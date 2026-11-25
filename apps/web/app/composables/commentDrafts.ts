@@ -2,7 +2,7 @@ import type { InjectionKey } from "vue";
 import type { CommentAnchor } from "@orvyn/editor/comments";
 export interface CommentPerson {
   id: string;
-  email: string | null;
+  displayName: string | null;
 }
 export interface CommentDraftState {
   mentions?: CommentPerson[];

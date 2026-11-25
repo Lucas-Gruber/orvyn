@@ -1,3 +1,4 @@
+import { commentBody, commentPeopleSql } from "./comment-people.js";
 import {
   Module,
   Controller,
@@ -23,7 +24,7 @@ async function lockSources(c: PoolClient, uid: string) {
 }
 const visible = `n.recipient_id=$1 AND orvyn_page_role(p.id,$1)>=10 AND ((n.kind='document_mention' AND EXISTS(SELECT 1 FROM document_people dp WHERE dp.page_id=p.id AND dp.user_id=$1)) OR (n.kind<>'document_mention' AND c.id IS NOT NULL AND t.id IS NOT NULL AND c.deleted_at IS NULL AND t.deleted_at IS NULL))`;
 const source = `FROM notifications n JOIN pages p ON p.id=n.page_id LEFT JOIN comment_threads t ON t.id=n.thread_id AND t.page_id=p.id LEFT JOIN comments c ON c.id=n.comment_id AND c.thread_id=t.id JOIN spaces s ON s.id=p.space_id LEFT JOIN users u ON u.id=n.actor_id`;
-const columns = `n.*,p.title,p.space_id,CASE WHEN n.kind='document_mention' THEN p.document ELSE NULL END AS document,left(c.body,280) AS excerpt,CASE WHEN u.id=s.owner_id OR EXISTS(SELECT 1 FROM space_members m WHERE m.space_id=s.id AND m.user_id=u.id) THEN u.email ELSE NULL END AS actor_email`;
+const columns = `n.*,p.title,p.space_id,CASE WHEN n.kind='document_mention' THEN p.document ELSE NULL END AS document,c.body AS excerpt,${commentPeopleSql("c.id")} AS mentions,CASE WHEN u.id=s.owner_id OR EXISTS(SELECT 1 FROM space_members m WHERE m.space_id=s.id AND m.user_id=u.id) THEN u.display_name ELSE NULL END AS actor_name`;
 function dto(n: any) {
   return {
     id: n.id,
@@ -34,8 +35,10 @@ function dto(n: any) {
     commentId: n.comment_id,
     title: n.title,
     excerpt:
-      n.kind === "document_mention" ? documentExcerpt(n.document) : n.excerpt,
-    actor: { id: n.actor_id, email: n.actor_email || null },
+      n.kind === "document_mention"
+        ? documentExcerpt(n.document)
+        : commentBody(n.excerpt || "", n.mentions).slice(0, 280),
+    actor: { id: n.actor_id, displayName: n.actor_name || null },
     createdAt: n.created_at,
     readAt: n.read_at,
   };

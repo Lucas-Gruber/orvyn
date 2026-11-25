@@ -567,7 +567,7 @@ export function recordColumns(
       JOIN files f ON f.id::text=image.value #>> '{}' AND f.page_id=p.id AND f.state='ready' AND f.media_type IN ('image/png','image/jpeg','image/gif','image/webp') ORDER BY image.position LIMIT 1),
     (SELECT f.id FROM files f WHERE f.page_id=p.id AND f.state='ready' AND f.media_type IN ('image/png','image/jpeg','image/gif','image/webp') ORDER BY f.created_at,f.id LIMIT 1)
   ) AS preview_file_id,`;
-  return `${dependencies}${preview}${files},${relations},${formulas},p.id,p.title,p.icon,p.cover_preset,p.title_version,p.created_at,p.updated_at,p.created_by,p.last_edited_by,creator.email AS creator_email,editor.email AS editor_email,r.values,r.version,orvyn_page_role(p.id,${actor}) AS access_rank,CASE WHEN p.appearance_version=1 THEN (SELECT id FROM files WHERE page_id=p.id AND state='ready' AND media_type IN ('image/png','image/jpeg','image/gif','image/webp') ORDER BY created_at LIMIT 1) ELSE (SELECT id FROM files WHERE id=p.cover_file_id AND page_id=p.id AND state='ready' AND media_type IN ('image/png','image/jpeg','image/gif','image/webp')) END AS cover_file_id`;
+  return `${dependencies}${preview}${files},${relations},${formulas},p.id,p.title,p.icon,p.cover_preset,p.title_version,p.created_at,p.updated_at,p.created_by,p.last_edited_by,creator.display_name AS creator_name,editor.display_name AS editor_name,r.values,r.version,orvyn_page_role(p.id,${actor}) AS access_rank,CASE WHEN p.appearance_version=1 THEN (SELECT id FROM files WHERE page_id=p.id AND state='ready' AND media_type IN ('image/png','image/jpeg','image/gif','image/webp') ORDER BY created_at LIMIT 1) ELSE (SELECT id FROM files WHERE id=p.cover_file_id AND page_id=p.id AND state='ready' AND media_type IN ('image/png','image/jpeg','image/gif','image/webp')) END AS cover_file_id`;
 }
 export function recordDTO(row: any, properties: Property[]) {
   const values: Record<string, unknown> = {};
@@ -634,10 +634,10 @@ export function recordDTO(row: any, properties: Property[]) {
     createdAt: new Date(row.created_at).toISOString(),
     updatedAt: new Date(row.updated_at).toISOString(),
     createdBy: row.created_by
-      ? { id: row.created_by, email: row.creator_email }
+      ? { id: row.created_by, displayName: row.creator_name }
       : null,
     lastEditedBy: row.last_edited_by
-      ? { id: row.last_edited_by, email: row.editor_email }
+      ? { id: row.last_edited_by, displayName: row.editor_name }
       : null,
     coverFileId: row.cover_file_id || null,
     previewFileId: row.preview_file_id || null,
@@ -692,10 +692,10 @@ export async function recordSnapshotRow(
 export async function personDirectory(
   c: Pool | PoolClient,
   spaceId: string,
-): Promise<{ id: string; email: string }[]> {
+): Promise<{ id: string; displayName: string; email: string }[]> {
   return (
     await c.query(
-      "SELECT u.id,u.email FROM users u JOIN spaces s ON s.id=$1 LEFT JOIN space_members m ON m.space_id=s.id AND m.user_id=u.id WHERE u.id=s.owner_id OR m.user_id=u.id ORDER BY u.email",
+      `SELECT u.id,u.email,u.display_name AS "displayName" FROM users u JOIN spaces s ON s.id=$1 LEFT JOIN space_members m ON m.space_id=s.id AND m.user_id=u.id WHERE u.id=s.owner_id OR m.user_id=u.id ORDER BY u.display_name,u.id`,
       [spaceId],
     )
   ).rows;

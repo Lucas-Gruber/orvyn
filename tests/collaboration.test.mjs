@@ -148,7 +148,7 @@ test("Yjs: concurrent replicas, durable acknowledgement, reconnect, read-only an
     );
     assert.equal(
       a.provider.awareness.getStates().get(v.doc.clientID).user.name,
-      viewer.email,
+      viewer.displayName,
     );
     b.socket.disconnect();
     await waitFor(() => b.closed, "Disconnect should be observable");

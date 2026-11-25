@@ -49,14 +49,14 @@ test("comment mentions validate current readers, persist chosen identities and n
   const db = new Pool({ connectionString: process.env.DATABASE_URL });
   try {
     const f = await fixture(db),
-      body = `Please check this, @${f.reader.email}.`,
+      body = `Please check this, @${f.reader.displayName}.`,
       key = randomUUID(),
       created = await create(f, body, [f.reader.id, f.reader.id], key);
     assert.equal(created.response.status, 201, JSON.stringify(created.data));
     const message = created.data.messages[0],
       id = created.data.thread.id;
     assert.deepEqual(message.mentions, [
-      { id: f.reader.id, email: f.reader.email },
+      { id: f.reader.id, displayName: f.reader.displayName },
     ]);
     const initial = (await feed(f.reader)).data;
     assert.equal(initial.unread, 1);
@@ -143,14 +143,16 @@ test("comment mentions validate current readers, persist chosen identities and n
     );
     assert.equal(readded.response.status, 200);
     assert.equal((await feed(f.reader)).data.unread, 1);
-    const self = await create(f, `A note to @${f.author.email}`, [f.author.id]);
+    const self = await create(f, `A note to @${f.author.displayName}`, [
+      f.author.id,
+    ]);
     assert.equal(self.response.status, 201);
     assert.equal((await feed(f.author)).data.unread, 0);
     const response = await request(`threads/${id}/comments`, {
       method: "POST",
       cookie: f.owner.cookie,
       body: {
-        body: `Thanks, @${f.author.email}.`,
+        body: `Thanks, @${f.author.displayName}.`,
         mentions: [f.author.id],
         requestId: randomUUID(),
       },
@@ -195,8 +197,10 @@ test("notification counts, pagination and read actions use current permissions a
   try {
     const f = await fixture(db),
       path = `pages/${f.page.id}`,
-      first = await create(f, `First @${f.reader.email}`, [f.reader.id]),
-      second = await create(f, `Second @${f.reader.email}`, [f.reader.id]);
+      first = await create(f, `First @${f.reader.displayName}`, [f.reader.id]),
+      second = await create(f, `Second @${f.reader.displayName}`, [
+        f.reader.id,
+      ]);
     assert.equal(first.response.status, 201);
     assert.equal(second.response.status, 201);
     const a = (await feed(f.reader, "?limit=1")).data;
@@ -303,7 +307,7 @@ test("notification counts, pagination and read actions use current permissions a
     );
     assert.equal((await feed(f.reader)).data.unread, 0);
     assert.equal(
-      (await create(f, `Cannot notify @${f.reader.email}`, [f.reader.id]))
+      (await create(f, `Cannot notify @${f.reader.displayName}`, [f.reader.id]))
         .response.status,
       400,
     );
@@ -316,7 +320,7 @@ test("notification counts, pagination and read actions use current permissions a
       [f.space.id, f.author.id],
     );
     assert.equal(
-      (await feed(f.reader)).data.notifications[0].actor.email,
+      (await feed(f.reader)).data.notifications[0].actor.displayName,
       null,
     );
     assert.equal(
@@ -390,20 +394,20 @@ test("Chromium: @ chooser sends a mention, inbox opens the current discussion, r
     const panel = owner.getByRole("dialog", { name: "Comments", exact: true });
     await panel
       .getByLabel("New comment", { exact: true })
-      .fill("Please review @" + f.author.email.split("@")[0]);
+      .fill("Please review @" + f.author.displayName.split("@")[0]);
     await expect(
-      panel.getByRole("option", { name: f.author.email, exact: false }),
+      panel.getByRole("option", { name: f.author.displayName, exact: false }),
     ).toBeVisible();
     await panel.getByLabel("New comment", { exact: true }).press("ArrowDown");
     await panel.getByLabel("New comment", { exact: true }).press("Enter");
     await expect(panel.getByLabel("New comment", { exact: true })).toHaveValue(
-      "Please review @" + f.author.email + " ",
+      "Please review @" + f.author.displayName + " ",
     );
     await panel
       .getByRole("button", { name: "Post comment", exact: true })
       .click();
     await expect(panel.locator(".comment-body")).toHaveText(
-      "Please review @" + f.author.email,
+      "Please review @" + f.author.displayName,
     );
     await reviewer.goto(base + pageLink(f.page.id));
     await expect(

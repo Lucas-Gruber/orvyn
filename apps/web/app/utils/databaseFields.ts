@@ -25,13 +25,14 @@ export const propertyIcon = (p: Property) =>
 export function formatDatabaseValue(
   record: DatabaseRecord,
   p: Property,
-  people: { id: string; email: string }[] = [],
+  people: { id: string; displayName: string }[] = [],
 ) {
   const value = record.values[p.id];
   if (value === null || value === undefined) return "";
-  if (p.type === "CreatedBy") return record.createdBy?.email || "Former member";
+  if (p.type === "CreatedBy")
+    return record.createdBy?.displayName || "Former member";
   if (p.type === "LastEditedBy")
-    return record.lastEditedBy?.email || "Former member";
+    return record.lastEditedBy?.displayName || "Former member";
   if (
     ["Number", "Formula", "Rollup"].includes(p.type) &&
     typeof value === "number"
@@ -48,7 +49,7 @@ export function formatDatabaseValue(
           : p.type === "Files"
             ? record.files?.find((f) => f.id === id)?.filename
             : p.type === "Person"
-              ? people.find((person) => person.id === id)?.email ||
+              ? people.find((person) => person.id === id)?.displayName ||
                 "Former member"
               : p.config.options?.find((o) => o.id === id)?.label,
       )

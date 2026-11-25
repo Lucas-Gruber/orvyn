@@ -60,7 +60,7 @@ export class PublicationPeople {
     const result = await c.query(
       `
       SELECT reference.user_id AS id,max(CASE WHEN (s.owner_id=u.id OR EXISTS(SELECT 1 FROM space_members member WHERE member.space_id=s.id AND member.user_id=u.id))
-        AND orvyn_page_role(p.id,u.id)>=10 THEN u.email END) AS email
+        AND orvyn_page_role(p.id,u.id)>=10 THEN u.display_name END) AS display_name
       FROM unnest($1::uuid[],$2::uuid[]) reference(user_id,page_id)
       JOIN pages p ON p.id=reference.page_id JOIN spaces s ON s.id=p.space_id LEFT JOIN users u ON u.id=reference.user_id
       GROUP BY reference.user_id ORDER BY reference.user_id`,
@@ -68,7 +68,7 @@ export class PublicationPeople {
     );
     return result.rows.map((row) => ({
       id: row.id,
-      privateLabel: row.email || "Person no longer on this page",
+      privateLabel: row.display_name || "Person no longer on this page",
     }));
   }
 }

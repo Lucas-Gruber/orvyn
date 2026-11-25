@@ -11,6 +11,7 @@ import {
 } from "@nestjs/common";
 import { randomBytes } from "node:crypto";
 import * as client from "openid-client";
+import { generatedProfileName, oidcProfileName } from "@orvyn/shared";
 import { db, user, fail, text, hash, mutation } from "./runtime.js";
 import {
   encrypt,
@@ -330,8 +331,12 @@ class OidcController {
         )
           return fail(403, "A verified email address is required");
         const created = await c.query(
-          "INSERT INTO users(email,email_verified) VALUES($1,true) ON CONFLICT DO NOTHING RETURNING id",
-          [email.toLowerCase()],
+          "INSERT INTO users(email,email_verified,display_name,display_name_source) VALUES($1,true,$2,$3) ON CONFLICT DO NOTHING RETURNING id",
+          [
+            email.toLowerCase(),
+            oidcProfileName(claims!) || generatedProfileName(email),
+            oidcProfileName(claims!) ? "provider" : "generated",
+          ],
         );
         if (!created.rowCount)
           fail(
@@ -346,6 +351,12 @@ class OidcController {
         ]);
         await audit(c, uid, "account.oidc_provisioned");
       }
+      const displayName = oidcProfileName(claims!);
+      if (displayName)
+        await c.query(
+          "UPDATE users SET display_name=$2,display_name_source='provider' WHERE id=$1 AND display_name_source<>'user'",
+          [uid, displayName],
+        );
       await issueSession(c, uid, res, id);
       await audit(c, uid, "account.oidc_login");
     });

@@ -101,9 +101,8 @@ onBeforeUnmount(() => {
       @click="emit('select', person)"
     >
       <span class="person-avatar">{{
-        person.email.slice(0, 2).toUpperCase()
-      }}</span
-      ><span>{{ person.email }}</span>
+        person.displayName.slice(0, 2).toUpperCase()
+      }}</span><span>{{ person.displayName }}</span>
     </button>
     <div class="picker-footer">↑ ↓ Choose · Enter Insert · Esc Close</div>
   </div>

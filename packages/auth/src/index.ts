@@ -48,13 +48,14 @@ export async function authenticateCookie(
   if (!token) return null;
   const digest = sessionDigest(token);
   const r = await c.query(
-    `SELECT s.user_id,u.email FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() ${lock ? "FOR SHARE OF s" : ""}`,
+    `SELECT s.user_id,u.email,u.display_name FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() ${lock ? "FOR SHARE OF s" : ""}`,
     [digest],
   );
   return r.rowCount
     ? {
         userId: r.rows[0].user_id as string,
         email: r.rows[0].email as string,
+        displayName: r.rows[0].display_name as string,
         sessionHash: digest,
       }
     : null;

@@ -166,8 +166,8 @@ export interface DatabaseRecord {
   accessRank: number;
   createdAt: string;
   updatedAt: string;
-  createdBy: { id: string; email: string } | null;
-  lastEditedBy: { id: string; email: string } | null;
+  createdBy: import("./people.js").Person | null;
+  lastEditedBy: import("./people.js").Person | null;
   coverFileId: string | null;
   previewFileId: string | null;
   icon: string | null;
@@ -181,6 +181,12 @@ export interface DatabaseRecord {
   }[];
 }
 export { z };
+export {
+  profileName,
+  generatedProfileName,
+  oidcProfileName,
+} from "./people.js";
+export type { Person } from "./people.js";
 export {
   appearanceInput,
   coverIds,

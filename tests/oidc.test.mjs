@@ -23,6 +23,8 @@ test("OIDC verifies signed tokens, PKCE, browser binding, replay and provider re
       sub: randomUUID(),
       email: randomUUID() + "@example.test",
       email_verified: true,
+      name: "Alex Morgan",
+      preferred_username: "alex.m",
     },
     badSignature = false,
     exchanges = 0;
@@ -183,6 +185,36 @@ test("OIDC verifies signed tokens, PKCE, browser binding, replay and provider re
       (await request("auth/me", { cookie: session })).data.email,
       claims.email,
     );
+    let profile = (await request("auth/me", { cookie: session })).data;
+    assert.equal(profile.displayName, "Alex Morgan");
+    assert.equal(profile.displayNameSource, "provider");
+    const originalId = profile.id;
+    delete claims.name;
+    const usernameLogin = await complete(await start());
+    profile = (
+      await request("auth/me", {
+        cookie: sessionCookie(usernameLogin.response),
+      })
+    ).data;
+    assert.equal(profile.id, originalId);
+    assert.equal(profile.displayName, "alex.m");
+    assert.equal(
+      (
+        await request("auth/profile", {
+          method: "PATCH",
+          cookie: session,
+          body: { displayName: "Alex · Product" },
+        })
+      ).response.status,
+      200,
+    );
+    claims.name = "Provider renamed Alex";
+    const afterCustom = await complete(await start());
+    profile = (
+      await request("auth/me", { cookie: sessionCookie(afterCustom.response) })
+    ).data;
+    assert.equal(profile.displayName, "Alex · Product");
+    assert.equal(profile.displayNameSource, "user");
     assert.equal((await complete(flow)).response.status, 400);
     const repeat = await complete(await start());
     assert.equal(repeat.response.status, 303);

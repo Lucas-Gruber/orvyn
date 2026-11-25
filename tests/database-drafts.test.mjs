@@ -189,7 +189,7 @@ test("Chromium: failed drafts retain every writable cell type through refresh, b
     await row.getByRole("textbox", { name: "Date", exact: true }).press("Tab");
     for (const [name, option] of [
       ["Labels", "Design"],
-      ["Assignees", f.owner.email],
+      ["Assignees", f.owner.displayName],
       ["Documents", "brief.txt"],
     ]) {
       await row.getByRole("button", { name, exact: true }).click();
