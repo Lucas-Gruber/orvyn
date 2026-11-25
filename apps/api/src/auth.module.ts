@@ -23,10 +23,18 @@ import {
 } from "./auth/security.js";
 import { accountLink } from "./auth/mail.js";
 import { administratorSql } from "./auth/deployment-oidc.js";
+import {
+  readRegistrationPolicy,
+  registrationAllowsEmail,
+} from "./auth/registration.js";
 
 function emailInput(value: unknown) {
   const email = text(value, 254).toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail(400, "Invalid email");
+  if (
+    /[\u0000-\u001f\u007f]/u.test(email) ||
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+  )
+    fail(400, "Invalid email");
   return email;
 }
 async function passwordHash(password: string) {
@@ -64,15 +72,26 @@ async function consumeToken(c: PoolClient, token: string, purpose: string) {
 }
 @Controller("api/v1/auth")
 class AuthController {
+  @Get("options") options() {
+    return { registration: readRegistrationPolicy() };
+  }
   @Post("register") async register(
     @Req() req: any,
     @Res({ passthrough: true }) res: any,
     @Body() body: any,
   ) {
     mutation(req);
+    const registration = readRegistrationPolicy();
+    if (!registration.enabled)
+      fail(
+        403,
+        "Account creation is disabled. Sign in with an existing account or contact your administrator.",
+      );
     await rateLimit("credentials-peer:" + req.ip, 500);
     const email = emailInput(body?.email),
       password = passwordInput(body?.password);
+    if (!registrationAllowsEmail(registration, email))
+      fail(403, "New accounts must use an approved email domain.");
     await rateLimit("credentials-account-peer:" + req.ip + ":" + email, 30);
     await rateLimit("credentials-account:" + email, 100);
     const digest = await passwordHash(password);

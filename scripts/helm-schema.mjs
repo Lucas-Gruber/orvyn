@@ -316,6 +316,16 @@ Object.assign(property("smtp.from"), {
   minLength: 3,
   pattern: "^[^\\r\\n]+@[^\\r\\n]+$",
 });
+Object.assign(property("auth.registration.allowedEmailDomains"), {
+  maxItems: 20,
+  uniqueItems: true,
+  items: {
+    type: "string",
+    maxLength: 253,
+    pattern:
+      "^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$",
+  },
+});
 Object.assign(property("backup.schedule"), {
   pattern: "^([0-9*/,-]+[ \\t]+){4}[0-9*/,-]+$",
   description: "Five numeric cron fields, interpreted in backup.timeZone.",

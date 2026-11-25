@@ -138,6 +138,7 @@ try {
       ? args
       : [
           "tests/accounts.test.mjs",
+          "tests/registration-policy.test.mjs",
           "tests/browser.test.mjs",
           "tests/migrations.test.mjs",
           "tests/oidc.test.mjs",

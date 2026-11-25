@@ -2,7 +2,26 @@
 
 Local accounts use scrypt passwords and random HttpOnly/SameSite=Strict cookie sessions. Password whitespace is significant. Email verification and reset tokens are 256-bit random values, valid for 30 minutes, hashed in PostgreSQL and consumed once. Resetting a password revokes all sessions. User locks serialize login, token issuance and consumption to avoid a password-reset race creating a session with an old password.
 
-Registration currently allows immediate access to an unverified account's private workspace. Verified email is required for administrator bootstrap and OIDC automatic provisioning. Domain/organization invitation restrictions are not implemented yet.
+Local self-registration is configurable. By default, new local accounts can immediately use their unverified private workspace. Verified email is required for administrator bootstrap and OIDC automatic provisioning. Organization-specific invitation policies remain outstanding.
+
+## Local registration policy
+
+The 0.3.0 development source adds two deployment settings:
+
+| Environment variable                       | Default | Behavior                                                                                                                                              |
+| ------------------------------------------ | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ORVYN_REGISTRATION_ENABLED`               | `true`  | Exact `true` or `false`. Disabling rejects local `POST /auth/register` with 403 before password hashing, account creation, email or session issuance. |
+| `ORVYN_REGISTRATION_ALLOWED_EMAIL_DOMAINS` | empty   | Optional comma-separated list of at most 20 exact DNS domains for new local accounts. Empty permits any otherwise valid email.                        |
+
+Domains are case-insensitive and canonicalized through IDNA. A configured `company.example` permits `person@company.example`, but not `person@sub.company.example` or `person@company.example.evil.test`. Wildcards, URLs, malformed labels and empty entries are rejected. Unicode domains are supported in environment configuration; Helm/Rancher values use their ASCII/Punycode spelling. Invalid settings stop API startup with a value-free configuration error. Apply the same policy to all API replicas and wait for the configuration rollout to complete.
+
+Existing local accounts can still sign in and recover their passwords regardless of their email domain. Existing sessions are not revoked. **OIDC automatic provisioning remains a separate provider setting**; verified identities can be provisioned even when local self-registration is disabled. This does not add invitation-only signup, restrict team invitations or implement OIDC group mappings.
+
+Before disabling local account creation, establish and test an administrator account or a deployment-managed OIDC provider with the intended provisioning/bootstrap settings. Disabling signup on an empty instance with no usable identity provider does not create a recovery administrator automatically.
+
+`GET /api/v1/auth/options` is intentionally public and uncached. It returns only `{registration: {enabled, allowedEmailDomains}}`, so the login screen can show the rule before signup. The domain list is therefore public configuration. If loading it fails, the UI hides account creation, keeps existing sign-in available and offers a retry; the API remains authoritative. A domain restriction is checked again on direct registration requests. Authentication tokens, passwords, issuer secrets and internal endpoints are never included in that response.
+
+Helm values are `auth.registration.enabled` and `auth.registration.allowedEmailDomains`; Rancher places them under **Authentication**. Only API pods receive these variables, and policy changes update their rollout checksum. The published 0.2.0 images/chart do not include these controls; use matching development-source builds until a new release is published.
 
 The UI exposes email confirmation, password recovery, active sessions, individual revocation and logout of all sessions. Email links carry tokens in the URL fragment, which the application removes before submitting the token in a JSON body; reverse-proxy URL logs do not contain those tokens.
 

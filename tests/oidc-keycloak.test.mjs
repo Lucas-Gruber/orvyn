@@ -154,6 +154,19 @@ test(
         viewport: { width: 1440, height: 1000 },
       });
       await page.goto(base);
+      if (process.env.ORVYN_REGISTRATION_ENABLED === "false") {
+        await expect(
+          page.getByRole("button", { name: "Create account", exact: true }),
+        ).toHaveCount(0);
+        await expect(
+          page.getByText(/Contact your administrator if you need access/),
+        ).toBeVisible();
+        await mkdir(".local/ui-review", { recursive: true });
+        await page.screenshot({
+          path: ".local/ui-review/registration-sso-only.png",
+          fullPage: true,
+        });
+      }
       await page
         .getByRole("button", {
           name: "Continue with Deployment Keycloak",

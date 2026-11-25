@@ -68,6 +68,8 @@ jobs:
           pnpm typecheck
       - name: Test release tools
         run: pnpm test:release
+      - name: Verify OIDC provisioning with local registration disabled
+        run: ORVYN_REGISTRATION_ENABLED=false ORVYN_REGISTRATION_ALLOWED_EMAIL_DOMAINS=company.example node --env-file=.env scripts/test.mjs tests/oidc-keycloak.test.mjs
       - name: Exercise filesystem uploads, copies, publications and exports
         run: ORVYN_TEST_STORAGE_DRIVER=local node --env-file=.env scripts/test.mjs tests/files.test.mjs tests/database-templates.test.mjs tests/publications.test.mjs tests/markdown-bundle.test.mjs
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4, node24

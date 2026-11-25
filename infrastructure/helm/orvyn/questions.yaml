@@ -74,6 +74,23 @@ questions:
     default: ""
     group: Advanced
     show_if: global.showAdvanced=true
+  - variable: auth.registration.enabled
+    label: Allow local account creation
+    type: boolean
+    default: true
+    group: Authentication
+    description: Controls local self-registration only. Existing password
+      sign-in/recovery remains available; OIDC provisioning is controlled
+      separately by the provider. Configure and test administrator access before
+      disabling.
+  - variable: auth.registration.allowedEmailDomains
+    label: Allowed local registration email domains
+    type: array[string]
+    default: []
+    group: Authentication
+    description: Optional exact DNS domains, e.g. company.example. Use
+      ASCII/Punycode; no wildcards or implicit subdomains. This does not
+      restrict existing sign-in or OIDC provisioning.
   - variable: web.replicaCount
     label: Web / replica Count
     type: int

@@ -4,6 +4,10 @@ import { Module } from "@nestjs/common";
 import { migrate, db } from "./runtime.js";
 import { encryptionKey } from "./auth/security.js";
 import {
+  readRegistrationPolicy,
+  RegistrationConfigurationError,
+} from "./auth/registration.js";
+import {
   initializeDeploymentOidc,
   DeploymentConfigurationError,
 } from "./auth/deployment-oidc.js";
@@ -52,6 +56,7 @@ import { WhiteboardsModule } from "./whiteboards.module.js";
 })
 class App {}
 async function main() {
+  readRegistrationPolicy();
   encryptionKey();
   await migrate(db);
   await initializeDeploymentOidc(db);
@@ -83,7 +88,8 @@ async function main() {
 }
 main().catch((error) => {
   console.error(
-    error instanceof DeploymentConfigurationError
+    error instanceof DeploymentConfigurationError ||
+      error instanceof RegistrationConfigurationError
       ? error.message
       : "API startup failed; verify database, storage and deployment configuration",
   );

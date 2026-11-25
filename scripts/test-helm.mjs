@@ -83,6 +83,16 @@ try {
   }
   const cases = [
     ["all-in-one", {}, "all-in-one"],
+    [
+      "closed-registration",
+      { auth: { registration: { enabled: false } } },
+      "all-in-one",
+    ],
+    [
+      "restricted-registration",
+      { auth: { registration: { allowedEmailDomains: ["company.example"] } } },
+      "all-in-one",
+    ],
     ["database-backup", { backup: { enabled: true } }, "all-in-one"],
     ["local-database-backup", { backup: { enabled: true } }, "local-storage"],
     ["gitops-database-backup", { backup: { enabled: true } }, "gitops"],
@@ -306,6 +316,39 @@ try {
     }
     const api = deployments.find((d) => d.metadata.name.endsWith("-api")).spec
       .template.spec.containers[0];
+    assert.equal(
+      api.env.find((e) => e.name === "ORVYN_REGISTRATION_ENABLED").value,
+      String(overlay.auth?.registration?.enabled ?? true),
+    );
+    assert.equal(
+      api.env.find((e) => e.name === "ORVYN_REGISTRATION_ALLOWED_EMAIL_DOMAINS")
+        .value,
+      (overlay.auth?.registration?.allowedEmailDomains || []).join(","),
+    );
+    if (name === "closed-registration" || name === "restricted-registration") {
+      for (const component of ["api", "web", "worker", "collaboration"]) {
+        const checksum = deployments.find((d) =>
+          d.metadata.name.endsWith("-" + component),
+        ).spec.template.metadata.annotations["checksum/config"];
+        const previous = internal.find(
+          (d) =>
+            d.kind === "Deployment" &&
+            d.metadata.name.endsWith("-" + component),
+        ).spec.template.metadata.annotations["checksum/config"];
+        if (component === "api")
+          assert.notEqual(
+            checksum,
+            previous,
+            "Registration policy changes must roll API replicas",
+          );
+        else
+          assert.equal(
+            checksum,
+            previous,
+            "Registration changes do not roll unrelated services",
+          );
+      }
+    }
     assert.ok(!api.env.some((e) => e.name === "ORVYN_OIDC_CLIENT_SECRET"));
     const web = deployments.find((d) => d.metadata.name.endsWith("-web")).spec
       .template.spec.containers[0];
@@ -437,6 +480,47 @@ try {
     );
   }
   const invalid = [
+    [
+      "wildcard registration domain",
+      {
+        smtp: { existingSecret: "mail" },
+        auth: { registration: { allowedEmailDomains: ["*.company.example"] } },
+      },
+    ],
+    [
+      "URL registration domain",
+      {
+        smtp: { existingSecret: "mail" },
+        auth: {
+          registration: { allowedEmailDomains: ["https://company.example"] },
+        },
+      },
+    ],
+    [
+      "duplicate registration domains",
+      {
+        smtp: { existingSecret: "mail" },
+        auth: {
+          registration: {
+            allowedEmailDomains: ["company.example", "company.example"],
+          },
+        },
+      },
+    ],
+    [
+      "too many registration domains",
+      {
+        smtp: { existingSecret: "mail" },
+        auth: {
+          registration: {
+            allowedEmailDomains: Array.from(
+              { length: 21 },
+              (_, i) => `company${i}.example`,
+            ),
+          },
+        },
+      },
+    ],
     [
       "ephemeral backup storage",
       {

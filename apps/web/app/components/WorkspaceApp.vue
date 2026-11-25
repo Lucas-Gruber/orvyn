@@ -26,6 +26,8 @@ const booting = ref(true),
   signedIn = ref(false),
   me = ref<any>(),
   providers = ref<any[]>([]),
+  registration = ref({ enabled: false, allowedEmailDomains: [] as string[] }),
+  registrationOptionsAvailable = ref(false),
   view = ref("workspace"),
   spaces = ref<any[]>([]),
   space = ref<any>(),
@@ -447,8 +449,34 @@ watch(
 async function refreshMe() {
   me.value = await api("auth/me");
 }
+async function loadRegistrationOptions() {
+  try {
+    const options = (await api("auth/options")).registration;
+    if (
+      typeof options?.enabled !== "boolean" ||
+      !Array.isArray(options.allowedEmailDomains) ||
+      options.allowedEmailDomains.some(
+        (domain: unknown) => typeof domain !== "string",
+      )
+    )
+      throw Error("Invalid account options");
+    registration.value = options;
+    registrationOptionsAvailable.value = true;
+  } catch {
+    registrationOptionsAvailable.value = false;
+    registration.value = { enabled: false, allowedEmailDomains: [] };
+  }
+}
 async function login(action: string) {
   if (busy.value || !authForm.value?.reportValidity()) return;
+  if (
+    action === "register" &&
+    (!registrationOptionsAvailable.value || !registration.value.enabled)
+  ) {
+    error.value =
+      "Account creation is unavailable. Sign in with an existing account or contact your administrator.";
+    return;
+  }
   const requestedPage = String(route.query.page || ""),
     requestedHeading = headingFromHash(route.hash),
     requestedPeek = { ...route.query };
@@ -1071,6 +1099,7 @@ onMounted(async () => {
     api("auth/me"),
     api("spaces"),
     api("oidc/providers"),
+    loadRegistrationOptions(),
   ]);
   if (result[2].status === "fulfilled") providers.value = result[2].value;
   if (result[0].status === "fulfilled" && result[1].status === "fulfilled") {
@@ -1260,6 +1289,7 @@ onBeforeUnmount(() => {
                   :size="16"
                 />Sign in</button
               ><button
+                v-if="registrationOptionsAvailable && registration.enabled"
                 type="button"
                 :disabled="busy"
                 @click="login('register')"
@@ -1268,6 +1298,46 @@ onBeforeUnmount(() => {
               </button>
             </div>
           </form>
+          <div
+            v-if="!registrationOptionsAvailable"
+            class="auth-registration-note"
+            role="status"
+          >
+            <AppIcon name="info" :size="16" />
+            <div>
+              <p>
+                Account creation options could not be loaded. You can still sign
+                in.
+              </p>
+              <button
+                class="ghost"
+                :disabled="busy"
+                @click="run(loadRegistrationOptions)"
+              >
+                Try again
+              </button>
+            </div>
+          </div>
+          <div v-else-if="!registration.enabled" class="auth-registration-note">
+            <AppIcon name="shield" :size="16" />
+            <p>
+              Sign in with an existing account.
+              <template v-if="providers.length"
+                >You can also use your organization’s sign-in below.</template
+              >
+              Contact your administrator if you need access.
+            </p>
+          </div>
+          <div
+            v-else-if="registration.allowedEmailDomains.length"
+            class="auth-registration-note"
+          >
+            <AppIcon name="info" :size="16" />
+            <p>
+              New accounts require an email address at
+              {{ registration.allowedEmailDomains.join(", ") }}.
+            </p>
+          </div>
           <button
             class="ghost auth-forgot"
             @click="

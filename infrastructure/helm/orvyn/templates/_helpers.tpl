@@ -187,6 +187,10 @@ valueFrom:
       value: "3001"
     - name: MAX_UPLOAD_BYTES
       value: {{ $root.Values.api.maxUploadBytes | quote }}
+    - name: ORVYN_REGISTRATION_ENABLED
+      value: {{ $root.Values.auth.registration.enabled | quote }}
+    - name: ORVYN_REGISTRATION_ALLOWED_EMAIL_DOMAINS
+      value: {{ join "," $root.Values.auth.registration.allowedEmailDomains | quote }}
     - name: ORVYN_OIDC_BOOTSTRAP_MODE
       value: external
     {{- if $root.Values.sso.oidc.ca.existingSecret }}

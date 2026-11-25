@@ -10,7 +10,7 @@
 {{- else }}
 {{- $_ := set $config "storage" $.Values.storage }}
 {{- $_ := set $config "crypto" (list $.Values.global.encryptionKey $.Values.global.existingEncryptionSecret $.Values.global.encryptionSecretKey) }}
-{{- if eq $component "worker" }}{{- $_ := set $config "smtp" $.Values.smtp }}{{- else }}{{- $_ := set $config "oidcCa" $.Values.sso.oidc.ca }}{{- end }}
+{{- if eq $component "worker" }}{{- $_ := set $config "smtp" $.Values.smtp }}{{- else }}{{- $_ := set $config "oidcCa" $.Values.sso.oidc.ca }}{{- $_ := set $config "auth" $.Values.auth }}{{- end }}
 {{- end }}
 {{- end }}
 {{- if not (and (eq $component "worker") (eq (include "orvyn.ephemeralLocal" $) "true")) }}

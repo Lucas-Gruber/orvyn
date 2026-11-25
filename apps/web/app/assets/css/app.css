@@ -1544,6 +1544,32 @@ dialog.link-database-dialog::backdrop {
   color: var(--muted);
   font-size: 0.78rem;
 }
+.auth-registration-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  background: var(--surface);
+  font-size: 0.76rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.auth-registration-note > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.auth-registration-note p {
+  margin: 0;
+}
+.auth-registration-note button {
+  margin-top: 6px;
+  padding: 2px 0;
+  font-size: inherit;
+}
 .auth-footnote {
   font-size: 0.71rem;
   color: var(--faint);

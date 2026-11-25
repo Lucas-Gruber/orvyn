@@ -422,6 +422,10 @@ try {
     "--set",
     "api.replicaCount=2",
     "--set",
+    "auth.registration.enabled=false",
+    "--set",
+    "auth.registration.allowedEmailDomains[0]=company.example",
+    "--set",
     "sso.oidc.enabled=true",
     "--set",
     "sso.oidc.issuer=https://login.example.test",
@@ -444,6 +448,17 @@ try {
   if (fingerprint(JSON.stringify(Object.entries(after).sort())) !== secretHash)
     throw Error("Generated secrets changed on upgrade");
   await smoke("s3", state);
+  const registration = await kubectl([
+    "-n",
+    namespace,
+    "exec",
+    "deployment/s3-orvyn-web",
+    "--",
+    "node",
+    "-e",
+    "(async()=>{const options=await(await fetch('http://127.0.0.1:3000/api/v1/auth/options')).json();if(options.registration.enabled!==false)process.exit(1);const response=await fetch('http://127.0.0.1:3000/api/v1/auth/register',{method:'POST',headers:{Origin:'https://orvyn.example.test','Content-Type':'application/json'},body:JSON.stringify({email:crypto.randomUUID()+'@company.example',password:crypto.randomUUID()})});if(response.status!==403)process.exit(1);console.log('Local registration disabled; existing access preserved')})()",
+  ]);
+  console.log("PASS Kubernetes: " + registration.trim());
   const providers = JSON.parse(
     await kubectl([
       "-n",

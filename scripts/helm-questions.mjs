@@ -18,6 +18,14 @@ const enums = {
   ],
 };
 const info = {
+  "auth.registration.enabled": [
+    "Allow local account creation",
+    "Controls local self-registration only. Existing password sign-in/recovery remains available; OIDC provisioning is controlled separately by the provider. Configure and test administrator access before disabling.",
+  ],
+  "auth.registration.allowedEmailDomains": [
+    "Allowed local registration email domains",
+    "Optional exact DNS domains, e.g. company.example. Use ASCII/Punycode; no wildcards or implicit subdomains. This does not restrict existing sign-in or OIDC provisioning.",
+  ],
   "backup.enabled": [
     "Schedule PostgreSQL backups",
     "Creates verified custom-format database snapshots on a dedicated retained PVC. Attachments, encryption keys and offsite copies require separate coordinated protection.",
@@ -158,7 +166,9 @@ function walk(value, path = []) {
     "podAnnotations",
     "annotations",
   ].includes(name);
-  const array = name === "imagePullSecrets" || name === "drop";
+  const array = ["imagePullSecrets", "drop", "allowedEmailDomains"].includes(
+    name,
+  );
   if (value && typeof value === "object" && !raw && !map && !array) {
     for (const [k, v] of Object.entries(value)) walk(v, [...path, k]);
     return;
@@ -166,21 +176,23 @@ function walk(value, path = []) {
   let group =
     path[0] === "global"
       ? "General"
-      : path[0] === "postgresql" || path[0] === "externalPostgresql"
-        ? "PostgreSQL"
-        : path[0] === "valkey" || path[0] === "externalValkey"
-          ? "Valkey"
-          : path[0] === "storage"
-            ? "Storage"
-            : path[0] === "smtp"
-              ? "SMTP"
-              : path[0] === "sso"
-                ? "SSO (OIDC)"
-                : path[0] === "backup"
-                  ? "Database backups"
-                  : path[0] === "ingress"
-                    ? "Networking"
-                    : "Advanced";
+      : path[0] === "auth"
+        ? "Authentication"
+        : path[0] === "postgresql" || path[0] === "externalPostgresql"
+          ? "PostgreSQL"
+          : path[0] === "valkey" || path[0] === "externalValkey"
+            ? "Valkey"
+            : path[0] === "storage"
+              ? "Storage"
+              : path[0] === "smtp"
+                ? "SMTP"
+                : path[0] === "sso"
+                  ? "SSO (OIDC)"
+                  : path[0] === "backup"
+                    ? "Database backups"
+                    : path[0] === "ingress"
+                      ? "Networking"
+                      : "Advanced";
   if (name === "replicaCount") group = "Scaling";
   if (path.includes("resources")) group = "Resources";
   let type =

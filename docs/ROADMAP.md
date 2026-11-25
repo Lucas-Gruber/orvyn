@@ -57,6 +57,7 @@ Work through these areas in order, preserving working features and committing/pu
    - [x] Public people/creator/editor fields and mentions with explicit public names, root-scoped opaque IDs and alias-only formula/rollup dependencies.
    - [x] Revocable, expiring and optional password-protected links with current source checks and permanent revocation on source policy changes.
 7. Localization, branding and administration
+   - [x] Deployment-controlled local self-registration, exact email-domain restrictions, login policy feedback and independent OIDC provisioning (development source).
    - [ ] Runtime German/English/system language and synchronized preferences.
    - [ ] Instance/organization/space appearance, complete administration.
    - [x] Real OIDC provider validation with a pinned Keycloak instance, including deployment-managed setup and administrator subject checks.
