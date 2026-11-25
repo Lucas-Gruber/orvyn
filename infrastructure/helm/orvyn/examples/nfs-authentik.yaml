@@ -1,0 +1,33 @@
+# Numeric ownership/ACLs must be provided by the NFS server if root squashing
+# rejects chown. This chart does not change TrueNAS or cluster security policy.
+global:
+  origin: https://orvyn.example.org
+smtp:
+  existingSecret: orvyn-mail
+  secretKey: smtp-url
+  from: Orvyn <orvyn@example.org>
+storage:
+  driver: local
+  local:
+    persistence:
+      storageClass: nfs-rwx
+      accessMode: ReadWriteMany
+volumePermissions:
+  strategy: auto
+postgresql:
+  persistence:
+    storageClass: nfs-rwx
+valkey:
+  persistence:
+    storageClass: nfs-rwx
+sso:
+  oidc:
+    enabled: true
+    name: Company SSO
+    issuer: https://auth.example.org/application/o/orvyn/
+    clientId: orvyn
+    existingSecret: orvyn-oidc
+    secretKey: client-secret
+    autoProvision: false
+# Enable autoProvision explicitly to allow first-time SSO users. It does not
+# automatically link an existing password account merely by matching its email.

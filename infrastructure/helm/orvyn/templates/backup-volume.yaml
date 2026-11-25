@@ -1,7 +1,8 @@
 {{- if .Values.backup.enabled }}
 {{- $backup := .Values.backup }}
 {{- $scripts := printf "%s%s" (.Files.Get "files/postgresql-common.sh") (.Files.Get "files/prepare-backup-volume.sh") }}
-{{- $revision := toJson (dict "backup" $backup "registry" .Values.global.imageRegistry "pullSecrets" .Values.global.imagePullSecrets "serviceAccount" .Values.serviceAccount "version" .Chart.AppVersion "scripts" $scripts) | sha256sum | trunc 10 }}
+{{- $permissions := ne .Values.volumePermissions.strategy "none" }}
+{{- $revision := toJson (dict "backup" $backup "registry" .Values.global.imageRegistry "pullSecrets" .Values.global.imagePullSecrets "serviceAccount" .Values.serviceAccount "version" .Chart.AppVersion "scripts" $scripts "volumePermissions" .Values.volumePermissions "permissionImage" .Values.api.image "logging" .Values.logging) | sha256sum | trunc 10 }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -37,6 +38,10 @@ spec:
       {{- with .Values.global.imagePullSecrets }}
       imagePullSecrets: {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- if $permissions }}
+      initContainers:
+        {{- include "orvyn.permissionInit" (dict "root" . "settings" $backup "component" "backup-init" "role" "backups" "volume" "backups" "path" "/backups" "privateRoot" (printf "%s/postgresql" (include "orvyn.fullname" .))) | nindent 8 }}
+      {{- end }}
       containers:
         - name: backup-volume
           image: {{ include "orvyn.image" (dict "root" . "image" $backup.image) | quote }}
@@ -54,6 +59,9 @@ spec:
             - name: backups
               mountPath: /backups
       volumes:
+        {{- if $permissions }}
+        {{- include "orvyn.permissionState" . | nindent 8 }}
+        {{- end }}
         - name: scripts
           configMap:
             name: {{ include "orvyn.fullname" . | trunc 42 | trimSuffix "-" }}-db-backup

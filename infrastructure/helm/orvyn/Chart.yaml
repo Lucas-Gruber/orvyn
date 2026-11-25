@@ -1,6 +1,6 @@
 apiVersion: v2
 name: orvyn
-description: Self-hosted knowledge management and collaboration platform
+description: Collaborative knowledge platform with private storage, OIDC and deployment reconciliation
 type: application
 version: "0.3.0-dev.0"
 appVersion: "0.3.0-dev.0"

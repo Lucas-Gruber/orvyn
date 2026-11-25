@@ -36,7 +36,7 @@ async function run() {
   await log.stage("database", async () => {
     await db.query("SELECT 1");
   });
-  await log.stage("storage", storageHealth);
+  await log.stage("storage", () => storageHealth("worker"));
   await log.stage("smtp_configuration", async () => {
     let url: URL;
     try {

@@ -83,6 +83,47 @@ try {
   }
   const cases = [
     ["all-in-one", {}, "all-in-one"],
+    ["nfs-authentik", {}, "nfs-authentik"],
+    [
+      "permissions-fsgroup",
+      { volumePermissions: { strategy: "fsGroup" }, backup: { enabled: true } },
+      "all-in-one",
+    ],
+    [
+      "permissions-none",
+      { volumePermissions: { strategy: "none" }, backup: { enabled: true } },
+      "local-storage",
+    ],
+    [
+      "permissions-init-existing-claims",
+      {
+        volumePermissions: { strategy: "initContainer", recursive: "always" },
+        postgresql: {
+          securityContext: { runAsUser: 2222, runAsGroup: 2223 },
+          podSecurityContext: { runAsUser: 888, fsGroup: 3333 },
+          persistence: { existingClaim: "existing-pg" },
+        },
+        storage: {
+          local: {
+            path: "/var/lib/orvyn-files",
+            persistence: {
+              existingClaim: "existing-files",
+              accessMode: "ReadWriteMany",
+              storageClass: "nfs-rwx",
+            },
+          },
+        },
+        api: {
+          securityContext: { runAsUser: 2000 },
+          podSecurityContext: { fsGroup: 2345 },
+        },
+        worker: {
+          securityContext: { runAsUser: 2000 },
+          podSecurityContext: { fsGroup: 2345 },
+        },
+      },
+      "local-storage",
+    ],
     [
       "closed-registration",
       { auth: { registration: { enabled: false } } },
@@ -357,6 +398,93 @@ try {
           c.image.includes("@sha256:") || c.image.endsWith(":" + version),
         );
       }
+      const strategy = overlay.volumePermissions?.strategy ?? "auto";
+      const helpers = (pod.initContainers || []).filter((c) =>
+        c.name.startsWith("volume-"),
+      );
+      const persistentMounts =
+        pod.volumes?.filter((v) => v.persistentVolumeClaim) || [];
+      const phases =
+        strategy === "none"
+          ? []
+          : strategy === "fsGroup"
+            ? ["verify"]
+            : strategy === "initContainer"
+              ? ["repair", "verify"]
+              : ["probe", "repair", "verify"];
+      assert.equal(
+        helpers.length,
+        persistentMounts.length * phases.length,
+        name + ": all persistent mounts use the permission strategy",
+      );
+      for (const volume of persistentMounts) {
+        const checks = helpers.filter((c) =>
+          c.name.startsWith("volume-" + volume.name + "-"),
+        );
+        assert.deepEqual(
+          checks.map((c) => c.args[0]),
+          phases,
+        );
+        const app = pod.containers[0];
+        const fallback = /postgresql|valkey|backup/.test(app.name) ? 999 : 1000;
+        const uid =
+          app.securityContext.runAsUser ??
+          pod.securityContext.runAsUser ??
+          fallback;
+        const gid =
+          app.securityContext.runAsGroup ??
+          pod.securityContext.runAsGroup ??
+          fallback;
+        for (const check of checks) {
+          const arg = (key) => check.args[check.args.indexOf(key) + 1];
+          assert.equal(arg("--uid"), String(uid));
+          assert.equal(arg("--gid"), String(gid));
+          assert.equal(
+            check.volumeMounts[0].mountPath,
+            app.volumeMounts.find((m) => m.name === volume.name).mountPath,
+          );
+          assert.deepEqual(
+            check.env.map((e) => e.name),
+            ["ORVYN_LOG_LEVEL"],
+            "Permission helpers receive no credentials",
+          );
+          assert.equal(check.securityContext.readOnlyRootFilesystem, true);
+          assert.deepEqual(check.securityContext.capabilities.drop, ["ALL"]);
+          if (check.args[0] === "repair") {
+            assert.equal(check.securityContext.runAsUser, 0);
+            assert.deepEqual(check.securityContext.capabilities.add, [
+              "CHOWN",
+              "FOWNER",
+              "DAC_OVERRIDE",
+            ]);
+          } else {
+            assert.equal(check.securityContext.runAsUser, uid);
+            assert.equal(check.securityContext.runAsGroup, gid);
+            assert.equal(check.securityContext.runAsNonRoot, true);
+            assert.deepEqual(check.securityContext.capabilities.add, []);
+          }
+          if (pod.securityContext.fsGroup)
+            assert.equal(
+              arg("--fs-group"),
+              String(pod.securityContext.fsGroup),
+            );
+        }
+      }
+      if (helpers.length) {
+        assert.ok(
+          pod.volumes.find((v) => v.name === "volume-permissions-state")
+            .emptyDir,
+        );
+        const otherInit = (pod.initContainers || []).filter(
+          (c) => !helpers.includes(c),
+        );
+        for (const c of otherInit)
+          assert.ok(
+            pod.initContainers.indexOf(c) >
+              pod.initContainers.indexOf(helpers.at(-1)),
+            "Permission preparation precedes schema/S3 configuration init",
+          );
+      }
     }
     const api = deployments.find((d) => d.metadata.name.endsWith("-api")).spec
       .template.spec.containers[0];
@@ -592,6 +720,44 @@ try {
     );
   }
   const invalid = [
+    [
+      "unknown permission strategy",
+      {
+        smtp: { existingSecret: "mail" },
+        volumePermissions: { strategy: "guess" },
+      },
+    ],
+    [
+      "unknown permission recursion",
+      {
+        smtp: { existingSecret: "mail" },
+        volumePermissions: { recursive: "chmod777" },
+      },
+    ],
+    [
+      "excess permission capability",
+      {
+        smtp: { existingSecret: "mail" },
+        volumePermissions: {
+          securityContext: { capabilities: { add: ["SYS_ADMIN"] } },
+        },
+      },
+    ],
+    [
+      "root regular API",
+      {
+        smtp: { existingSecret: "mail" },
+        api: { securityContext: { runAsUser: 0 } },
+      },
+    ],
+    [
+      "mismatched shared attachment group",
+      {
+        smtp: { existingSecret: "mail" },
+        storage: { driver: "local" },
+        worker: { podSecurityContext: { fsGroup: 2000 } },
+      },
+    ],
     [
       "zero configuration interval",
       {

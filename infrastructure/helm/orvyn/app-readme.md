@@ -26,3 +26,12 @@ Deployment with automatic retries and readiness after successful application.
 API/storage startup failures no longer require a second Helm upgrade to apply
 SSO settings. Reconciliation/retry intervals are available under Configuration;
 matching development images are required.
+
+The **Volume permissions** section supports auto, fsGroup, explicit initContainer
+or operator-managed preparation for every persistent data mount. Auto probes as
+the service UID and repairs only when necessary; it requires admission of a
+limited root init. Use fsGroup in Restricted namespaces with correctly provisioned
+storage. Root-squashed NFS may require server-side numeric ownership/ACLs; failed
+repair is diagnosed and never bypasses the final non-root write check. Existing
+claims and data are preserved. The chart README documents advanced controls,
+the TrueNAS/Democratic CSI case and the limits of available backend testing.

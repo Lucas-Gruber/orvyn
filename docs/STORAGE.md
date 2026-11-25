@@ -13,3 +13,13 @@ Back up the database, attachment objects and persistent encryption key together.
 Changing the driver or path does **not** migrate data. For a controlled migration, put the instance into maintenance, stop all API/worker writers, take and verify backups, and copy every `files.object_key` still referenced by the database (including pending/trash/publication/template references) through the source backend's `get()` and destination backend's `put()`. Verify object sizes and SHA-256 digests, retain the database's original keys, then switch API and worker together and test authenticated downloads, templates, exports and cleanup. Keep the original store and backups until rollback is no longer needed. There is no automatic migration command; do not rename hashed local files into S3 keys. Returning to the previous driver after new writes requires another verified copy.
 
 Helm supports an existing attachment PVC, ReadWriteMany storage for multiple pods across nodes, or one API and one worker colocated on ReadWriteOnce storage. These modes do not by themselves establish high availability. Ephemeral filesystem mode shares an `emptyDir` between API and a worker sidecar and loses attachments when that pod is replaced; use it only for disposable tests.
+
+The development Helm chart prepares each persistent mount through
+`volumePermissions` and checks it as the actual service UID. See the
+[permission strategy and NFS guide](../infrastructure/helm/orvyn/README.md#persistent-volume-permission-preparation)
+for auto/fsGroup/initContainer/none, root-squash diagnostics, least-privilege
+exceptions and existing-data behavior. Shared API/worker mounts require a common
+numeric UID and consistent fsGroup. Initial readiness checks write, rename and
+fsync rather than trusting mode bits alone; filesystem diagnostics omit object
+names and payloads. Active uploads refresh their staging timestamp once a minute,
+so another worker's age-based cleanup does not remove a live stalled upload.

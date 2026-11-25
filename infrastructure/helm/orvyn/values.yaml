@@ -469,6 +469,36 @@ ingress:
     secretName: orvyn-tls
     issuer: ""
     issuerKind: ClusterIssuer
+# Permission preparation for persistent data mounts; fsGroup mode has no root init.
+volumePermissions:
+  strategy: auto
+  recursive: onRootMismatch
+  image:
+    repository: ""
+    tag: ""
+    digest: ""
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 10m
+      memory: 48Mi
+    limits:
+      cpu: 500m
+      memory: 128Mi
+  securityContext:
+    runAsUser: 0
+    runAsNonRoot: false
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: [ALL]
+      add: [CHOWN, FOWNER, DAC_OVERRIDE]
+  probeSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: [ALL]
+      add: []
 configuration:
   reconcileIntervalSeconds: 30
   retryIntervalSeconds: 5

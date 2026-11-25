@@ -1,6 +1,8 @@
 {{- range $component := list "web" "api" "worker" "collaboration" }}
 {{- $root := $ }}{{- $settings := index $.Values $component }}
 {{- $config := dict "settings" $settings "origin" $.Values.global.origin "logging" $.Values.logging "secretRevision" $.Values.global.secretRevision }}
+{{- $permissions := and (ne $.Values.volumePermissions.strategy "none") (eq $.Values.storage.driver "local") $.Values.storage.local.persistence.enabled (has $component (list "api" "worker")) }}
+{{- if $permissions }}{{- $_ := set $config "volumePermissions" $.Values.volumePermissions }}{{- $_ := set $config "permissionImage" $.Values.api.image }}{{- end }}
 {{- if eq $component "web" }}
 {{- $_ := set $config "upstreams" (list $.Values.api.service $.Values.collaboration.service) }}
 {{- else }}
@@ -63,8 +65,12 @@ spec:
       {{- with $affinity }}
       affinity: {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- if eq $component "worker" }}
+      {{- if or $permissions (eq $component "worker") }}
       initContainers:
+        {{- if $permissions }}
+        {{- include "orvyn.permissionInit" (dict "root" $ "settings" $settings "component" $component "role" "attachments" "volume" "attachments" "path" $.Values.storage.local.path) | nindent 8 }}
+        {{- end }}
+        {{- if eq $component "worker" }}
         - name: wait-for-schema
           image: {{ include "orvyn.image" (dict "root" $ "image" $settings.image) | quote }}
           securityContext: {{- toYaml $settings.securityContext | nindent 12 }}
@@ -72,6 +78,7 @@ spec:
           command: [node, -e]
           args:
             - {{ printf "(async()=>{for(let i=0;i<180;i++){try{const r=await fetch('http://%s-api:%v/api/v1/health',{signal:AbortSignal.timeout(2000)});if(r.ok)return;await r.body?.cancel()}catch{}await new Promise(r=>setTimeout(r,1000))}process.exit(1)})()" (include "orvyn.fullname" $) $.Values.api.service.port | quote }}
+        {{- end }}
       {{- end }}
       containers:
         {{- include "orvyn.container" (dict "root" $ "component" $component) | nindent 8 }}
@@ -79,6 +86,9 @@ spec:
         {{- include "orvyn.container" (dict "root" $ "component" "worker") | nindent 8 }}
         {{- end }}
       volumes:
+        {{- if $permissions }}
+        {{- include "orvyn.permissionState" $ | nindent 8 }}
+        {{- end }}
         - name: tmp
           emptyDir:
             sizeLimit: 256Mi

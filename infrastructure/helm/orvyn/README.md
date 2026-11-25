@@ -152,6 +152,72 @@ Configuration checksums never include newly generated random data. Relevant sett
 
 Flux HelmRelease and Argo CD manage the configuration Deployment as a regular workload, alongside the ordinary storage bootstrap Job, StatefulSets and application deployments. Keep the usual Deployment/Job health assessment. Configuration readiness is independent of API readiness and does not depend on a PostSync hook. Helm upgrades retire the legacy hook Job through the compatibility hook described above; raw GitOps renderers should prune that retired resource. `--atomic` rolls back Kubernetes resources but does **not** roll back database migrations or transactionally undo provider/session changes. The ordinary CLI's retained Secret lookup differs from deterministic rendering; select the GitOps example before first install.
 
+## Persistent volume permission preparation
+
+`volumePermissions.strategy` applies consistently to persistent PostgreSQL,
+Valkey, local API/worker attachments, SeaweedFS and backup mounts. Target UID/GID
+comes from each container's SecurityContext, then the Pod, then its image's
+documented default (999 for PostgreSQL/Valkey/backups, 1000 otherwise). Ownership
+uses the Pod's `fsGroup` when set, otherwise the runtime GID. Shared local API and
+worker mounts require the same UID and volume group; the chart rejects mismatches.
+
+| Strategy | Startup behavior | Pod Security |
+| --- | --- | --- |
+| `auto` (default) | Probe as the actual service UID; attempt root repair if needed; verify again as the service UID. Healthy mounts skip ownership walks. | Root repair init requires a narrowly scoped policy exception. |
+| `fsGroup` | Only non-root preparation and a real write/rename/fsync probe. Use when kubelet/CSI handles ownership, or the server pre-provisions it. | Compatible with Restricted when the other workload settings also comply. |
+| `initContainer` | Explicit repair followed by real non-root verification. | Same root init exception as auto. |
+| `none` | No helper containers or preparation; operator supplies correct mounts. | No added exception; startup still checks attachment storage. |
+
+Auto always **renders** its root repair init container; policy admission evaluates
+the whole Pod even when its repair phase will skip. Choose `fsGroup` for Restricted
+namespaces rather than weakening namespace or cluster policy. Regular containers
+continue to run non-root. Root helper defaults drop ALL capabilities and add only
+CHOWN, FOWNER and DAC_OVERRIDE, with no privilege escalation, writable rootfs,
+privileged mode, service-account token, database credentials or application secrets.
+It mounts only its own data volume plus a small per-Pod state volume. Permission
+preparation precedes schema waits and private S3 configuration.
+
+`volumePermissions.recursive=onRootMismatch` repairs a mismatched root/critical
+service directory and its affected tree. An on-volume incomplete marker resumes
+interrupted repairs even after the boundary owner changed. `always` explicitly
+scans existing descendants (e.g. an imported tree with mixed ownership); `never`
+requires correct descendant ownership. Private attachment/backup directories are
+tightened by their owner after kubelet fsGroup preparation when necessary. Data
+bytes are preserved. Symlinks, hardlinks, nested mounts and `lost+found` are not
+followed. The helper does not delete/recreate PVCs or use chmod 777. Existing
+contents must belong exclusively to the intended Orvyn component.
+
+Configure helper `resources`, root `securityContext`, and non-root
+`probeSecurityContext` under Volume permissions (expand Advanced for image/security
+fields). An empty helper `image.repository` inherits the **complete API image**,
+including digest and pull policy. An override must contain the matching compiled
+Orvyn Node helper at `/app/dist/commands/volume-permissions.js`; arbitrary BusyBox
+or database images are incompatible. Keep helper/application/chart versions aligned.
+
+**Democratic CSI / TrueNAS NFS:** `fsGroup` is not evidence that a driver or export
+actually permits writes. The reported `org.democratic-csi.nfs` / `freenas-api-nfs`
+case provisioned `root:root/0755`; non-root services cannot create their data there.
+Auto can correct it only if the export authorizes the ownership operation. With
+root squashing, a root init may also receive EPERM/EACCES. Its structured diagnostic
+includes mount, expected/effective UID/GID, fsGroup, owner, mode, operation and a
+server-side ACL action. The final non-root verification must pass; denied root
+repair never counts as successful readiness. Correct the numeric owner and
+appropriate inherited dataset ACLs **on the storage server/provisioner**. Private
+existing files require the service's numeric owner, not merely a matching group.
+Do not disable root squashing or make exports publicly writable. After correction
+the failed verification init retries automatically; no second Helm upgrade is needed.
+See the [NFS + Authentik example](examples/nfs-authentik.yaml).
+
+Use `fsGroup` with working CSI block storage, Longhorn or local-path provisioning
+after validating their actual policy, and auto/initContainer where explicitly
+allowed. Existing claims and RWO/RWX retain the chart's normal binding/scheduling
+rules. Multi-node attachments require shared RWX POSIX rename/fsync semantics;
+permission preparation does not turn node-local storage into shared storage.
+Container fixtures cover correct/root-owned/denied mounts, actual UIDs,
+interrupted and concurrent repairs. They simulate denied chown, **not a real NFS
+server**. TrueNAS/Democratic CSI, root-squashed NFS, Longhorn and k3s local-path
+have not been validated against their actual backend in this environment.
+
 ## Networking and TLS
 
 Ingress host and TLS host are derived exclusively from `global.origin`. `ingress.className` and `annotations` select/tune your controller. To use an existing TLS certificate set `tls.enabled=true` and `tls.secretName`. To issue one with cert-manager also set `tls.issuer` and `tls.issuerKind` (`Issuer` or `ClusterIssuer`); the issuer must exist. With `tls.enabled=false`, HTTPS must terminate at an upstream proxy/load balancer and the origin remains the public **HTTPS** URL. Production cookies are Secure; plain HTTP origins are rejected. Disabling ingress supports an independently managed HTTPS gateway or test access.

@@ -22,6 +22,7 @@
     "smtp",
     "sso",
     "ingress",
+    "volumePermissions",
     "configuration",
     "serviceAccount"
   ],
@@ -1520,6 +1521,49 @@
         }
       }
     },
+    "volumePermissions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "strategy",
+        "recursive",
+        "image",
+        "resources",
+        "securityContext",
+        "probeSecurityContext"
+      ],
+      "properties": {
+        "strategy": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "fsGroup",
+            "initContainer",
+            "none"
+          ]
+        },
+        "recursive": {
+          "type": "string",
+          "enum": [
+            "onRootMismatch",
+            "always",
+            "never"
+          ]
+        },
+        "image": {
+          "$ref": "#/definitions/permissionImage"
+        },
+        "resources": {
+          "$ref": "#/definitions/resources"
+        },
+        "securityContext": {
+          "$ref": "#/definitions/permissionSecurityContext"
+        },
+        "probeSecurityContext": {
+          "$ref": "#/definitions/securityContext"
+        }
+      }
+    },
     "configuration": {
       "type": "object",
       "additionalProperties": false,
@@ -1952,6 +1996,89 @@
             "add": {
               "type": "array",
               "maxItems": 0
+            }
+          }
+        }
+      }
+    },
+    "permissionImage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "tag",
+        "digest",
+        "pullPolicy"
+      ],
+      "properties": {
+        "repository": {
+          "type": "string",
+          "pattern": "^$|^[a-z0-9][a-z0-9._:/-]*$"
+        },
+        "tag": {
+          "type": "string",
+          "pattern": "^$|^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$"
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^$|^sha256:[a-f0-9]{64}$"
+        },
+        "pullPolicy": {
+          "enum": [
+            "Always",
+            "IfNotPresent",
+            "Never"
+          ]
+        }
+      }
+    },
+    "permissionSecurityContext": {
+      "type": "object",
+      "properties": {
+        "allowPrivilegeEscalation": {
+          "const": false
+        },
+        "privileged": {
+          "const": false
+        },
+        "readOnlyRootFilesystem": {
+          "type": "boolean"
+        },
+        "runAsNonRoot": {
+          "type": "boolean"
+        },
+        "runAsUser": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "runAsGroup": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "capabilities": {
+          "type": "object",
+          "properties": {
+            "drop": {
+              "type": "array",
+              "minItems": 1,
+              "contains": {
+                "const": "ALL"
+              },
+              "items": {
+                "type": "string"
+              }
+            },
+            "add": {
+              "type": "array",
+              "uniqueItems": true,
+              "maxItems": 3,
+              "items": {
+                "enum": [
+                  "CHOWN",
+                  "FOWNER",
+                  "DAC_OVERRIDE"
+                ]
+              }
             }
           }
         }

@@ -2188,6 +2188,159 @@ questions:
       - Issuer
       - ClusterIssuer
     show_if: ingress.enabled=true&&ingress.tls.enabled=true
+  - variable: volumePermissions.strategy
+    label: Persistent volume permission strategy
+    type: enum
+    default: auto
+    group: Volume permissions
+    description: Auto probes as the application UID, attempts narrowly scoped root
+      repair only if needed, and verifies as the application. fsGroup uses
+      backend ownership plus a non-root preparation/probe and supports
+      Restricted Pod Security. initContainer explicitly prepares ownership; none
+      leaves preparation to the operator. Root-squashed NFS may require
+      server-side numeric ownership/ACLs.
+    options:
+      - auto
+      - fsGroup
+      - initContainer
+      - none
+  - variable: volumePermissions.recursive
+    label: Recursive ownership preparation
+    type: enum
+    default: onRootMismatch
+    group: Volume permissions
+    description: onRootMismatch repairs an affected tree once and resumes incomplete
+      repairs. always walks existing data explicitly; never requires
+      pre-provisioned descendant ownership. Healthy auto probes skip ownership
+      walks. Symlinks, hardlinks and nested mounts are not followed.
+    options:
+      - onRootMismatch
+      - always
+      - never
+    show_if: volumePermissions.strategy!=none
+  - variable: volumePermissions.image.repository
+    label: Permission helper image (optional)
+    type: string
+    default: ""
+    group: Volume permissions
+    description: Leave empty to inherit the complete API image, including its digest
+      and pull policy. An override must provide the matching Orvyn Node
+      permission helper; tag/digest/pull-policy fields apply when this
+      repository is set.
+    show_if: volumePermissions.strategy!=none&&global.showAdvanced=true
+  - variable: volumePermissions.image.tag
+    label: Volume Permissions / image / tag
+    type: string
+    default: ""
+    group: Volume permissions
+    show_if: volumePermissions.strategy!=none&&volumePermissions.image.repository!=&&global.showAdvanced=true
+  - variable: volumePermissions.image.digest
+    label: Volume Permissions / image / digest
+    type: string
+    default: ""
+    group: Volume permissions
+    description: Pinned digest takes precedence over tag. Clear the digest when
+      intentionally selecting another image tag.
+    show_if: volumePermissions.strategy!=none&&volumePermissions.image.repository!=&&global.showAdvanced=true
+  - variable: volumePermissions.image.pullPolicy
+    label: Volume Permissions / image / pull Policy
+    type: enum
+    default: IfNotPresent
+    group: Volume permissions
+    options:
+      - IfNotPresent
+      - Always
+      - Never
+    show_if: volumePermissions.strategy!=none&&volumePermissions.image.repository!=&&global.showAdvanced=true
+  - variable: volumePermissions.resources.requests.cpu
+    label: Volume Permissions / resources / requests / cpu
+    type: string
+    default: 10m
+    group: Resources
+    show_if: volumePermissions.strategy!=none
+  - variable: volumePermissions.resources.requests.memory
+    label: Volume Permissions / resources / requests / memory
+    type: string
+    default: 48Mi
+    group: Resources
+    show_if: volumePermissions.strategy!=none
+  - variable: volumePermissions.resources.limits.cpu
+    label: Volume Permissions / resources / limits / cpu
+    type: string
+    default: 500m
+    group: Resources
+    show_if: volumePermissions.strategy!=none
+  - variable: volumePermissions.resources.limits.memory
+    label: Volume Permissions / resources / limits / memory
+    type: string
+    default: 128Mi
+    group: Resources
+    show_if: volumePermissions.strategy!=none
+  - variable: volumePermissions.securityContext.runAsUser
+    label: Volume Permissions / security Context / run As User
+    type: int
+    default: 0
+    group: Volume permissions
+    show_if: volumePermissions.strategy!=none&&volumePermissions.strategy!=fsGroup&&global.showAdvanced=true
+  - variable: volumePermissions.securityContext.runAsNonRoot
+    label: Volume Permissions / security Context / run As Non Root
+    type: boolean
+    default: false
+    group: Volume permissions
+    show_if: volumePermissions.strategy!=none&&volumePermissions.strategy!=fsGroup&&global.showAdvanced=true
+  - variable: volumePermissions.securityContext.allowPrivilegeEscalation
+    label: Volume Permissions / security Context / allow Privilege Escalation
+    type: boolean
+    default: false
+    group: Volume permissions
+    show_if: volumePermissions.strategy!=none&&volumePermissions.strategy!=fsGroup&&global.showAdvanced=true
+  - variable: volumePermissions.securityContext.readOnlyRootFilesystem
+    label: Volume Permissions / security Context / read Only Root Filesystem
+    type: boolean
+    default: true
+    group: Volume permissions
+    show_if: volumePermissions.strategy!=none&&volumePermissions.strategy!=fsGroup&&global.showAdvanced=true
+  - variable: volumePermissions.securityContext.capabilities.drop
+    label: Volume Permissions / security Context / capabilities / drop
+    type: array[string]
+    default:
+      - ALL
+    group: Volume permissions
+    show_if: volumePermissions.strategy!=none&&volumePermissions.strategy!=fsGroup&&global.showAdvanced=true
+  - variable: volumePermissions.securityContext.capabilities.add
+    label: Volume Permissions / security Context / capabilities / add
+    type: array[string]
+    default:
+      - CHOWN
+      - FOWNER
+      - DAC_OVERRIDE
+    group: Volume permissions
+    show_if: volumePermissions.strategy!=none&&volumePermissions.strategy!=fsGroup&&global.showAdvanced=true
+  - variable: volumePermissions.probeSecurityContext.allowPrivilegeEscalation
+    label: Volume Permissions / probe Security Context / allow Privilege Escalation
+    type: boolean
+    default: false
+    group: Volume permissions
+    show_if: volumePermissions.strategy!=none&&global.showAdvanced=true
+  - variable: volumePermissions.probeSecurityContext.readOnlyRootFilesystem
+    label: Volume Permissions / probe Security Context / read Only Root Filesystem
+    type: boolean
+    default: true
+    group: Volume permissions
+    show_if: volumePermissions.strategy!=none&&global.showAdvanced=true
+  - variable: volumePermissions.probeSecurityContext.capabilities.drop
+    label: Volume Permissions / probe Security Context / capabilities / drop
+    type: array[string]
+    default:
+      - ALL
+    group: Volume permissions
+    show_if: volumePermissions.strategy!=none&&global.showAdvanced=true
+  - variable: volumePermissions.probeSecurityContext.capabilities.add
+    label: Volume Permissions / probe Security Context / capabilities / add
+    type: array[string]
+    default: []
+    group: Volume permissions
+    show_if: volumePermissions.strategy!=none&&global.showAdvanced=true
   - variable: configuration.reconcileIntervalSeconds
     label: Configuration reconciliation interval
     type: int

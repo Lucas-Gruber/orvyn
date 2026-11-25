@@ -152,6 +152,30 @@ export function diagnosticCode(error: unknown): string {
   }
 }
 const actions: Record<string, string> = {
+  STORAGE_PATH_UNSAFE:
+    "Keep the attachment mount and its private directories free of symlinks and group/world write access. Select volume permission preparation or correct numeric ownership/ACLs on the server; retain existing files.",
+  STORAGE_CONFIGURATION_INVALID:
+    "Choose local or s3 storage. Local storage requires an absolute ORVYN_STORAGE_LOCAL_PATH mounted consistently in API and worker; no S3 service or credentials are needed.",
+  S3_CONFIGURATION_INVALID:
+    "Configure S3_ENDPOINT, S3_BUCKET and the referenced S3 access credentials, or select native local storage.",
+  VOLUME_CONFIGURATION_INVALID:
+    "Check the permission helper's absolute mount/state paths, role and derived non-root UID/GID. Use matching Orvyn helper images.",
+  VOLUME_SYMLINK_UNSAFE:
+    "Use a real volume directory without symbolic-link ancestors. Permission repair never follows links outside its mounted volume.",
+  VOLUME_OWNER_MISMATCH:
+    "Existing service data must belong to the derived application UID. Select verified ownership repair or provision the owner/ACL on the storage server; fsGroup alone cannot fix private data ownership.",
+  VOLUME_PRIVATE_MODE_INVALID:
+    "Keep private application directories writable only by the application UID. Prefer fsGroupChangePolicy OnRootMismatch and provision private permissions on the backend.",
+  VOLUME_PUBLIC_MODE_INVALID:
+    "Remove world-write access from the dedicated volume boundary or apply the documented ownership/permission preparation. Do not use chmod 777.",
+  VOLUME_IDENTITY_MISMATCH:
+    "The write probe must run with the same effective UID/GID as its application container. Check inherited and overridden security contexts.",
+  VOLUME_STATE_INVALID:
+    "Check the permission helper's private state and its reserved incomplete-repair marker. Preserve application data; do not replace PVCs or remove unverified files.",
+  VOLUME_NESTING_INVALID:
+    "Inspect an unexpectedly deep volume tree. Permission preparation bounds traversal and does not follow directory links.",
+  ESTALE:
+    "Check NFS/server availability and mount health. Recover the affected mount or pod without deleting its PVC or application data.",
   CONFIGURATION_INTERVAL_INVALID:
     "Set ORVYN_CONFIGURATION_RECONCILE_SECONDS and ORVYN_CONFIGURATION_RETRY_SECONDS to whole seconds between 1 and 300.",
   CONFIGURATION_ARGUMENT_INVALID:
@@ -222,6 +246,10 @@ const actions: Record<string, string> = {
   ORIGIN_HTTPS_REQUIRED: "Terminate TLS and configure the public HTTPS origin.",
 };
 export interface DiagnosticFields {
+  fsGroup?: number;
+  changedEntries?: number;
+  visitedEntries?: number;
+  skippedEntries?: number;
   stage?: string;
   error?: unknown;
   code?: string;
@@ -276,6 +304,10 @@ export function createDiagnostics(
           : "Check this stage's configuration and dependency readiness. Credentials and raw error payloads are intentionally omitted.");
     }
     for (const field of [
+      "fsGroup",
+      "changedEntries",
+      "visitedEntries",
+      "skippedEntries",
       "status",
       "durationMs",
       "expectedUid",

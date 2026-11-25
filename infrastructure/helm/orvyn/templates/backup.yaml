@@ -62,6 +62,10 @@ spec:
           {{- with .Values.global.imagePullSecrets }}
           imagePullSecrets: {{- toYaml . | nindent 12 }}
           {{- end }}
+          {{- if ne .Values.volumePermissions.strategy "none" }}
+          initContainers:
+            {{- include "orvyn.permissionInit" (dict "root" . "settings" $backup "component" "backup" "role" "backups" "volume" "backups" "path" "/backups" "privateRoot" (printf "%s/postgresql" (include "orvyn.fullname" .))) | nindent 12 }}
+          {{- end }}
           containers:
             - name: database-backup
               image: {{ include "orvyn.image" (dict "root" . "image" $backup.image) | quote }}
@@ -93,6 +97,9 @@ spec:
                   readOnly: true
                 {{- end }}
           volumes:
+            {{- if ne .Values.volumePermissions.strategy "none" }}
+            {{- include "orvyn.permissionState" . | nindent 12 }}
+            {{- end }}
             - name: scripts
               configMap:
                 name: {{ $name }}

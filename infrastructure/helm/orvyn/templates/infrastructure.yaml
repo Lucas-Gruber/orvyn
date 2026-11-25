@@ -3,6 +3,7 @@
 {{- $settings := ternary $.Values.storage.s3.internal (index $.Values $component) (eq $component "storage") }}
 {{- if and $settings.enabled (or (ne $component "storage") (eq $.Values.storage.driver "s3")) }}
 {{- $port := index (dict "postgresql" 5432 "valkey" 6379 "storage" 8333) $component }}
+{{- $permissions := and $settings.persistence.enabled (ne $.Values.volumePermissions.strategy "none") }}
 ---
 apiVersion: v1
 kind: Service
@@ -34,7 +35,7 @@ spec:
         {{- include "orvyn.selector" (dict "root" $ "component" $component) | nindent 8 }}
       annotations:
         {{- with $settings.podAnnotations }}{{ toYaml . | nindent 8 }}{{ end }}
-        checksum/config: {{ toJson (dict "settings" $settings "s3" (ternary $.Values.storage.s3 dict (eq $component "storage")) "revision" $.Values.global.secretRevision "initializerImage" (ternary $.Values.api.image dict (eq $component "storage"))) | sha256sum | quote }}
+        checksum/config: {{ toJson (dict "settings" $settings "s3" (ternary $.Values.storage.s3 dict (eq $component "storage")) "revision" $.Values.global.secretRevision "initializerImage" (ternary $.Values.api.image dict (or (eq $component "storage") $permissions)) "volumePermissions" (ternary $.Values.volumePermissions dict $permissions)) | sha256sum | quote }}
     spec:
       serviceAccountName: {{ include "orvyn.serviceAccount" $ }}
       automountServiceAccountToken: false
@@ -52,8 +53,12 @@ spec:
       {{- with $settings.tolerations }}
       tolerations: {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- if eq $component "storage" }}
+      {{- if or $permissions (eq $component "storage") }}
       initContainers:
+        {{- if $permissions }}
+        {{- include "orvyn.permissionInit" (dict "root" $ "settings" $settings "component" $component "role" $component "volume" "data" "path" "/data") | nindent 8 }}
+        {{- end }}
+        {{- if eq $component "storage" }}
         - name: private-s3-configuration
           image: {{ include "orvyn.image" (dict "root" $ "image" $.Values.api.image) | quote }}
           imagePullPolicy: {{ $.Values.api.image.pullPolicy }}
@@ -67,6 +72,7 @@ spec:
           volumeMounts:
             - name: s3-config
               mountPath: /config
+        {{- end }}
       {{- end }}
       containers:
         - name: {{ $component }}
@@ -152,6 +158,9 @@ spec:
               readOnly: true
             {{- end }}
       volumes:
+        {{- if $permissions }}
+        {{- include "orvyn.permissionState" $ | nindent 8 }}
+        {{- end }}
         - name: data
           {{- if $settings.persistence.enabled }}
           persistentVolumeClaim:

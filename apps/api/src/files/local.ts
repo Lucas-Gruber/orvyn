@@ -12,6 +12,10 @@ import { createHash, randomUUID } from "node:crypto";
 import { isAbsolute, join, resolve } from "node:path";
 import { Readable, Transform, Writable } from "node:stream";
 import { pipeline } from "node:stream/promises";
+import {
+  RuntimeConfigurationError,
+  type DiagnosticFields,
+} from "@orvyn/shared/server";
 import type {
   AttachmentStorage,
   StoredAttachment,
@@ -36,7 +40,8 @@ async function directory(path: string) {
   });
   const stat = await lstat(path);
   if (!stat.isDirectory() || stat.isSymbolicLink() || stat.mode & 0o022)
-    throw Error(
+    throw new RuntimeConfigurationError(
+      "STORAGE_PATH_UNSAFE",
       "Attachment directory must be private and must not be a symlink",
     );
 }
@@ -45,11 +50,36 @@ async function directory(path: string) {
 export class LocalAttachmentStorage implements AttachmentStorage {
   readonly driver = "local";
   private root: string;
+  private mount: string;
   private initialized?: Promise<void>;
   constructor(path: string) {
     if (!isAbsolute(path))
       throw Error("ORVYN_STORAGE_LOCAL_PATH must be absolute");
-    this.root = join(resolve(path), "orvyn-objects");
+    this.mount = resolve(path);
+    this.root = join(this.mount, "orvyn-objects");
+  }
+  async diagnostics(): Promise<DiagnosticFields> {
+    const uid = process.getuid?.(),
+      gid = process.getgid?.();
+    const fields: DiagnosticFields = {
+      mountPath: this.mount,
+      operation: "storage.health",
+      effectiveUid: uid,
+      effectiveGid: gid,
+      expectedUid: uid,
+      expectedGid: gid,
+    };
+    try {
+      const stat = await lstat(this.mount);
+      Object.assign(fields, {
+        ownerUid: stat.uid,
+        ownerGid: stat.gid,
+        permissions: (stat.mode & 0o7777).toString(8).padStart(4, "0"),
+      });
+    } catch {
+      /* The original filesystem failure remains the diagnostic cause. */
+    }
+    return fields;
   }
   private initialize() {
     return (this.initialized ||= (async () => {
@@ -58,7 +88,10 @@ export class LocalAttachmentStorage implements AttachmentStorage {
       if (
         (await realpath(resolve(this.root, ".."))) !== resolve(this.root, "..")
       )
-        throw Error("Attachment root must not contain symlinks");
+        throw new RuntimeConfigurationError(
+          "STORAGE_PATH_UNSAFE",
+          "Attachment root must not contain symlinks",
+        );
       await directory(this.root);
       await directory(join(this.root, "staging"));
     })().catch((error) => {
@@ -87,6 +120,12 @@ export class LocalAttachmentStorage implements AttachmentStorage {
       0o600,
     );
     let bytes = 0;
+    // A stalled but live upload must not be mistaken for a crashed writer on a shared PVC.
+    const heartbeat = setInterval(() => {
+      const now = new Date();
+      void file.utimes(now, now).catch(() => {});
+    }, 60000);
+    heartbeat.unref();
     try {
       const limit = new Transform({
         transform(chunk, _encoding, callback) {
@@ -123,6 +162,7 @@ export class LocalAttachmentStorage implements AttachmentStorage {
         await parent.close();
       }
     } finally {
+      clearInterval(heartbeat);
       await file.close().catch(() => {});
       await unlink(temporary).catch((error) => {
         if (error.code !== "ENOENT") throw error;
@@ -172,9 +212,11 @@ export class LocalAttachmentStorage implements AttachmentStorage {
     const key = "health/" + randomUUID();
     try {
       await this.put(key, { body: Buffer.from("ok"), size: 2 });
-    } finally {
-      await this.delete(key);
+    } catch (error) {
+      await this.delete(key).catch(() => {});
+      throw error;
     }
+    await this.delete(key);
   }
   async cleanup() {
     await this.initialize();

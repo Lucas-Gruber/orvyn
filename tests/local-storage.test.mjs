@@ -9,6 +9,7 @@ import {
   symlink,
   mkdir,
   utimes,
+  chmod,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -117,6 +118,10 @@ test("stale staging files are cleaned without deleting live writes or completed 
   }));
 test("two independent processes commit complete concurrent file generations", () =>
   fixture(async (store, root) => {
+    await store.put("shared", {
+      body: Buffer.alloc(1048576, 65),
+      size: 1048576,
+    });
     const module = new URL("../apps/api/dist/files/local.js", import.meta.url)
       .href;
     const run = async (value) => {
@@ -136,11 +141,69 @@ test("two independent processes commit complete concurrent file generations", ()
       const [code] = await once(child, "exit");
       assert.equal(code, 0, error);
     };
-    await Promise.all([run(65), run(66)]);
+    let done = false;
+    const writers = Promise.all([run(65), run(66)]).finally(() => {
+      done = true;
+    });
+    let reads = 0;
+    while (!done) {
+      const value = await bytes(await store.get("shared"));
+      assert.ok(
+        value.equals(Buffer.alloc(1048576, 65)) ||
+          value.equals(Buffer.alloc(1048576, 66)),
+        "A concurrent reader sees an entire committed generation",
+      );
+      reads++;
+    }
+    await writers;
+    assert.ok(reads > 0);
     const result = await bytes(await store.get("shared"));
     assert.equal(result.length, 1048576);
     assert.ok(
       result.equals(Buffer.alloc(result.length, 65)) ||
         result.equals(Buffer.alloc(result.length, 66)),
     );
+  }));
+
+test("a denied local mount reports safe numeric metadata and recovers without S3 configuration", () =>
+  fixture(async (store, root) => {
+    await chmod(root, 0o500);
+    try {
+      await assert.rejects(store.health(), (error) => error.code === "EACCES");
+      const diagnostic = await store.diagnostics();
+      assert.equal(diagnostic.mountPath, root);
+      assert.equal(diagnostic.ownerUid, process.getuid());
+      assert.equal(diagnostic.effectiveUid, process.getuid());
+      assert.equal(diagnostic.permissions, "0500");
+    } finally {
+      await chmod(root, 0o700);
+    }
+    await store.health();
+    const module = new URL("../apps/api/dist/files/storage.js", import.meta.url)
+      .href;
+    const env = Object.fromEntries(
+      Object.entries(process.env).filter(([key]) => !key.startsWith("S3_")),
+    );
+    const child = spawn(
+      process.execPath,
+      [
+        "--input-type=module",
+        "-e",
+        `import {storageHealth} from ${JSON.stringify(module)}; await storageHealth('worker')`,
+      ],
+      {
+        env: {
+          ...env,
+          ORVYN_STORAGE_DRIVER: "local",
+          ORVYN_STORAGE_LOCAL_PATH: root,
+        },
+        stdio: ["ignore", "ignore", "pipe"],
+      },
+    );
+    let error = "";
+    child.stderr.on("data", (data) => {
+      error += data;
+    });
+    const [code] = await once(child, "exit");
+    assert.equal(code, 0, error);
   }));

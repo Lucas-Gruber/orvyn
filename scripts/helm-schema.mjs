@@ -171,7 +171,33 @@ const defs = {
     },
   },
 };
+defs.permissionImage = structuredClone(defs.image);
+defs.permissionImage.properties.repository = {
+  type: "string",
+  pattern: "^$|^[a-z0-9][a-z0-9._:/-]*$",
+};
+defs.permissionSecurityContext = structuredClone(defs.securityContext);
+defs.permissionSecurityContext.properties.runAsUser.minimum = 0;
+defs.permissionSecurityContext.properties.runAsGroup.minimum = 0;
+defs.permissionSecurityContext.properties.capabilities.properties.drop = {
+  type: "array",
+  minItems: 1,
+  contains: { const: "ALL" },
+  items: string,
+};
+defs.permissionSecurityContext.properties.capabilities.properties.add = {
+  type: "array",
+  uniqueItems: true,
+  maxItems: 3,
+  items: { enum: ["CHOWN", "FOWNER", "DAC_OVERRIDE"] },
+};
 function infer(value, path = []) {
+  if (path.join(".") === "volumePermissions.image")
+    return { $ref: "#/definitions/permissionImage" };
+  if (path.join(".") === "volumePermissions.securityContext")
+    return { $ref: "#/definitions/permissionSecurityContext" };
+  if (path.join(".") === "volumePermissions.probeSecurityContext")
+    return { $ref: "#/definitions/securityContext" };
   const name = path.at(-1);
   if (name === "podLabels")
     return {
@@ -299,6 +325,12 @@ for (const name of ["reconcileIntervalSeconds", "retryIntervalSeconds"])
     minimum: 1,
     maximum: 300,
   });
+Object.assign(property("volumePermissions.strategy"), {
+  enum: ["auto", "fsGroup", "initContainer", "none"],
+});
+Object.assign(property("volumePermissions.recursive"), {
+  enum: ["onRootMismatch", "always", "never"],
+});
 Object.assign(property("global.origin"), { pattern: "^https://[^/?#@]+$" });
 Object.assign(property("storage.driver"), { enum: ["local", "s3"] });
 Object.assign(property("logging.level"), {

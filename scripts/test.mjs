@@ -154,6 +154,7 @@ try {
           "tests/editor.test.mjs",
           "tests/files.test.mjs",
           "tests/local-storage.test.mjs",
+          "tests/volume-permissions.test.mjs",
           "tests/database-configuration.test.mjs",
           "tests/restore.test.mjs",
           "tests/postgresql-backups.test.mjs",

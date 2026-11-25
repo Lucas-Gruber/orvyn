@@ -10,6 +10,10 @@ import {
 import { createHash } from "node:crypto";
 import { Readable } from "node:stream";
 import { LocalAttachmentStorage } from "./local.js";
+import {
+  createDiagnostics,
+  RuntimeConfigurationError,
+} from "@orvyn/shared/server";
 export {
   S3Client,
   HeadBucketCommand,
@@ -26,7 +30,10 @@ export function storage() {
     "S3_SECRET_ACCESS_KEY",
   ];
   if (names.some((name) => !process.env[name]))
-    throw Error("S3 configuration required");
+    throw new RuntimeConfigurationError(
+      "S3_CONFIGURATION_INVALID",
+      "S3 configuration required",
+    );
   return (client ||= new S3Client({
     endpoint: process.env.S3_ENDPOINT,
     region: process.env.S3_REGION || "us-east-1",
@@ -135,11 +142,32 @@ export function attachments(): AttachmentStorage {
   if (driver === "s3") return (backend = new S3AttachmentStorage());
   if (driver === "local") {
     if (!process.env.ORVYN_STORAGE_LOCAL_PATH)
-      throw Error("ORVYN_STORAGE_LOCAL_PATH required");
+      throw new RuntimeConfigurationError(
+        "STORAGE_CONFIGURATION_INVALID",
+        "ORVYN_STORAGE_LOCAL_PATH required",
+      );
     return (backend = new LocalAttachmentStorage(
       process.env.ORVYN_STORAGE_LOCAL_PATH,
     ));
   }
-  throw Error("ORVYN_STORAGE_DRIVER must be local or s3");
+  throw new RuntimeConfigurationError(
+    "STORAGE_CONFIGURATION_INVALID",
+    "ORVYN_STORAGE_DRIVER must be local or s3",
+  );
 }
-export const storageHealth = () => attachments().health();
+export async function storageHealth(component = "api") {
+  const backend = attachments();
+  try {
+    await backend.health();
+  } catch (error) {
+    const log = createDiagnostics(component, process.env);
+    if (backend instanceof LocalAttachmentStorage)
+      log.error("storage.filesystem_unavailable", {
+        stage: "storage",
+        ...(await backend.diagnostics()),
+        error,
+      });
+    else log.error("storage.s3_unavailable", { stage: "storage", error });
+    throw error;
+  }
+}

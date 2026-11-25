@@ -9,6 +9,8 @@ const readable = (s) =>
     .replace(/\./g, " / ")
     .replace(/^./, (c) => c.toUpperCase());
 const enums = {
+  "volumePermissions.strategy": ["auto", "fsGroup", "initContainer", "none"],
+  "volumePermissions.recursive": ["onRootMismatch", "always", "never"],
   "logging.level": ["debug", "info", "warn", "error"],
   "storage.driver": ["local", "s3"],
   "ingress.tls.issuerKind": ["Issuer", "ClusterIssuer"],
@@ -19,6 +21,18 @@ const enums = {
   ],
 };
 const info = {
+  "volumePermissions.strategy": [
+    "Persistent volume permission strategy",
+    "Auto probes as the application UID, attempts narrowly scoped root repair only if needed, and verifies as the application. fsGroup uses backend ownership plus a non-root preparation/probe and supports Restricted Pod Security. initContainer explicitly prepares ownership; none leaves preparation to the operator. Root-squashed NFS may require server-side numeric ownership/ACLs.",
+  ],
+  "volumePermissions.recursive": [
+    "Recursive ownership preparation",
+    "onRootMismatch repairs an affected tree once and resumes incomplete repairs. always walks existing data explicitly; never requires pre-provisioned descendant ownership. Healthy auto probes skip ownership walks. Symlinks, hardlinks and nested mounts are not followed.",
+  ],
+  "volumePermissions.image.repository": [
+    "Permission helper image (optional)",
+    "Leave empty to inherit the complete API image, including its digest and pull policy. An override must provide the matching Orvyn Node permission helper; tag/digest/pull-policy fields apply when this repository is set.",
+  ],
   "configuration.reconcileIntervalSeconds": [
     "Configuration reconciliation interval",
     "Seconds between idempotent checks of deployment-managed OIDC settings. The independent configuration workload applies settings without waiting for API or attachment readiness.",
@@ -131,6 +145,20 @@ const info = {
 function visibility(path) {
   const conditions = [];
   if (
+    path.startsWith("volumePermissions.") &&
+    path !== "volumePermissions.strategy"
+  )
+    conditions.push("volumePermissions.strategy!=none");
+  if (path.startsWith("volumePermissions.securityContext."))
+    conditions.push("volumePermissions.strategy!=fsGroup");
+  if (path.startsWith("volumePermissions.probeSecurityContext."))
+    conditions.push("global.showAdvanced=true");
+  if (
+    path.startsWith("volumePermissions.image.") &&
+    path !== "volumePermissions.image.repository"
+  )
+    conditions.push("volumePermissions.image.repository!=");
+  if (
     /\.(image|podSecurityContext|securityContext|nodeSelector|affinity|tolerations|podLabels|podAnnotations|startupProbe|readinessProbe|livenessProbe)(\.|$)/.test(
       path,
     ) ||
@@ -183,35 +211,40 @@ function walk(value, path = []) {
     "podAnnotations",
     "annotations",
   ].includes(name);
-  const array = ["imagePullSecrets", "drop", "allowedEmailDomains"].includes(
-    name,
-  );
+  const array = [
+    "imagePullSecrets",
+    "drop",
+    "add",
+    "allowedEmailDomains",
+  ].includes(name);
   if (value && typeof value === "object" && !raw && !map && !array) {
     for (const [k, v] of Object.entries(value)) walk(v, [...path, k]);
     return;
   }
   let group =
-    path[0] === "global"
-      ? "General"
-      : path[0] === "logging"
-        ? "Logging and diagnostics"
-        : path[0] === "auth"
-          ? "Authentication"
-          : path[0] === "postgresql" || path[0] === "externalPostgresql"
-            ? "PostgreSQL"
-            : path[0] === "valkey" || path[0] === "externalValkey"
-              ? "Valkey"
-              : path[0] === "storage"
-                ? "Storage"
-                : path[0] === "smtp"
-                  ? "SMTP"
-                  : path[0] === "sso"
-                    ? "SSO (OIDC)"
-                    : path[0] === "backup"
-                      ? "Database backups"
-                      : path[0] === "ingress"
-                        ? "Networking"
-                        : "Advanced";
+    path[0] === "volumePermissions"
+      ? "Volume permissions"
+      : path[0] === "global"
+        ? "General"
+        : path[0] === "logging"
+          ? "Logging and diagnostics"
+          : path[0] === "auth"
+            ? "Authentication"
+            : path[0] === "postgresql" || path[0] === "externalPostgresql"
+              ? "PostgreSQL"
+              : path[0] === "valkey" || path[0] === "externalValkey"
+                ? "Valkey"
+                : path[0] === "storage"
+                  ? "Storage"
+                  : path[0] === "smtp"
+                    ? "SMTP"
+                    : path[0] === "sso"
+                      ? "SSO (OIDC)"
+                      : path[0] === "backup"
+                        ? "Database backups"
+                        : path[0] === "ingress"
+                          ? "Networking"
+                          : "Advanced";
   if (name === "replicaCount") group = "Scaling";
   if (path.includes("resources")) group = "Resources";
   let type =

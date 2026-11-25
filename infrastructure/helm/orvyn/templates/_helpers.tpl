@@ -133,6 +133,11 @@ valueFrom:
 {{- $workerPodUid := ternary .Values.api.podSecurityContext.runAsUser .Values.worker.podSecurityContext.runAsUser (not .Values.storage.local.persistence.enabled) -}}
 {{- $workerUid := default 1000 (default $workerPodUid .Values.worker.securityContext.runAsUser) -}}
 {{- if ne (int $apiUid) (int $workerUid) }}{{ fail "Local attachment storage requires API and worker to run with the same UID" }}{{ end -}}
+{{- if .Values.storage.local.persistence.enabled -}}
+{{- $apiGroup := include "orvyn.permissionVolumeGid" (dict "settings" .Values.api "role" "attachments") -}}
+{{- $workerGroup := include "orvyn.permissionVolumeGid" (dict "settings" .Values.worker "role" "attachments") -}}
+{{- if ne $apiGroup $workerGroup }}{{ fail "Shared local storage requires consistent API and worker fsGroup (or runtime GID when fsGroup is unset)" }}{{ end -}}
+{{- end -}}
 {{- end -}}
 {{- if and (eq .Values.storage.driver "s3") (not .Values.storage.s3.internal.enabled) -}}
 {{- $endpoint := urlParse .Values.storage.s3.external.endpoint -}}
