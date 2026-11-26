@@ -28,6 +28,7 @@ import { validPersonId, documentPeople } from "./mention-model.js";
 import { CommentHighlights } from "./comment-highlights.js";
 import { EditorTables } from "./table-controls.js";
 import { WhiteboardBlock } from "./whiteboard-node.js";
+import { MarkdownPaste } from "./markdown-paste.js";
 const lowlight = createLowlight(common);
 export const documentSchemaVersion = 13;
 export function editorExtensions(collaborative = false): AnyExtension[] {
@@ -46,6 +47,7 @@ export function editorExtensions(collaborative = false): AnyExtension[] {
     }),
     TableKit.configure({ table: { resizable: false, cellMinWidth: 96 } }),
     EditorTables,
+    MarkdownPaste.configure({ normalizeDocument }),
     DatabaseBlock,
     WhiteboardBlock,
     HeadingIdentity,

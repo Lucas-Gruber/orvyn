@@ -205,6 +205,7 @@ try {
           "tests/public-rollups.test.mjs",
           "tests/public-people.test.mjs",
           "tests/markdown-import.test.mjs",
+          "tests/markdown-paste.test.mjs",
           "tests/markdown-export.test.mjs",
           "tests/markdown-upload.test.mjs",
           "tests/markdown-bundle.test.mjs",

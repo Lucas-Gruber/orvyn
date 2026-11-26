@@ -613,6 +613,9 @@ function initialize() {
   if (editor.value) return;
   persistInitialHeadingIds();
   editor.value = new Editor({
+    // MarkdownPaste owns text conversion. Running inline paste rules again
+    // would reinterpret escaped Markdown and even Ctrl/Cmd+Shift+V input.
+    enablePasteRules: false,
     extensions: [
       ...editorExtensions(true).map((extension) =>
         [
@@ -668,13 +671,15 @@ function initialize() {
                     onCopy: copyHeadingLink,
                     activeHeading: () => props.targetHeading || "",
                   })
-                : extension.name === "orvynDatabase"
-                  ? extension.extend({
-                      addNodeView() {
-                        return VueNodeViewRenderer(EmbeddedDatabaseNode);
-                      },
-                    })
-                  : extension,
+                : extension.name === "orvynMarkdownPaste"
+                  ? extension.configure({ pageId: () => props.pageId })
+                  : extension.name === "orvynDatabase"
+                    ? extension.extend({
+                        addNodeView() {
+                          return VueNodeViewRenderer(EmbeddedDatabaseNode);
+                        },
+                      })
+                    : extension,
       ),
       Collaboration.configure({ document }),
       CollaborationCaret.configure({
