@@ -10,6 +10,9 @@ import {
   mkdir,
   utimes,
   chmod,
+  open,
+  link,
+  unlink,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -116,6 +119,70 @@ test("stale staging files are cleaned without deleting live writes or completed 
     assert.deepEqual(await readdir(dir), [fresh.split("/").at(-1)]);
     assert.equal(await store.exists("keep"), true);
   }));
+
+for (const operation of ["replace", "delete"])
+  test(`an opened generation remains readable after ${operation === "replace" ? "atomic replacement" : "deletion"} before fstat`, (t) =>
+    fixture(async (store, root) => {
+      const key = "opened-generation",
+        original = Buffer.from("the complete original generation"),
+        replacement = Buffer.from("a differently sized replacement");
+      await store.put(key, { body: original, size: original.length });
+      const hash = createHash("sha256").update(key).digest("hex"),
+        target = join(root, "orvyn-objects", hash.slice(0, 2), hash.slice(2)),
+        handle = await open(target, "r"),
+        prototype = Object.getPrototypeOf(handle),
+        originalStat = prototype.stat;
+      await handle.close();
+      let pending = true,
+        observedLinks;
+      // Force the actual filesystem race after get() opens the old inode but
+      // before it validates metadata. Delegate to real fstat, not fake stats.
+      const hook = t.mock.method(prototype, "stat", async function (...args) {
+        if (pending) {
+          pending = false;
+          if (operation === "replace")
+            await store.put(key, {
+              body: replacement,
+              size: replacement.length,
+            });
+          else await store.delete(key);
+          const metadata = await originalStat.apply(this, args);
+          observedLinks = metadata.nlink;
+          return metadata;
+        }
+        return originalStat.apply(this, args);
+      });
+      try {
+        const object = await store.get(key);
+        assert.equal(
+          observedLinks,
+          0,
+          "the already-open inode has lost its directory entry",
+        );
+        assert.equal(object.size, original.length);
+        assert.deepEqual(await bytes(object), original);
+      } finally {
+        hook.mock.restore();
+      }
+      if (operation === "replace")
+        assert.deepEqual(await bytes(await store.get(key)), replacement);
+      else assert.equal(await store.exists(key), false);
+    }));
+
+test("local reads still reject files with extra hard links", () =>
+  fixture(async (store, root) => {
+    const key = "hard-linked",
+      content = Buffer.from("private content");
+    await store.put(key, { body: content, size: content.length });
+    const hash = createHash("sha256").update(key).digest("hex"),
+      target = join(root, "orvyn-objects", hash.slice(0, 2), hash.slice(2)),
+      alias = join(root, "extra-link");
+    await link(target, alias);
+    await assert.rejects(store.get(key), /not a private regular file/);
+    await unlink(alias);
+    assert.deepEqual(await bytes(await store.get(key)), content);
+  }));
+
 test("two independent processes commit complete concurrent file generations", () =>
   fixture(async (store, root) => {
     await store.put("shared", {
@@ -146,16 +213,21 @@ test("two independent processes commit complete concurrent file generations", ()
       done = true;
     });
     let reads = 0;
-    while (!done) {
-      const value = await bytes(await store.get("shared"));
-      assert.ok(
-        value.equals(Buffer.alloc(1048576, 65)) ||
-          value.equals(Buffer.alloc(1048576, 66)),
-        "A concurrent reader sees an entire committed generation",
-      );
-      reads++;
+    try {
+      while (!done) {
+        const value = await bytes(await store.get("shared"));
+        assert.ok(
+          value.equals(Buffer.alloc(1048576, 65)) ||
+            value.equals(Buffer.alloc(1048576, 66)),
+          "A concurrent reader sees an entire committed generation",
+        );
+        reads++;
+      }
+    } finally {
+      // Never remove the fixture while independent writers still use it,
+      // including when a reader assertion fails.
+      await writers;
     }
-    await writers;
     assert.ok(reads > 0);
     const result = await bytes(await store.get("shared"));
     assert.equal(result.length, 1048576);

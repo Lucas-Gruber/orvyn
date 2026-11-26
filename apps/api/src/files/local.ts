@@ -176,7 +176,10 @@ export class LocalAttachmentStorage implements AttachmentStorage {
     );
     try {
       const stat = await file.stat();
-      if (!stat.isFile() || stat.nlink !== 1)
+      // An atomic replacement/deletion can unlink this already-open inode
+      // before fstat. It remains a complete, private generation until this
+      // reader closes it. Only extra hard links make a regular file unsafe.
+      if (!stat.isFile() || stat.nlink > 1)
         throw Error("Attachment is not a private regular file");
       const body = file.createReadStream({ autoClose: true, signal });
       return { body, size: stat.size };

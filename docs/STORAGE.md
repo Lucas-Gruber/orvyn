@@ -6,6 +6,13 @@ For native filesystem storage set `ORVYN_STORAGE_DRIVER=local` and `ORVYN_STORAG
 
 API operations, database-template file copies, public attachment grants, and Markdown bundle exports use the same typed backend. Access checks remain in the application. Pending/failed uploads and expired trash are removed by the worker using existing database retention rules; abandoned staging files older than an hour are cleaned in bounded batches. Never run external cleanup against active uploads. A mounted directory with untrusted concurrent writers is unsupported.
 
+Concurrent readers validate and stream the inode they actually opened. If another
+writer atomically replaces or deletes its path before metadata validation, the
+open generation can have zero directory links and remains readable in full.
+Files with extra hard links, non-regular files and symlink reads remain rejected.
+Deterministic regressions exercise replacement/deletion between open and fstat;
+independent writer processes additionally verify complete generations under load.
+
 For S3, configure `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_REGION` (default `us-east-1`) and `S3_FORCE_PATH_STYLE`. Provision a private bucket and suitable credentials. `node scripts/storage-init.mjs` initializes local-development S3 and checks privacy and integrity. The compiled `node dist/commands/storage-init.js` command is used by the Helm chart only for its own internal SeaweedFS bucket; external buckets are never created automatically.
 
 Back up the database, attachment objects and persistent encryption key together. Local files are opaque and content metadata lives in PostgreSQL. Keep file ownership and permissions when restoring. Stop API and worker while taking a consistent filesystem/database snapshot, or use coordinated storage and PostgreSQL snapshots. For S3 preserve exact object keys, bytes and bucket policy; provider versioning is recommended.

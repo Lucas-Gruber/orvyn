@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Fix local attachment reads racing with atomic replacement/deletion. Already-open
+  complete generations remain readable while extra hard links and symlinks stay
+  rejected; deterministic race and independent-process tests cover the behavior.
 - Import larger Markdown roadmaps: up to 512 KB of UTF-8 source, with coordinated
   editor, HTTP and collaboration budgets instead of rejecting modest files after
   their formatting expands into structured blocks. Limit errors identify size,
