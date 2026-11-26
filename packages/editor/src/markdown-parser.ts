@@ -9,6 +9,7 @@ import { markdownSlugger } from "./markdown-anchors.js";
 import {
   markdownImportMaxBytes,
   markdownImportSizeLabel,
+  markdownImportMaxTokens,
 } from "@orvyn/shared/markdown-limits";
 
 type Node = {
@@ -48,7 +49,7 @@ export function parseMarkdown(
     ids = new WeakMap<Token, string>(),
     anchors = new Map<string, string>(),
     slugFor = markdownSlugger();
-  let remaining = 6000,
+  let remaining = markdownImportMaxTokens,
     headingIndex = 0;
   const first = tokens.find((token) => token.type !== "space");
   const titleHeading =

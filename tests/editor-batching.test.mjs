@@ -86,9 +86,9 @@ test("Chromium: rapid typing batches transport, durably acknowledges complete co
     await doc.locator(":scope > p").click();
     updates = 0;
     const text =
-      "Fast writing should reach the other editor promptly and be stored before the page says it is saved. ".repeat(
-        2,
-      );
+      "Fast writing should reach the other editor promptly and be stored before the page says it is saved. "
+        .repeat(2)
+        .trimEnd();
     await page.keyboard.type(text);
     await expect(
       page.getByText("All changes saved", { exact: true }),

@@ -1,5 +1,7 @@
 import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
+import type { NestExpressApplication } from "@nestjs/platform-express";
+import { documentMaxBytes } from "@orvyn/shared/document-limits";
 import { Module } from "@nestjs/common";
 import { migrate, db } from "./runtime.js";
 import { encryptionKey } from "./auth/security.js";
@@ -73,7 +75,12 @@ export async function main() {
   await log.stage("migrations", () => migrate(db));
   await log.stage("oidc_configuration", () => initializeDeploymentOidc(db));
   await log.stage("storage", storageHealth);
-  const app = await NestFactory.create(App, { logger: false });
+  const app = await NestFactory.create<NestExpressApplication>(App, {
+    logger: false,
+  });
+  // Include room for page metadata and escaped JSON transport. Content itself
+  // is still checked against the shared document budget before persistence.
+  app.useBodyParser("json", { limit: documentMaxBytes * 2 });
   app.useGlobalFilters(new SafeExceptionFilter());
   let stopping = false;
   const shutdown = async () => {

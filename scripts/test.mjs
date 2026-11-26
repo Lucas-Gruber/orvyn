@@ -210,6 +210,8 @@ try {
           "tests/markdown-paste.test.mjs",
           "tests/markdown-export.test.mjs",
           "tests/markdown-upload.test.mjs",
+          "tests/markdown-roadmap.test.mjs",
+          "tests/editor-connection.test.mjs",
           "tests/markdown-bundle.test.mjs",
           "tests/markdown-bundle-storage.test.mjs",
           "tests/editor-assets.test.mjs",

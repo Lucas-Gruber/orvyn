@@ -391,6 +391,7 @@ defineExpose({ flush, requestClose: () => close() });
           :space-id="page.space_id"
           :user="user"
           :access-rank="page.access_rank"
+          :initial-document="page.document"
           :paused="closing || paused"
           :focused-comment="focusedComment"
           :target-heading="targetHeading"

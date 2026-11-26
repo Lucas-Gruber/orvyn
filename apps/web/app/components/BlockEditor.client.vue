@@ -48,6 +48,7 @@ const props = defineProps<{
   targetPerson?: string;
   personVisit?: number;
   chromeTarget?: string;
+  initialDocument?: Record<string, unknown>;
 }>();
 const emit = defineEmits<{
   comment: [anchor: CommentAnchor];
@@ -310,6 +311,10 @@ const document = new Y.Doc(),
   synced = ref(false),
   readOnly = ref(true),
   unsynced = ref(0),
+  localChanges = ref(false),
+  connectionDelayed = ref(false),
+  connectionError = ref(""),
+  reconnecting = ref(false),
   denied = ref(false),
   peers = ref<any[]>([]),
   tick = ref(0);
@@ -332,15 +337,62 @@ const saveStatus = computed(() =>
   denied.value
     ? "Access denied"
     : status.value !== "connected"
-      ? "Disconnected · Editing paused"
+      ? editor.value
+        ? "Disconnected · Editing paused"
+        : "Connecting…"
       : !synced.value
         ? "Synchronizing…"
         : readOnly.value
           ? "Read-only"
-          : unsynced.value
+          : localChanges.value
             ? "Saving changes…"
             : "All changes saved",
 );
+let connectionTimer: ReturnType<typeof setTimeout> | undefined;
+const connectionNotice = computed(
+  () =>
+    connectionError.value ||
+    (editor.value
+      ? localChanges.value
+        ? "The live connection was interrupted. Your changes are kept in this page. Reconnect to save them."
+        : "The live connection was interrupted. Editing is paused until you reconnect."
+      : "The live connection is taking longer than expected. You can read the saved version below or open another page."),
+);
+async function reconnect() {
+  if (denied.value || disposed || reconnecting.value) return;
+  reconnecting.value = true;
+  connectionError.value = "";
+  connectionDelayed.value = false;
+  clearTimeout(connectionTimer);
+  connectionTimer = undefined;
+  // Keep the current Y.Doc and local edits. The provider's deprecated
+  // disconnect() method is a no-op; use its actual socket instead.
+  try {
+    const socket = provider.configuration.websocketProvider;
+    // Closing a WebSocket is asynchronous. Calling connect immediately would
+    // see the old Connected status and return without opening a new socket.
+    if (socket.status !== "disconnected") {
+      await new Promise<void>((resolve, reject) => {
+        const closed = () => {
+          clearTimeout(timeout);
+          socket.off("close", closed);
+          resolve();
+        };
+        const timeout = setTimeout(() => {
+          socket.off("close", closed);
+          reject(new Error("Connection did not close"));
+        }, 5000);
+        socket.on("close", closed);
+        socket.disconnect();
+      });
+    } else socket.disconnect();
+    if (!disposed && !denied.value) await socket.connect();
+  } catch {
+    if (!disposed) connectionDelayed.value = true;
+  } finally {
+    if (!disposed) reconnecting.value = false;
+  }
+}
 interface SlashCommand {
   label: string;
   icon: string;
@@ -721,12 +773,20 @@ function initialize() {
     ],
     editable: false,
     editorProps: {
-      attributes: {
+      attributes: () => ({
         role: "textbox",
         "aria-label": "Document",
         "aria-multiline": "true",
+        "aria-readonly": String(
+          status.value !== "connected" ||
+            !synced.value ||
+            readOnly.value ||
+            denied.value ||
+            accessRank.value < 30 ||
+            props.paused === true,
+        ),
         tabindex: "0",
-      },
+      }),
       handleKeyDown: (_view, event) => {
         if (
           (event.metaKey || event.ctrlKey) &&
@@ -1282,17 +1342,27 @@ const provider = new HocuspocusProvider({
     reportAccess(0);
     denied.value = true;
     readOnly.value = true;
-    provider.disconnect();
+    provider.configuration.websocketProvider.disconnect();
   },
   onStatus({ status: s }) {
     status.value = s;
+    if (s !== "connected") synced.value = false;
   },
   onSynced({ state }) {
     synced.value = state;
-    if (state) initialize();
+    if (state) {
+      try {
+        initialize();
+        connectionError.value = "";
+      } catch {
+        connectionError.value =
+          "This document could not be opened. Retry the connection. If it continues, check that all Orvyn components use the same version.";
+      }
+    }
   },
   onUnsyncedChanges({ number }) {
     unsynced.value = number;
+    if (!number) localChanges.value = false;
     if (!number && !disposed && currentPeople().join(",") !== fetchedPeople) {
       clearTimeout(peopleTimer);
       peopleTimer = setTimeout(() => void refreshPeople(), 150);
@@ -1323,13 +1393,24 @@ const provider = new HocuspocusProvider({
       denied.value = true;
       readOnly.value = true;
       reportAccess(0);
-      provider.disconnect();
+      provider.configuration.websocketProvider.disconnect();
+    } else if (event.code === 1009) {
+      connectionError.value =
+        "This document is larger than the connection allows. Check that all Orvyn components use the same version.";
+    } else if (event.code === 1011) {
+      connectionError.value =
+        "The live document service is unavailable. Retry the connection; the saved version remains available.";
     }
   },
 });
+document.on("update", (_update, origin, _doc, transaction) => {
+  // Hocuspocus also counts its initial sync handshake as an unsynced change.
+  // Only real local document mutations should block navigation or closing.
+  if (origin !== provider && transaction.local) localChanges.value = true;
+});
 async function flush() {
   provider.flushPendingUpdates();
-  if (!unsynced.value) return;
+  if (!localChanges.value) return;
   await new Promise<void>((resolve, reject) => {
     const timeout = setTimeout(() => {
       stop();
@@ -1339,8 +1420,8 @@ async function flush() {
         ),
       );
     }, 8000);
-    const stop = watch(unsynced, (count) => {
-      if (count) return;
+    const stop = watch(localChanges, (pending) => {
+      if (pending) return;
       clearTimeout(timeout);
       stop();
       resolve();
@@ -1354,7 +1435,7 @@ defineExpose({
   focusStart: () => editor.value?.commands.focus("start"),
 });
 function beforeUnload(event: BeforeUnloadEvent) {
-  if (!unsynced.value) return;
+  if (!localChanges.value) return;
   event.preventDefault();
   event.returnValue = "";
 }
@@ -1375,6 +1456,22 @@ watch([editor, synced], () => {
     void refreshPeople();
   }
 });
+watch(
+  [status, synced],
+  () => {
+    if (status.value === "connected" && synced.value) {
+      clearTimeout(connectionTimer);
+      connectionTimer = undefined;
+      connectionDelayed.value = false;
+    } else if (!connectionTimer) {
+      connectionTimer = setTimeout(() => {
+        connectionTimer = undefined;
+        if (!disposed) connectionDelayed.value = true;
+      }, 8000);
+    }
+  },
+  { immediate: true },
+);
 watch(() => props.focusedComment, scheduleHighlights);
 watch(
   [() => props.targetPerson, () => props.personVisit, editor, synced],
@@ -1400,6 +1497,7 @@ onBeforeUnmount(() => {
   disposed = true;
   peopleRequest++;
   clearTimeout(peopleTimer);
+  clearTimeout(connectionTimer);
   annotationRequest++;
   clearInterval(annotationTimer);
   cancelAnimationFrame(annotationFrame);
@@ -1413,6 +1511,30 @@ onBeforeUnmount(() => {
 </script>
 <template>
   <div ref="root" class="block-editor" :data-revision="tick">
+    <div
+      v-if="
+        !denied &&
+        (connectionDelayed ||
+          connectionError ||
+          (editor && status !== 'connected'))
+      "
+      class="editor-connection-notice"
+      role="alert"
+    >
+      <div>
+        <strong>Live connection unavailable</strong>
+        <p>{{ connectionNotice }}</p>
+      </div>
+      <button
+        type="button"
+        class="ghost"
+        :disabled="reconnecting"
+        :aria-busy="reconnecting"
+        @click="reconnect"
+      >
+        Reconnect
+      </button>
+    </div>
     <div v-if="linkMessage" class="editor-link-toast" role="status">
       <span>{{ linkMessage }}</span><button
         class="ghost"
@@ -1460,14 +1582,18 @@ onBeforeUnmount(() => {
           :data-state="
             status !== 'connected'
               ? 'disconnected'
-              : unsynced
+              : localChanges
                 ? 'saving'
                 : 'saved'
           "
         >
           <span role="status" class="editor-save-state" :title="saveStatus"
             ><AppIcon
-              :name="status === 'connected' && !unsynced ? 'check' : 'clock'"
+              :name="
+                status === 'connected' && synced && !localChanges
+                  ? 'check'
+                  : 'clock'
+              "
               :size="14"
             /><span class="editor-save-label">{{ saveStatus }}</span></span
           >
@@ -1743,14 +1869,50 @@ onBeforeUnmount(() => {
       </div>
       <EditorContent :editor="editor" />
     </template>
-    <p v-else>
+    <p
+      v-else-if="denied || (!connectionDelayed && !connectionError)"
+      role="status"
+    >
       {{
         denied ? "This document is unavailable." : "Connecting to the document…"
       }}
     </p>
+    <SavedDocumentPreview
+      v-if="!editor && !denied && initialDocument"
+      :document="initialDocument"
+    />
   </div>
 </template>
 <style>
+.editor-connection-notice {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  background: var(--panel);
+  font-size: 0.875rem;
+}
+.editor-connection-notice p {
+  margin: 0.4rem 0 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+.editor-connection-notice button {
+  flex-shrink: 0;
+}
+.saved-document-preview > .hint {
+  margin: 0 0 1.5rem;
+  font-size: 0.8rem;
+}
+@media (max-width: 600px) {
+  .editor-connection-notice {
+    flex-direction: column;
+  }
+}
 .block-editor {
   border: 1px solid var(--line);
   border-radius: 0.6rem;

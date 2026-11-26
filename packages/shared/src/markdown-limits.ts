@@ -1,2 +1,3 @@
-export const markdownImportMaxBytes = 96 * 1024;
-export const markdownImportSizeLabel = "96 KB";
+export const markdownImportMaxBytes = 512 * 1024;
+export const markdownImportSizeLabel = "512 KB";
+export const markdownImportMaxTokens = 100000;

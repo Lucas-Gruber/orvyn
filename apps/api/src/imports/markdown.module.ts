@@ -22,7 +22,7 @@ import {
   bindMarkdownDocument,
   markdownImportPreviewId,
 } from "@orvyn/editor/markdown";
-import { documentSchemaVersion } from "@orvyn/editor";
+import { documentSchemaVersion, DocumentLimitError } from "@orvyn/editor";
 import { documentReferences } from "@orvyn/editor/links";
 import { user, hash, fail } from "../runtime.js";
 import {
@@ -100,9 +100,10 @@ async function plan(
     return fail(
       400,
       error instanceof Error &&
-        /^(Choose a |The Markdown contains)/.test(error.message)
+        (error instanceof DocumentLimitError ||
+          /^(Choose a |The Markdown contains)/.test(error.message))
         ? error.message
-        : "This Markdown exceeds the document limits. Try a smaller file with fewer nested blocks.",
+        : "This Markdown could not be converted into an editable page. Check its block structure and links, then preview it again.",
     );
   }
   const ancestry = (

@@ -10,6 +10,12 @@ The client provides formatting toolbars, a keyboard-accessible slash menu, Markd
 
 Browser providers batch document and awareness changes in a fixed 40 ms window using Hocuspocus's built-in `flushDelay`. This bounds the batching delay and avoids issuing one full authorization/persistence cycle per rapidly typed character or caret update. One merged update receives one durable acknowledgement; the UI still waits for all outstanding acknowledgements. Navigation and link/attachment pickers flush buffered updates immediately before waiting for durability. No timeout or reconnect marks unacknowledged content as saved. A Chromium regression test counts real outgoing update frames, checks the server projection and second browser, and leaves immediately after another edit to verify navigation flushing.
 
+The document editor distinguishes a pending initial handshake from actual local document mutations. Merely opening a page whose WebSocket cannot synchronize does not trigger a false unsaved-changes navigation warning. Real local edits remain protected until the server acknowledges them, including through reconnect. The reconnect action restarts the actual provider socket and preserves the Y.Doc; the deprecated provider disconnect method is not used.
+
+While initial synchronization is pending, the current authorized HTTP document is shown in a separate read-only editor. It never seeds the collaborative Y.Doc, preventing duplicate content when synchronization succeeds. After eight seconds a connection notice offers retry and explains that the saved version remains readable. A previously initialized editor pauses on disconnect while keeping its current content. Session/resource denial hides the initial preview and prevents reconnect. No offline write fallback is introduced. Tests cover stalled initial synchronization, unedited navigation, reconnect without duplication, interrupted real edits and durable recovery.
+
+Document validation is bounded to 2 MiB of serialized UTF-8 JSON, 20,000 elements and 64 levels. Editor Yjs state is bounded to 4 MiB, transport messages/queues to 8 MiB; whiteboard state retains its separate 2 MiB bound. All components must be upgraded together before relying on larger document budgets.
+
 ## Authentication and authorization
 
 WebSockets use the HttpOnly session cookie, never a copied browser token. Origin must exactly match ORVYN_ORIGIN. Document rooms are page UUIDs. API and collaboration share the session authentication package and PostgreSQL orvyn_page_role policy.

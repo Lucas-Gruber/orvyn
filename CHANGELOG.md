@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Import larger Markdown roadmaps: up to 512 KB of UTF-8 source, with coordinated
+  editor, HTTP and collaboration budgets instead of rejecting modest files after
+  their formatting expands into structured blocks. Limit errors identify size,
+  element count or nesting; failed reviews never create partial pages.
+- Keep the saved document readable during initial connection problems, show a
+  reconnect action, and preserve real pending edits across reconnect. Initial
+  synchronization alone no longer produces a false unsaved-changes warning.
+
 ## 0.3.0
 
 ### Editor and workspace

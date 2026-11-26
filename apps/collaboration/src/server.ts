@@ -14,6 +14,10 @@ import {
   yDocToDocument,
   documentSchemaVersion,
 } from "@orvyn/editor";
+import {
+  collaborationMessageMaxBytes,
+  documentStateMaxBytes,
+} from "@orvyn/shared/document-limits";
 import * as Y from "yjs";
 import { documentPeople } from "@orvyn/editor/mentions";
 import { documentReferences, newDocumentAssets } from "@orvyn/editor/links";
@@ -140,7 +144,10 @@ function guardOutbound(connection: Connection<Identity>) {
       return;
     }
     if (closed) return;
-    if (count >= 32 || bytes + message.byteLength > 4 * 1024 * 1024) {
+    if (
+      count >= 32 ||
+      bytes + message.byteLength > collaborationMessageMaxBytes
+    ) {
       connection.close({ code: 1013, reason: "Outbound queue limit" });
       return;
     }
@@ -275,7 +282,7 @@ const server = new Server<Identity>({
   address: "0.0.0.0",
   quiet: true,
   stopOnSignals: false,
-  websocketOptions: { maxPayload: 2 * 1024 * 1024 },
+  websocketOptions: { maxPayload: collaborationMessageMaxBytes },
   extensions: [extension],
   async onAuthenticate({ requestHeaders, documentName, connectionConfig }) {
     if (
@@ -404,7 +411,7 @@ const server = new Server<Identity>({
         Y.applyUpdate(candidate, row.rows[0].state);
         Y.applyUpdate(candidate, payload);
         const next = Buffer.from(Y.encodeStateAsUpdate(candidate));
-        if (next.length > 2 * 1024 * 1024) deny();
+        if (next.length > documentStateMaxBytes) deny();
         const json = yDocToDocument(candidate);
         if (next.equals(row.rows[0].state)) return;
         const people = documentPeople(json),

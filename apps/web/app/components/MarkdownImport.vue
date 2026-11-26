@@ -254,8 +254,9 @@ defineExpose({ open });
     </template>
     <form v-else class="markdown-import-form" @submit.prevent="prepare">
       <p>
-        Turn a Markdown file into an editable page. Review headings, lists,
-        tables and links before importing.
+        Import headings, lists, tasks, tables and links as editable blocks.
+        Choose a file or paste Markdown below, then review the page before
+        creating it.
       </p>
       <label class="markdown-file"
         ><AppIcon name="upload" :size="21" /><span

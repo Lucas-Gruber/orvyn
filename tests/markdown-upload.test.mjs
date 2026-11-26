@@ -2,7 +2,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
-import { markdownImportMaxBytes } from "../packages/shared/dist/markdown-limits.js";
+import {
+  markdownImportMaxBytes,
+  markdownImportSizeLabel,
+} from "../packages/shared/dist/markdown-limits.js";
 import { request, sessionCookie, Pool, base } from "./helpers.mjs";
 
 async function account() {
@@ -302,12 +305,11 @@ test("a large Markdown file that expands beyond native document limits leaves no
   const db = new Pool({ connectionString: process.env.DATABASE_URL });
   try {
     const f = await fixture(),
-      source = "**strong** _italic_ [a link](https://example.test) ".repeat(
-        1400,
-      );
+      source = "- A roadmap item\n".repeat(7000);
     assert.ok(Buffer.byteLength(source) < markdownImportMaxBytes);
     const review = await f.post(source);
     assert.equal(review.response.status, 400, JSON.stringify(review.data));
+    assert.match(review.data.message, /20,000 elements/);
     assert.equal(
       (
         await db.query(
@@ -384,7 +386,7 @@ test("Chromium: larger UTF-8 Markdown uses a bounded file upload, previews, impo
         buffer: Buffer.alloc(markdownImportMaxBytes + 1, "a"),
       });
     await expect(dialog.getByRole("alert")).toHaveText(
-      "Choose a .md or .markdown file up to 96 KB.",
+      "Choose a .md or .markdown file up to " + markdownImportSizeLabel + ".",
     );
     await dialog
       .getByLabel("Choose a Markdown file", { exact: true })

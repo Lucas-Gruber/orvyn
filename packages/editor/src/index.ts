@@ -29,6 +29,24 @@ import { CommentHighlights } from "./comment-highlights.js";
 import { EditorTables } from "./table-controls.js";
 import { WhiteboardBlock } from "./whiteboard-node.js";
 import { MarkdownPaste } from "./markdown-paste.js";
+import {
+  documentMaxBytes,
+  documentMaxNodes,
+  documentMaxDepth,
+} from "@orvyn/shared/document-limits";
+
+export class DocumentLimitError extends Error {
+  constructor(public readonly limit: "size" | "nodes" | "depth") {
+    super(
+      limit === "size"
+        ? "This document exceeds 2 MB of formatted content. Split it into smaller pages."
+        : limit === "nodes"
+          ? "This document contains more than 20,000 elements. Split it into smaller pages."
+          : "This document is nested more than 64 levels deep. Reduce its nesting before importing.",
+    );
+    this.name = "DocumentLimitError";
+  }
+}
 const lowlight = createLowlight(common);
 export const documentSchemaVersion = 13;
 export function editorExtensions(collaborative = false): AnyExtension[] {
@@ -71,19 +89,31 @@ export function editorExtensions(collaborative = false): AnyExtension[] {
 export const schema: ReturnType<typeof getSchema> =
   getSchema(editorExtensions());
 export function validateDocument(input: unknown) {
+  if (!input || typeof input !== "object") throw Error("Invalid document");
   if (
-    !input ||
-    typeof input !== "object" ||
-    JSON.stringify(input).length > 100000
+    new TextEncoder().encode(JSON.stringify(input)).byteLength >
+    documentMaxBytes
   )
-    throw Error("Invalid document size");
+    throw new DocumentLimitError("size");
+  // Check the raw tree before recursive schema parsing to bound both work and
+  // stack depth, including malformed documents supplied directly to the API.
+  const pending: { node: any; depth: number }[] = [{ node: input, depth: 0 }];
+  let rawNodes = 0;
+  while (pending.length) {
+    const { node, depth } = pending.pop()!;
+    if (++rawNodes > documentMaxNodes) throw new DocumentLimitError("nodes");
+    if (depth > documentMaxDepth) throw new DocumentLimitError("depth");
+    if (Array.isArray(node?.content))
+      for (const child of node.content)
+        pending.push({ node: child, depth: depth + 1 });
+  }
   const node = schema.nodeFromJSON(input);
   if (node.type.name !== "doc") throw Error("Document root required");
   node.check();
   let nodes = 0;
   const bounded = (n: any, depth: number) => {
-    if (++nodes > 3000 || depth > 64)
-      throw Error("Document structure limit exceeded");
+    if (++nodes > documentMaxNodes) throw new DocumentLimitError("nodes");
+    if (depth > documentMaxDepth) throw new DocumentLimitError("depth");
     if (
       n.type.name === "orvynColumns" &&
       n.attrs.widths !== null &&
@@ -199,7 +229,13 @@ export function validateDocument(input: unknown) {
           throw Error("Unsafe link protocol");
       }
   });
-  return node.toJSON();
+  const normalized = node.toJSON();
+  if (
+    new TextEncoder().encode(JSON.stringify(normalized)).byteLength >
+    documentMaxBytes
+  )
+    throw new DocumentLimitError("size");
+  return normalized;
 }
 export function normalizeDocument(input: any) {
   if (input?.type === "doc" && Array.isArray(input.content)) {

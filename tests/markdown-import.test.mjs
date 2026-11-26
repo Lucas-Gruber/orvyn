@@ -9,6 +9,7 @@ import {
   bindMarkdownDocument,
 } from "../packages/editor/dist/markdown.js";
 import { request, sessionCookie, Pool, base } from "./helpers.mjs";
+import { markdownImportMaxBytes } from "../packages/shared/dist/markdown-limits.js";
 
 const markdown = `# A calmer handover
 
@@ -147,7 +148,7 @@ test("Markdown import preserves GFM structure, stable heading links, inline mark
     "Useful note",
   );
   assert.throws(() =>
-    importMarkdown("x".repeat(98305), {
+    importMarkdown("x".repeat(markdownImportMaxBytes + 1), {
       filename: "too-big.md",
       titleFromHeading: true,
     }),

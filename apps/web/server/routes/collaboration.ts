@@ -1,9 +1,10 @@
 import WebSocket from "ws";
 import { createDiagnostics, runtimeOrigin } from "@orvyn/shared/server";
+import { collaborationMessageMaxBytes } from "@orvyn/shared/document-limits";
 
 const log = createDiagnostics("web", process.env);
 
-const maxBytes = 4 * 1024 * 1024;
+const maxBytes = collaborationMessageMaxBytes;
 interface Tunnel {
   socket: WebSocket;
   pending: Uint8Array[];

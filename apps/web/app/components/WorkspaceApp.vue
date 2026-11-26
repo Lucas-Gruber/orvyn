@@ -2089,6 +2089,7 @@ onBeforeUnmount(() => {
             :page-id="page.id"
             :space-id="page.space_id"
             :access-rank="page.access_rank"
+            :initial-document="page.document"
             :focused-comment="focusedComment"
             @comment="commentOnText"
             @thread="openCommentThread"
