@@ -1,5 +1,7 @@
 # Remaining product work
 
+The [complete open-items audit](OPEN_ITEMS.md) is the detailed inventory of missing work, partial implementations, unresolved problems and outstanding validation against the product specification and subsequent requests. It distinguishes later/optional extensions from requirements of the initial server release. This roadmap is the shorter working overview.
+
 Work through these areas in order, preserving working features and committing/pushing tested functional changes. PRODUCT.md remains the complete specification; checked entries below describe implemented slices rather than completion of an entire product phase. Include current browser screenshots during substantial UI changes.
 
 1. Editor and pages
@@ -61,7 +63,7 @@ Work through these areas in order, preserving working features and committing/pu
    - [x] Public people/creator/editor fields and mentions with explicit public names, root-scoped opaque IDs and alias-only formula/rollup dependencies.
    - [x] Revocable, expiring and optional password-protected links with current source checks and permanent revocation on source policy changes.
 7. Localization, branding and administration
-   - [x] Deployment-controlled local self-registration, exact email-domain restrictions, login policy feedback and independent OIDC provisioning (development source).
+   - [x] Deployment-controlled local self-registration, exact email-domain restrictions, login policy feedback and independent OIDC provisioning (released in 0.3.0).
    - [ ] Runtime German/English/system language and synchronized preferences.
    - [ ] Instance/organization/space appearance, complete administration.
    - [x] Real OIDC provider validation with a pinned Keycloak instance, including deployment-managed setup and administrator subject checks.
@@ -81,6 +83,11 @@ Work through these areas in order, preserving working features and committing/pu
    - [ ] Tauri clients, releases, update distribution and signing.
    - [x] Kubernetes/Helm with Rancher configuration, deployment-managed OIDC and internal/external services.
    - [x] Uniform volume permission strategies, resumable preparation, independent configuration recovery and safe startup diagnostics; see the [hardening report](DEPLOYMENT-HARDENING.md) for backend validation limits.
-   - [x] Scheduled PostgreSQL snapshots on retained PVCs, integrity checks, bounded retention and isolated new-database restore tooling (development chart).
+   - [x] Scheduled PostgreSQL snapshots on retained PVCs, integrity checks, bounded retention and isolated new-database restore tooling (released in chart 0.3.0).
    - [ ] Coordinated scheduled attachment/key backups, encrypted offsite copies, observability and production disaster recovery.
    - [ ] Load testing, object-store deployment policies, accessibility and broader browser validation.
+10. MCP and API integrations
+    - [ ] MCP server, documented transport and permission-checked search/read/write tools.
+    - [ ] External integration authentication, scoped access, revocation and auditability.
+    - [ ] Application/Helm/Rancher configuration and MCP client/authorization tests.
+    - [ ] Generated OpenAPI schemas and machine-readable API documentation.
