@@ -6,6 +6,7 @@ dist/
 *.log
 .local/
 apps/web/public/excalidraw-assets/
+apps/web/app/generated/mermaid/
 backups/
 artifacts/
 test-results.txt

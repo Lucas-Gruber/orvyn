@@ -4,8 +4,57 @@ import {
   NodeViewContent,
   type NodeViewProps,
 } from "@tiptap/vue-3";
+import { copyText } from "../utils/clipboard";
 const props = defineProps<NodeViewProps>(),
   editable = useNodeEditable(props.editor);
+const isMermaid = computed(
+  () => String(props.node.attrs.language).toLowerCase() === "mermaid",
+);
+const sourceOpen = ref(false),
+  copied = ref(false);
+const sourceId = "code-source-" + crypto.randomUUID();
+let copyTimer: ReturnType<typeof setTimeout> | undefined;
+function revealSelection() {
+  if (!isMermaid.value || !editable.value || !props.editor.isFocused) return;
+  const pos = props.getPos(),
+    { from, to } = props.editor.state.selection;
+  if (typeof pos === "number" && from > pos && to < pos + props.node.nodeSize)
+    sourceOpen.value = true;
+}
+async function toggleSource() {
+  sourceOpen.value = !sourceOpen.value;
+  if (!sourceOpen.value && editable.value) {
+    const pos = props.getPos();
+    if (typeof pos === "number") props.editor.commands.setNodeSelection(pos);
+  }
+  if (sourceOpen.value && editable.value) {
+    await nextTick();
+    const pos = props.getPos();
+    if (typeof pos === "number") {
+      props.editor.commands.setTextSelection(pos + 1);
+      props.editor.view.focus();
+    }
+  }
+}
+async function copySource() {
+  try {
+    await copyText(props.node.textContent);
+    copied.value = true;
+    clearTimeout(copyTimer);
+    copyTimer = setTimeout(() => (copied.value = false), 2000);
+  } catch {
+    copied.value = false;
+  }
+}
+onMounted(() => {
+  props.editor.on("selectionUpdate", revealSelection);
+  revealSelection();
+});
+onBeforeUnmount(() => {
+  props.editor.off("selectionUpdate", revealSelection);
+  clearTimeout(copyTimer);
+});
+watch(isMermaid, revealSelection);
 const languages = [
   ["plaintext", "Plain text"],
   ["javascript", "JavaScript"],
@@ -18,6 +67,7 @@ const languages = [
   ["css", "CSS"],
   ["yaml", "YAML"],
   ["markdown", "Markdown"],
+  ["mermaid", "Mermaid"],
   ["go", "Go"],
   ["rust", "Rust"],
   ["java", "Java"],
@@ -26,9 +76,9 @@ const languages = [
 ];
 </script>
 <template>
-  <NodeViewWrapper class="code-block"
+  <NodeViewWrapper class="code-block" :class="{ 'mermaid-block': isMermaid }"
     ><div class="code-block-controls" contenteditable="false">
-      <AppIcon name="code" :size="14" /><select
+      <AppIcon :name="isMermaid ? 'diagram' : 'code'" :size="14" /><select
         aria-label="Code language"
         :value="node.attrs.language || 'plaintext'"
         :disabled="!editable"
@@ -55,8 +105,43 @@ const languages = [
           {{ language[1] }}
         </option>
       </select>
+      <template v-if="isMermaid">
+        <div class="mermaid-controls">
+          <button
+            type="button"
+            class="ghost"
+            :aria-controls="sourceId"
+            :aria-expanded="sourceOpen"
+            @click="toggleSource"
+          >
+            <AppIcon name="code" :size="14" />{{
+              sourceOpen
+                ? "Hide source"
+                : editable
+                  ? "Edit diagram"
+                  : "Show source"
+            }}
+          </button>
+          <button
+            type="button"
+            class="ghost"
+            :aria-label="copied ? 'Code copied' : 'Copy Mermaid code'"
+            @click="copySource"
+          >
+            <AppIcon :name="copied ? 'check' : 'copy'" :size="14" />
+          </button>
+        </div>
+      </template>
     </div>
-    <pre><NodeViewContent as="code" spellcheck="false"/></pre>
+    <pre
+      :id="sourceId"
+      v-show="!isMermaid || sourceOpen"
+    ><NodeViewContent as="code" spellcheck="false"/></pre>
+    <MermaidPreview
+      v-if="isMermaid"
+      :source="node.textContent"
+      @error="editable && (sourceOpen = true)"
+    />
   </NodeViewWrapper>
 </template>
 <style>
@@ -83,6 +168,21 @@ const languages = [
   padding: 2px;
   min-height: 24px;
   width: auto;
+}
+.mermaid-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+.mermaid-controls button {
+  min-height: 26px;
+  padding: 3px 6px;
+  font-size: 0.73rem;
+  color: var(--muted);
+}
+.mermaid-block pre {
+  border-bottom: 1px solid var(--line-soft) !important;
 }
 .block-editor .tiptap .code-block pre {
   margin: 0;

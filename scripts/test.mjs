@@ -195,6 +195,7 @@ try {
           "tests/document-links.test.mjs",
           "tests/backlinks.test.mjs",
           "tests/editor-blocks.test.mjs",
+          "tests/mermaid.test.mjs",
           "tests/editor-ux.test.mjs",
           "tests/editor-tables.test.mjs",
           "tests/whiteboards.test.mjs",

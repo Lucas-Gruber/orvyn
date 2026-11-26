@@ -34,7 +34,7 @@ Write a quick note and grow it into a team handbook. Link a decision to the exac
 
 ### From a blank page to a shared understanding
 
-A block editor with `/` commands, Markdown paste and shortcuts, and H1–H4 headings. Build pages with columns, callouts, tables, code, images and checklists. Connect documents through stable heading links, preview cards and backlinks, then find them again with permission-aware search.
+A block editor with `/` commands, Markdown paste and shortcuts, and H1–H4 headings. Build pages with columns, callouts, tables, code, [Mermaid diagrams](docs/MERMAID.md), images and checklists. Connect documents through stable heading links, preview cards and backlinks, then find them again with permission-aware search.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/workspace-dark.png">

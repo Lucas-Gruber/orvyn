@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev:api": "node --env-file=.env apps/api/node_modules/tsx/dist/cli.mjs --tsconfig apps/api/tsconfig.json apps/api/src/main.ts",
-    "dev:web": "node apps/web/scripts/whiteboard-assets.mjs && node --env-file=.env apps/web/node_modules/nuxt/bin/nuxt.mjs dev apps/web --host 0.0.0.0",
+    "dev:web": "node apps/web/scripts/whiteboard-assets.mjs && node apps/web/scripts/mermaid-assets.mjs && node --env-file=.env apps/web/node_modules/nuxt/bin/nuxt.mjs dev apps/web --host 0.0.0.0",
     "build": "pnpm -r build",
     "test": "pnpm build && node --env-file=.env scripts/test.mjs",
     "infra:up": "docker compose --env-file .env -f infrastructure/compose/compose.yaml up -d --wait",

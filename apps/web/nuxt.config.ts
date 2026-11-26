@@ -30,7 +30,7 @@ export default defineNuxtConfig({
       ],
     },
   },
-  nitro: { experimental: { websocket: true } },
+  nitro: { experimental: { websocket: true }, compressPublicAssets: true },
   runtimeConfig: {
     apiUrl: "http://127.0.0.1:3001",
     collaborationUpstream: "ws://127.0.0.1:3002",

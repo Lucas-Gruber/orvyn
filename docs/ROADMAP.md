@@ -6,6 +6,7 @@ Work through these areas in order, preserving working features and committing/pu
    - [ ] Templates for ordinary pages, with a template picker when creating a page and reusable document content.
    - [x] Slash commands, permanent document/heading links and backlinks.
    - [x] Callouts, collapsible sections, dynamic outlines and highlighted code.
+   - [x] Mermaid diagrams via slash commands and fenced Markdown, with live source editing, theme-aware previews and published readers.
    - [x] Private images/files embedded in document content.
    - [x] Internal document/heading preview cards.
    - [x] Opt-in YouTube/Vimeo/Loom video embeds.

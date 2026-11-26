@@ -80,6 +80,7 @@ import {
   LoaderCircle,
   GripVertical,
   PencilRuler,
+  Workflow,
 } from "@lucide/vue";
 const props = withDefaults(defineProps<{ name: string; size?: number }>(), {
   size: 18,
@@ -87,6 +88,7 @@ const props = withDefaults(defineProps<{ name: string; size?: number }>(), {
 const icons: Record<string, any> = {
   upload: Upload,
   whiteboard: PencilRuler,
+  diagram: Workflow,
   grip: GripVertical,
   info: Info,
   inbox: Inbox,

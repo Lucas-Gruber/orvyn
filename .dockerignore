@@ -19,5 +19,6 @@
 backups
 tests
 apps/web/public/excalidraw-assets
+apps/web/app/generated/mermaid
 *.tar
 artifacts

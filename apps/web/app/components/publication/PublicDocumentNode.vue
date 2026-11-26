@@ -95,6 +95,23 @@ const widths = computed(() => {
       :snapshot="snapshot"
       :file-url="fileUrl"
   /></component>
+  <div
+    v-else-if="
+      node.type === 'codeBlock' &&
+      String(node.attrs?.language).toLowerCase() === 'mermaid'
+    "
+    class="public-mermaid"
+  >
+    <MermaidPreview
+      :source="
+        (node.content || []).map((child: any) => child.text || '').join('')
+      "
+    />
+    <details>
+      <summary>Mermaid source</summary>
+      <pre><code>{{ (node.content || []).map((child: any) => child.text || '').join('') }}</code></pre>
+    </details>
+  </div>
   <pre
     v-else-if="node.type === 'codeBlock'"
   ><code><PublicDocumentNode v-for="(child,i) in node.content" :key="i" :node="child" :snapshot="snapshot" :file-url="fileUrl" /></code></pre>

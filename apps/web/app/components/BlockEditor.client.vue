@@ -471,6 +471,29 @@ const commands: SlashCommand[] = [
     run: (e: Editor) => e.chain().focus().toggleCodeBlock().run(),
   },
   {
+    label: "Mermaid",
+    icon: "diagram",
+    aliases: ["diagram", "diagramm", "flowchart", "sequence"],
+    run: (e) =>
+      e
+        .chain()
+        .focus()
+        .insertContent([
+          {
+            type: "codeBlock",
+            attrs: { language: "mermaid" },
+            content: [
+              {
+                type: "text",
+                text: "flowchart LR\n  Ideas[Collect ideas] --> Plan[Make a plan]\n  Plan --> Create[Build together]",
+              },
+            ],
+          },
+          { type: "paragraph" },
+        ])
+        .run(),
+  },
+  {
     label: "Divider",
     icon: "divider",
     run: (e: Editor) => e.chain().focus().setHorizontalRule().run(),
@@ -539,6 +562,7 @@ const basicCommands = [
   "Table",
   "Linked database",
   "Whiteboard",
+  "Mermaid",
   "Code block",
   "Image",
   "File",
@@ -569,6 +593,7 @@ const commandDescriptions: Record<string, string> = {
   Table: "Arrange content in rows and columns",
   "Linked database": "Insert a live view of your database",
   Whiteboard: "Embed a collaborative drawing canvas",
+  Mermaid: "Draw flowcharts, sequences and more with code",
   "Code block": "Write code with syntax highlighting",
   Image: "Upload an image",
   File: "Attach a file to this page",
