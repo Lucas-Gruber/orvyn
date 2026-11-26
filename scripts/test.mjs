@@ -227,7 +227,19 @@ try {
         ];
   const tests = spawn(
     process.execPath,
-    ["--test", "--test-concurrency=1", ...testArgs],
+    [
+      "--test",
+      "--test-concurrency=1",
+      ...(process.env.GITHUB_ACTIONS === "true"
+        ? [
+            "--test-reporter=spec",
+            "--test-reporter-destination=stdout",
+            "--test-reporter=./scripts/test-github-reporter.mjs",
+            "--test-reporter-destination=stderr",
+          ]
+        : []),
+      ...testArgs,
+    ],
     { env: common, stdio: "inherit" },
   );
   process.exitCode = await new Promise((resolve) =>

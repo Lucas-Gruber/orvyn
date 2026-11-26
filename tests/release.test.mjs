@@ -22,6 +22,53 @@ import {
 } from "../scripts/release-chart.mjs";
 import { manifestDigest } from "../scripts/release-platforms.mjs";
 
+test("real Node failures produce useful CI annotations with file positions and without secret or expected-TODO leakage", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "orvyn-test-reporter-"));
+  try {
+    await mkdir(join(directory, "tests"));
+    const path = join(directory, "tests", "reporter.fixture.test.mjs"),
+      secret = "test-reporter-secret-" + "9".repeat(20),
+      session = "ab".repeat(32);
+    await writeFile(
+      path,
+      "import test from 'node:test';test('validator fails',()=>{throw Error('Intentional CI probe '+process.env.S3_SECRET_ACCESS_KEY+' '+process.env.SESSION_CANARY)});test('expected TODO',{todo:true},()=>{throw Error('Known pending feature')});",
+    );
+    const env = {
+      ...process.env,
+      S3_SECRET_ACCESS_KEY: secret,
+      SESSION_CANARY: session,
+    };
+    delete env.NODE_TEST_CONTEXT;
+    const result = spawnSync(
+      process.execPath,
+      [
+        "--test",
+        "--test-reporter=" +
+          new URL("../scripts/test-github-reporter.mjs", import.meta.url).href,
+        path,
+      ],
+      {
+        cwd: directory,
+        env,
+        encoding: "utf8",
+      },
+    );
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(
+      result.stdout,
+      /::error title=Integration test failed,file=tests\/reporter\.fixture\.test\.mjs,line=1/,
+    );
+    assert.match(result.stdout, /Intentional CI probe/);
+    assert.ok(
+      !result.stdout.includes(secret) && !result.stdout.includes(session),
+    );
+    assert.ok(!result.stdout.includes("Known pending feature"));
+    assert.equal(result.stdout.trim().split("\n").length, 1);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("CI retains Kubernetes/integration logs and propagates failed validators through tee", async () => {
   const workflow = YAML.parse(
     await readFile(
