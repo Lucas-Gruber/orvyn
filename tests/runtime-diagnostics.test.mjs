@@ -3,12 +3,47 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { randomUUID } from "node:crypto";
+import { redactTestDiagnostics } from "../scripts/test-diagnostics.mjs";
 import {
   createDiagnostics,
   diagnosticCode,
   runtimeOrigin,
   runtimeUpstream,
 } from "../packages/shared/dist/server.js";
+
+test("CI image diagnostics retain failure categories while removing encoded credentials and generated sessions", () => {
+  const password = "test-p@ssword/:" + randomUUID(),
+    secret = "s3-" + randomUUID(),
+    session = "ab".repeat(32),
+    token = "ghs_" + randomUUID();
+  const env = {
+    DATABASE_URL:
+      "postgresql://user:" + encodeURIComponent(password) + "@localhost/test",
+    S3_SECRET_ACCESS_KEY: secret,
+    GITHUB_TOKEN: token,
+  };
+  const raw =
+    "ECONNREFUSED postgres://user:" +
+    encodeURIComponent(password) +
+    "@postgres/test " +
+    password +
+    " " +
+    secret +
+    " " +
+    session +
+    " " +
+    token;
+  const safe = redactTestDiagnostics(raw, env);
+  assert.match(safe, /ECONNREFUSED/);
+  for (const value of [
+    password,
+    encodeURIComponent(password),
+    secret,
+    session,
+    token,
+  ])
+    assert.ok(!safe.includes(value));
+});
 
 test("production components require an explicit canonical HTTPS origin and private upstreams", () => {
   assert.equal(runtimeOrigin({}), "http://localhost:3000");

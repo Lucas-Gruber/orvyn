@@ -86,7 +86,9 @@ jobs:
               --file infrastructure/docker/Dockerfile .
           done
       - name: Exercise production containers over HTTPS
-        run: pnpm test:images
+        run: |
+          set -o pipefail
+          pnpm test:images 2>&1 | tee production-image-results.txt
       - name: Install and upgrade on Kubernetes with internal and local storage
         run: |
           set -o pipefail
@@ -102,6 +104,8 @@ jobs:
           name: test-results-${{ github.run_attempt }}
           path: |
             infrastructure-startup.txt
+            production-image-results.txt
+            .local/test-results/*.log
             test-results.txt
             kubernetes-results.txt
             .local/ui-review/*.png

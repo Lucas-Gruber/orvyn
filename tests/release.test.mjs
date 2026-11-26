@@ -33,6 +33,10 @@ test("CI retains Kubernetes/integration logs and propagates failed validators th
   try {
     for (const [name, file] of [
       [
+        "Exercise production containers over HTTPS",
+        "production-image-results.txt",
+      ],
+      [
         "Install and upgrade on Kubernetes with internal and local storage",
         "kubernetes-results.txt",
       ],
@@ -46,7 +50,7 @@ test("CI retains Kubernetes/integration logs and propagates failed validators th
         // Execute the actual step script using the runner's weakest default
         // (-e without pipefail), substituting only the expensive test program.
         const script =
-          "node() { printf '%s\\n' 'validator output'; return " +
+          "pnpm() { node; }; node() { printf '%s\\n' 'validator output'; return " +
           code +
           "; }\n" +
           step.run;

@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import { randomBytes, randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { mkdtemp, writeFile, readFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer as tlsServer, request as tlsRequest } from "node:https";
@@ -16,6 +16,7 @@ import {
 } from "@hocuspocus/provider";
 import * as Y from "yjs";
 import { removeTestBucket } from "./s3-cleanup.mjs";
+import { redactTestDiagnostics } from "./test-diagnostics.mjs";
 const execute = promisify(execFile),
   require = createRequire(new URL("../apps/api/package.json", import.meta.url)),
   { Pool } = require("pg"),
@@ -23,8 +24,13 @@ const execute = promisify(execFile),
   WS = createRequire(new URL("../apps/web/package.json", import.meta.url))(
     "ws",
   );
-const loopback = (url) =>
-  ["localhost", "127.0.0.1", "[::1]"].includes(new URL(url).hostname);
+const loopback = (url) => {
+  try {
+    return ["localhost", "127.0.0.1", "[::1]"].includes(new URL(url).hostname);
+  } catch {
+    return false;
+  }
+};
 if (!loopback(process.env.DATABASE_URL) || !loopback(process.env.S3_ENDPOINT))
   throw Error(
     "Image tests require the local disposable development infrastructure.",
@@ -52,11 +58,14 @@ let databaseCreated = false,
   bucketCreated = false,
   proxy;
 async function docker(args) {
-  return (
-    await execute("docker", ["--host=unix:///var/run/docker.sock", ...args], {
+  const result = await execute(
+    "docker",
+    ["--host=unix:///var/run/docker.sock", ...args],
+    {
       maxBuffer: 4 * 1024 * 1024,
-    })
-  ).stdout.trim();
+    },
+  );
+  return (result.stdout + (args[0] === "logs" ? result.stderr : "")).trim();
 }
 async function port() {
   for (let attempt = 0; attempt < 20; attempt++) {
@@ -83,6 +92,7 @@ async function waitFor(check, label, timeout = 30000) {
   throw Error(label);
 }
 async function main() {
+  await rm(".local/test-results/production-images.log", { force: true });
   for (const component of ["web", "api", "collaboration", "worker"]) {
     const image = JSON.parse(
       await docker(["image", "inspect", `orvyn/${component}:ci`]),
@@ -552,16 +562,36 @@ async function main() {
 try {
   await main();
 } catch (error) {
-  console.error(error.message);
+  const failure = redactTestDiagnostics(
+    error.message || "Production image validation failed",
+  );
+  console.error("IMAGE_CHECK: " + failure.replaceAll("\n", "\nIMAGE_CHECK: "));
+  if (process.env.GITHUB_ACTIONS === "true")
+    console.error(
+      "::error title=Production image validation failed::" +
+        failure
+          .replaceAll("%", "%25")
+          .replaceAll("\r", "%0D")
+          .replaceAll("\n", "%0A"),
+    );
+  const report = [failure];
   process.exitCode = 1;
   for (const container of containers)
     try {
-      await writeFile(
-        join(directory, container + ".log"),
+      const diagnostic = redactTestDiagnostics(
         await docker(["logs", "--tail", "35", container]),
-        { mode: 0o600 },
       );
+      await writeFile(join(directory, container + ".log"), diagnostic, {
+        mode: 0o600,
+      });
+      report.push(container + "\n" + diagnostic);
     } catch {}
+  await mkdir(".local/test-results", { recursive: true });
+  await writeFile(
+    ".local/test-results/production-images.log",
+    report.join("\n\n"),
+    { mode: 0o600 },
+  );
 } finally {
   for (const peer of peers) {
     peer.provider.destroy();
