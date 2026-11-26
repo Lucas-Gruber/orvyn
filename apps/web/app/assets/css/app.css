@@ -368,7 +368,8 @@ hr {
   background: var(--bg);
 }
 .app-sidebar {
-  width: 252px;
+  position: relative;
+  width: var(--sidebar-width, 252px);
   flex: none;
   background: var(--panel);
   border-right: 1px solid var(--line-soft);
@@ -379,7 +380,7 @@ hr {
   transition: margin 0.18s;
 }
 .app-sidebar.collapsed {
-  margin-left: -252px;
+  margin-left: calc(-1 * var(--sidebar-width, 252px));
 }
 .sidebar-brand {
   height: 40px;
@@ -1672,10 +1673,10 @@ dialog.link-database-dialog::backdrop {
 }
 @media (max-width: 1050px) {
   .app-sidebar {
-    width: 230px;
+    width: var(--sidebar-width, 230px);
   }
   .app-sidebar.collapsed {
-    margin-left: -230px;
+    margin-left: calc(-1 * var(--sidebar-width, 230px));
   }
   .document-page {
     width: calc(100% - 72px);

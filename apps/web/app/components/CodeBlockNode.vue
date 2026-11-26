@@ -10,6 +10,38 @@ const props = defineProps<NodeViewProps>(),
 const isMermaid = computed(
   () => String(props.node.attrs.language).toLowerCase() === "mermaid",
 );
+const canRenderMermaid = computed(() => {
+  if (
+    !editable.value ||
+    !["", "plaintext", "text"].includes(
+      String(props.node.attrs.language || "").toLowerCase(),
+    )
+  )
+    return false;
+  const source = props.node.textContent;
+  if (source.length > 20000) return false;
+  const first =
+    source
+      .replace(/^\uFEFF/, "")
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .find((line) => line && !line.startsWith("%%")) || "";
+  return /^(?:(?:flowchart|graph)\s+(?:TB|TD|BT|RL|LR)\b|(?:sequenceDiagram|classDiagram|stateDiagram(?:-v2)?|erDiagram|journey|gantt|pie|mindmap|timeline|gitGraph|requirementDiagram|quadrantChart|xychart(?:-beta)?|block-beta|packet-beta|architecture-beta|kanban|sankey-beta|C4(?:Context|Container|Component|Dynamic|Deployment))(?:\s|$))/.test(
+    first,
+  );
+});
+function renderDiagram() {
+  if (!canRenderMermaid.value) return;
+  const pos = props.getPos();
+  if (typeof pos !== "number") return;
+  props.editor
+    .chain()
+    .focus()
+    .setNodeSelection(pos)
+    .updateAttributes("codeBlock", { language: "mermaid" })
+    .run();
+  sourceOpen.value = false;
+}
 const sourceOpen = ref(false),
   copied = ref(false);
 const sourceId = "code-source-" + crypto.randomUUID();
@@ -105,6 +137,15 @@ const languages = [
           {{ language[1] }}
         </option>
       </select>
+      <button
+        v-if="!isMermaid && canRenderMermaid"
+        type="button"
+        class="ghost mermaid-render-action"
+        title="Render this code as a Mermaid diagram"
+        @click="renderDiagram"
+      >
+        <AppIcon name="diagram" :size="14" />Render diagram
+      </button>
       <template v-if="isMermaid">
         <div class="mermaid-controls">
           <button
@@ -145,6 +186,12 @@ const languages = [
   </NodeViewWrapper>
 </template>
 <style>
+.mermaid-render-action {
+  margin-left: auto;
+  min-height: 26px;
+  padding: 3px 7px;
+  font-size: 0.75rem;
+}
 .code-block {
   border: 1px solid var(--line);
   border-radius: 8px;

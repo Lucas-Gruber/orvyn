@@ -6,6 +6,13 @@ the preview update, then **Hide source** to leave just the diagram. **Copy Merma
 code** copies the source. An ordinary code block can also use **Mermaid** in its
 language selector.
 
+Existing plain-text code blocks whose first non-comment line identifies a Mermaid
+diagram also offer **Render diagram**. The action changes that block's language
+to Mermaid in one undoable edit and keeps its exact source. It requires editing
+permission, preserves explicitly selected programming languages and uses the
+same native renderer, collaboration and published reader as fenced/slash blocks.
+For other Mermaid sources, select Mermaid from the code-language menu.
+
 ```mermaid
 flowchart LR
   Idea[Collect ideas] --> Plan[Make a plan]

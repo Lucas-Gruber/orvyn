@@ -6,6 +6,15 @@ Workspace search (`Ctrl/Cmd P`, or `Ctrl/Cmd K` outside the document editor) sea
 
 The sidebar shows favorites and recent pages. Only their IDs are stored in per-account device preferences; labels come from the current authorized page list. These preferences are not yet synchronized across devices. Pages outside the currently loaded sidebar batch can be found through search or by loading more pages.
 
+Drag the sidebar's right edge to resize it between 220 and 480 pixels. Narrow
+desktop windows reduce the maximum to leave at least 360 pixels for content.
+Width is stored with the current account's device preferences and survives
+reload and collapse/expand. The focusable separator supports Left/Right (10 px),
+Shift (50 px), Home/End and Enter or double-click to reset. Escape, pointer
+cancellation, loss of capture, window blur/resize and unmount cancel a drag
+without saving its preview. Mobile keeps the fixed drawer and its existing
+navigation behavior; returning to desktop restores the preferred width.
+
 The document editor supports slash commands and internal links to documents and stable headings; Ctrl/Cmd K inside the editor opens the link picker (see DOCUMENT_LINKS.md). Page actions contain width, attachments, history, permissions, move, trash and reviewed Markdown exports. New databases and spaces use dialogs. Database views retain real filters, sorting, property editing, pagination, live updates, record pages and imports/exports. Person, multi-select and attachment fields use searchable multiple-choice popovers. Kanban cards offer scoped drag/drop and keyboard/menu movement.
 
 ## Design system

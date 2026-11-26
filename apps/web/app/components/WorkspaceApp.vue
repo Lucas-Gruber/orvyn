@@ -18,6 +18,11 @@ import { copyText } from "../utils/clipboard";
 import type { CommentAnchor } from "@orvyn/editor/comments";
 import { pageOrder } from "../utils/pageTree";
 import {
+  preferredSidebarWidth,
+  resolvedSidebarWidth,
+  sidebarWidthLimit,
+} from "../utils/sidebarWidth";
+import {
   commentDraftsKey,
   type CommentDraftState,
 } from "../composables/commentDrafts";
@@ -140,6 +145,21 @@ const sidebarOpen = ref(true),
   expanded = ref<string[]>([]),
   favorites = ref<string[]>([]),
   recent = ref<string[]>([]);
+const preferredWidth = ref<number | null>(null),
+  sidebarPreview = ref<number | null>(null),
+  viewportWidth = ref(0),
+  sidebarWidth = computed(() =>
+    resolvedSidebarWidth(
+      sidebarPreview.value ?? preferredWidth.value,
+      viewportWidth.value,
+    ),
+  ),
+  sidebarLimit = computed(() => sidebarWidthLimit(viewportWidth.value || 1440));
+function saveSidebarWidth(width: number | null) {
+  preferredWidth.value = preferredSidebarWidth(width);
+  sidebarPreview.value = null;
+  persist();
+}
 const workspaceSearch = ref<{ open: () => Promise<void>; close: () => void }>();
 const themes = [
     { id: "cybercade", name: "Cybercade" },
@@ -167,8 +187,9 @@ function resizePageTitle() {
   input.style.height = "auto";
   input.style.height = input.scrollHeight + "px";
 }
-watch([titleInput, () => page.value?.title, fullWidth, sidebarOpen], () =>
-  nextTick(resizePageTitle),
+watch(
+  [titleInput, () => page.value?.title, fullWidth, sidebarOpen, sidebarWidth],
+  () => nextTick(resizePageTitle),
 );
 let titleTimer: ReturnType<typeof setTimeout> | undefined,
   noticeTimer: ReturnType<typeof setTimeout> | undefined,
@@ -263,6 +284,10 @@ function anchorStatusChanged(value: {
 function viewportChanged(event: { matches: boolean }) {
   mobile.value = event.matches;
   sidebarOpen.value = !event.matches;
+}
+function resizeWorkspace() {
+  viewportWidth.value = window.innerWidth;
+  resizePageTitle();
 }
 watch(sidebarOpen, async (open) => {
   if (!mobile.value) return;
@@ -380,8 +405,11 @@ function preferences() {
       ? data.recent.filter((id: unknown) => typeof id === "string").slice(0, 30)
       : [];
     fullWidth.value = data.fullWidth === true;
+    preferredWidth.value = preferredSidebarWidth(data.sidebarWidth);
+    sidebarPreview.value = null;
     return data;
   } catch {
+    preferredWidth.value = null;
     return {};
   }
 }
@@ -395,6 +423,7 @@ function persist() {
         recent: recent.value,
         spaceId: space.value?.id,
         fullWidth: fullWidth.value,
+        sidebarWidth: preferredWidth.value,
       }),
     );
   } catch {}
@@ -435,6 +464,8 @@ async function updateLocation() {
   });
 }
 function signedOut() {
+  preferredWidth.value = null;
+  sidebarPreview.value = null;
   peekId.value = "";
   commentDrafts.clear();
   clearTimeout(titleTimer);
@@ -1132,6 +1163,7 @@ watch(notice, (value) => {
   if (value) noticeTimer = setTimeout(() => (notice.value = ""), 4500);
 });
 onMounted(async () => {
+  viewportWidth.value = window.innerWidth;
   viewport = window.matchMedia("(max-width: 760px)");
   viewportChanged(viewport);
   viewport.addEventListener("change", viewportChanged);
@@ -1145,7 +1177,7 @@ onMounted(async () => {
   window.addEventListener("keydown", globalKeys);
   window.addEventListener("popstate", fromHistory);
   window.addEventListener("beforeunload", beforeUnload);
-  window.addEventListener("resize", resizePageTitle);
+  window.addEventListener("resize", resizeWorkspace);
   await readAccountLink();
   if (
     typeof route.query.authError === "string" &&
@@ -1216,7 +1248,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("keydown", globalKeys);
   window.removeEventListener("popstate", fromHistory);
   window.removeEventListener("beforeunload", beforeUnload);
-  window.removeEventListener("resize", resizePageTitle);
+  window.removeEventListener("resize", resizeWorkspace);
   viewport?.removeEventListener("change", viewportChanged);
   commentViewport?.removeEventListener("change", commentViewportChanged);
 });
@@ -1477,7 +1509,11 @@ onBeforeUnmount(() => {
       </section>
     </main>
   </div>
-  <div v-else class="app-shell">
+  <div
+    v-else
+    class="app-shell"
+    :style="{ '--sidebar-width': sidebarWidth + 'px' }"
+  >
     <button
       v-if="mobile && sidebarOpen"
       class="mobile-scrim"
@@ -1485,6 +1521,7 @@ onBeforeUnmount(() => {
       @click="sidebarOpen = false"
     />
     <aside
+      id="workspace-sidebar"
       class="app-sidebar"
       :class="{ collapsed: !sidebarOpen }"
       :inert="!sidebarOpen"
@@ -1705,6 +1742,13 @@ onBeforeUnmount(() => {
           </button></UiMenu
         >
       </div>
+      <SidebarResizer
+        v-if="sidebarOpen && !mobile"
+        :width="sidebarWidth"
+        :max="sidebarLimit"
+        @preview="sidebarPreview = $event"
+        @commit="saveSidebarWidth"
+      />
     </aside>
     <main
       class="workspace-main"

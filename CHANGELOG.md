@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.2
+
+- Resize the sidebar by dragging its right edge or using the keyboard. Widths
+  persist per account/device, reset with Enter or double-click, and respect
+  smaller desktop windows. Cancelled drags preserve the saved width; mobile
+  keeps its drawer layout.
+- Render recognizable Mermaid in existing plain-text code blocks using **Render
+  diagram**. The source stays intact and conversion supports undo/redo, reload,
+  collaboration and public snapshots. Explicit programming languages stay as
+  code. This completes [issue #1](https://github.com/Lucas-Gruber/orvyn/issues/1).
+- Upgrade the chart and all four application images together to **0.3.2** after
+  publication. No new database migration is introduced.
+
 ## 0.3.1
 
 - Fix local attachment reads racing with atomic replacement/deletion. Already-open

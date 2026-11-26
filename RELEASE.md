@@ -1,6 +1,6 @@
 # Releases
 
-Server CI and release automation are configured. The current release source is **0.3.1**; see [the changelog](CHANGELOG.md) for larger Markdown documents, editor connection recovery and concurrent local attachment reads. The `v0.3.1` tag publishes matching server images and the Helm chart only after its release workflow succeeds. A source version or pushed tag alone does not establish artifact availability; check the [completed release](https://github.com/Lucas-Gruber/orvyn/releases/tag/v0.3.1) before deployment. Version numbers are not a production-readiness claim. Do not create tags or publish releases without explicit authorization. The version command never commits, tags, pushes or publishes anything.
+Server CI and release automation are configured. The current release source is **0.3.2**; see [the changelog](CHANGELOG.md) for sidebar resizing and one-click rendering of existing Mermaid code blocks. The `v0.3.2` tag publishes matching server images and the Helm chart only after its release workflow succeeds. A source version or pushed tag alone does not establish artifact availability; check the [completed release](https://github.com/Lucas-Gruber/orvyn/releases/tag/v0.3.2) before deployment. Version numbers are not a production-readiness claim. Do not create tags or publish releases without explicit authorization. The version command never commits, tags, pushes or publishes anything.
 
 ## Checks on pushes and pull requests
 

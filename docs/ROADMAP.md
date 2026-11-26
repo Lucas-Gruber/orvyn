@@ -5,6 +5,8 @@ The [complete open-items audit](OPEN_ITEMS.md) is the detailed inventory of miss
 Work through these areas in order, preserving working features and committing/pushing tested functional changes. PRODUCT.md remains the complete specification; checked entries below describe implemented slices rather than completion of an entire product phase. Include current browser screenshots during substantial UI changes.
 
 1. Editor and pages
+   - [x] Resizable sidebar with per-account device persistence, pointer/keyboard controls, cancellation and responsive width limits.
+   - [x] One-click rendering of recognizable Mermaid in existing plain-text code blocks, retaining source, undo, permissions and published diagrams.
    - [ ] Templates for ordinary pages, with a template picker when creating a page and reusable document content.
    - [x] Slash commands, permanent document/heading links and backlinks.
    - [x] Callouts, collapsible sections, dynamic outlines and highlighted code.
