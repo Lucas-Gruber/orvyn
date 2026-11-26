@@ -1,5 +1,8 @@
 # Deployment hardening report
 
+These fixes are included in **0.3.0**. The results below retain the development
+revision and artifact names used for the original verification.
+
 This report covers the development source **0.3.0-dev.0**. Chart, application,
 workspace packages and default application-image tags remain aligned. Published
 0.2.0 images do not contain these changes. Source commits do not publish a new

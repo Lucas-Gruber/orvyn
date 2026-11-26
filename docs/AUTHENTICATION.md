@@ -21,7 +21,7 @@ Before disabling local account creation, establish and test an administrator acc
 
 `GET /api/v1/auth/options` is intentionally public and uncached. It returns only `{registration: {enabled, allowedEmailDomains}}`, so the login screen can show the rule before signup. The domain list is therefore public configuration. If loading it fails, the UI hides account creation, keeps existing sign-in available and offers a retry; the API remains authoritative. A domain restriction is checked again on direct registration requests. Authentication tokens, passwords, issuer secrets and internal endpoints are never included in that response.
 
-Helm values are `auth.registration.enabled` and `auth.registration.allowedEmailDomains`; Rancher places them under **Authentication**. Only API pods receive these variables, and policy changes update their rollout checksum. The published 0.2.0 images/chart do not include these controls; use matching development-source builds until a new release is published.
+Helm values are `auth.registration.enabled` and `auth.registration.allowedEmailDomains`; Rancher places them under **Authentication**. Only API pods receive these variables, and policy changes update their rollout checksum. These controls require matching 0.3.0-or-newer images and chart; 0.2.0 does not include them.
 
 The UI exposes email confirmation, password recovery, active sessions, individual revocation and logout of all sessions. Email links carry tokens in the URL fragment, which the application removes before submitting the token in a JSON body; reverse-proxy URL logs do not contain those tokens.
 
@@ -138,17 +138,17 @@ omit metadata bodies, raw exceptions, client secrets, claims and tokens.
 
 OIDC can also be configured declaratively. The stable redirect URI is **`<ORVYN_ORIGIN>/api/v1/oidc/deployment/callback`**. Register that exact URL at the provider before enabling sign-in. The normal administration screen still manages other providers.
 
-| Variable                        | Meaning                                                                                                                                                               |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ORVYN_OIDC_ENABLED`            | `true` enables the deployment-managed provider; absent/`false` disables only deployment-managed providers.                                                            |
-| `ORVYN_OIDC_NAME`               | Sign-in button label; defaults to `Single sign-on`.                                                                                                                   |
-| `ORVYN_OIDC_ISSUER`             | HTTPS issuer, including a realm/tenant path when applicable.                                                                                                          |
-| `ORVYN_OIDC_CLIENT_ID`          | Registered client ID.                                                                                                                                                 |
-| `ORVYN_OIDC_CLIENT_SECRET`      | Client secret, supplied from a secret store. It is encrypted before persistence.                                                                                      |
-| `ORVYN_OIDC_CLIENT_AUTH_METHOD` | `client_secret_post`, `client_secret_basic` or `none` for a public PKCE client. Without an explicit method, a configured secret selects POST; otherwise `none`.       |
-| `ORVYN_OIDC_SCOPES`             | Space-separated scopes including `openid`; defaults to `openid email profile`.                                                                                        |
-| `ORVYN_OIDC_AUTO_PROVISION`     | `true` allows new accounts with a provider-verified email; defaults to `false`.                                                                                       |
-| `ORVYN_OIDC_ADMIN_SUBJECT`      | Optional exact, immutable provider `sub` for instance administration. This is an identity ID, not an email address or display name.                                   |
+| Variable                        | Meaning                                                                                                                                                                    |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ORVYN_OIDC_ENABLED`            | `true` enables the deployment-managed provider; absent/`false` disables only deployment-managed providers.                                                                 |
+| `ORVYN_OIDC_NAME`               | Sign-in button label; defaults to `Single sign-on`.                                                                                                                        |
+| `ORVYN_OIDC_ISSUER`             | HTTPS issuer, including a realm/tenant path when applicable.                                                                                                               |
+| `ORVYN_OIDC_CLIENT_ID`          | Registered client ID.                                                                                                                                                      |
+| `ORVYN_OIDC_CLIENT_SECRET`      | Client secret, supplied from a secret store. It is encrypted before persistence.                                                                                           |
+| `ORVYN_OIDC_CLIENT_AUTH_METHOD` | `client_secret_post`, `client_secret_basic` or `none` for a public PKCE client. Without an explicit method, a configured secret selects POST; otherwise `none`.            |
+| `ORVYN_OIDC_SCOPES`             | Space-separated scopes including `openid`; defaults to `openid email profile`.                                                                                             |
+| `ORVYN_OIDC_AUTO_PROVISION`     | `true` allows new accounts with a provider-verified email; defaults to `false`.                                                                                            |
+| `ORVYN_OIDC_ADMIN_SUBJECT`      | Optional exact, immutable provider `sub` for instance administration. This is an identity ID, not an email address or display name.                                        |
 | `ORVYN_OIDC_BOOTSTRAP_MODE`     | `auto` applies settings at API startup; `external` leaves them to a configuration command/workload; `wait` waits up to two minutes for that command's exact configuration. |
 
 For a single API, `auto` is the default. For Kubernetes or multiple API replicas, use `external`. The Helm chart runs a dedicated configuration workload using the API image:

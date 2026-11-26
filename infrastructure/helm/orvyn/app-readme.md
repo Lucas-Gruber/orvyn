@@ -13,11 +13,11 @@ slash. `sso.oidc.repairLegacyIssuer` explicitly approves a verified correction o
 the old slash-removal bug when linked accounts exist. Provider/user IDs remain
 stable; old provider sessions are revoked. See the chart's upgrade instructions.
 
-The development chart's **Authentication** section can disable local self-registration or limit new local accounts to exact email domains. Existing sign-in/recovery and provider-controlled OIDC provisioning remain independent. Establish administrator access before closing signup. These controls require matching development-source images; published 0.2.0 does not support them.
+The 0.3.0 chart's **Authentication** section can disable local self-registration or limit new local accounts to exact email domains. Existing sign-in/recovery and provider-controlled OIDC provisioning remain independent. Establish administrator access before closing signup. These controls require matching 0.3.0-or-newer images; 0.2.0 does not support them.
 
 Use existing namespace Secrets for GitOps and disable automatic generation. Keep the persistent encryption key and back up PostgreSQL and attachments together. Only select ephemeral storage for disposable tests. Expand Advanced for expert Kubernetes options.
 
-The development chart's **Database backups** section can schedule verified PostgreSQL snapshots on a separate retained PVC, with count-based retention and isolated new-database restore tooling. These database-only snapshots need separate coordinated attachment/key backups and encrypted offsite copies; the published 0.2.0 chart does not include them.
+The 0.3.0 chart's **Database backups** section can schedule verified PostgreSQL snapshots on a separate retained PVC, with count-based retention and isolated new-database restore tooling. These database-only snapshots need separate coordinated attachment/key backups and encrypted offsite copies; the published 0.2.0 chart does not include them.
 
 See the bundled [chart README](README.md), [values](values.yaml) and [examples](examples/) for installation, OCI signature verification, storage migration, backup/restore, PVC expansion, compatible rollback and operational limits. Chart/app versions follow the server release; desktop icon assets do not imply a shipped desktop client.
 

@@ -1,7 +1,7 @@
 {
   "name": "@orvyn/auth",
   "private": true,
-  "version": "0.3.0-dev.0",
+  "version": "0.3.0",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {

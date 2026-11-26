@@ -6,7 +6,7 @@
 
 This chart runs Web, API, email/attachment Worker, and Collaboration. PostgreSQL, authenticated Valkey, and private SeaweedFS can run inside the release or be replaced independently. Native filesystem attachments are also supported. Only Web is exposed through ingress; its Nuxt routes proxy `/api` and `/collaboration` to ClusterIP services. Worker has no Service. This is a single-instance internal infrastructure topology, **not a verified HA configuration**.
 
-Chart `version`, `appVersion`, and all owned Node package versions are synchronized by `pnpm release:version`. An empty application image tag resolves to the exact `appVersion`; a digest takes precedence. SemVer build metadata (`+build`) maps to `_build` in Docker tags while the chart/package version retains the original SemVer. Published charts never resolve application images to `latest`. The source prepares **0.3.0-dev.0**; its matching images and OCI chart are not published. Version **0.2.0** remains the [released installation](https://github.com/Lucas-Gruber/orvyn/releases/tag/v0.2.0), with publicly pullable OCI chart and application images. Development source charts require images built from the same source; publishing a future version requires a completed release workflow.
+Chart `version`, `appVersion`, and all owned Node package versions are synchronized by `pnpm release:version`. An empty application image tag resolves to the exact `appVersion`; a digest takes precedence. SemVer build metadata (`+build`) maps to `_build` in Docker tags while the chart/package version retains the original SemVer. Published charts never resolve application images to `latest`. This source is **0.3.0**. Matching images and the OCI chart are published together by the `v0.3.0` tag workflow after all checks pass; verify the [completed release](https://github.com/Lucas-Gruber/orvyn/releases/tag/v0.3.0) before installing. See [changes and upgrade notes](../../../CHANGELOG.md). Source charts require images built from the same version.
 
 ## Requirements and first installation
 
@@ -28,7 +28,7 @@ The bare defaults intentionally fail with a useful error until SMTP is supplied.
 
 ```sh
 helm upgrade --install orvyn oci://ghcr.io/lucas-gruber/charts/orvyn \
-  --version 0.2.0 --namespace orvyn --create-namespace \
+  --version 0.3.0 --namespace orvyn --create-namespace \
   --wait --wait-for-jobs --atomic --timeout 10m -f your-values.yaml
 ```
 
@@ -85,8 +85,8 @@ The form groups General, **Authentication**, Networking, PostgreSQL, Valkey, Sto
 | `storage.s3.bucket/region/forcePathStyle`                                   | Common S3 settings. External buckets must already exist and remain private.                                                                                                                                                                                                                   |
 | `storage.s3.accessKeyId/secretAccessKey/existingSecret`                     | Inline credentials or one referenced Secret with configurable `accessKeySecretKey` and `secretAccessKeySecretKey`.                                                                                                                                                                            |
 | `smtp.url/from/existingSecret/secretKey`                                    | SMTP URL and sender; only Worker receives SMTP credentials.                                                                                                                                                                                                                                   |
-| `configuration.resources/activeDeadlineSeconds/backoffLimit`                | Resources for the configuration workload and storage bootstrap; deadlines/retry limits apply to the storage bootstrap Job.                                                                                                                                                                                                                                                      |
-| `configuration.reconcileIntervalSeconds/retryIntervalSeconds` | Seconds between idempotent checks (30) and retries (5); range 1–300. |
+| `configuration.resources/activeDeadlineSeconds/backoffLimit`                | Resources for the configuration workload and storage bootstrap; deadlines/retry limits apply to the storage bootstrap Job.                                                                                                                                                                    |
+| `configuration.reconcileIntervalSeconds/retryIntervalSeconds`               | Seconds between idempotent checks (30) and retries (5); range 1–300.                                                                                                                                                                                                                          |
 | `serviceAccount.create/name/annotations`                                    | Dedicated account by default; no RBAC or mounted service-account tokens. Existing-account mode requires its name.                                                                                                                                                                             |
 
 For every internal data service, `persistence` supports `enabled`, `existingClaim`, `storageClass`, `accessMode`, `size`, `annotations`, and `retain`. Component scheduling, resources, pod labels/annotations and security contexts are independently configurable. `global.storageClass` is the fallback; empty uses cluster default and `"-"` requests no class. Generated PVCs are separate resources so an allowed size increase can be patched; existing claims remain operator-managed.
@@ -102,7 +102,7 @@ auth:
     allowedEmailDomains: [company.example]
 ```
 
-To close local signup after establishing administrator access, set `enabled: false`. OIDC automatic provisioning remains controlled separately by `sso.oidc.autoProvision`; verified identities can still be provisioned through the configured provider. These rules do not add invitation-only signup or OIDC group mapping. The domain list is visible on the public login screen. Policy changes roll API pods; use the same values on all replicas. Published 0.2.0 images/chart do not support these settings. See [authentication behavior](https://github.com/Lucas-Gruber/orvyn/blob/main/docs/AUTHENTICATION.md#local-registration-policy).
+To close local signup after establishing administrator access, set `enabled: false`. OIDC automatic provisioning remains controlled separately by `sso.oidc.autoProvision`; verified identities can still be provisioned through the configured provider. These rules do not add invitation-only signup or OIDC group mapping. The domain list is visible on the public login screen. Policy changes roll API pods; use the same values on all replicas. These settings require matching 0.3.0-or-newer images and chart; 0.2.0 does not support them. See [authentication behavior](https://github.com/Lucas-Gruber/orvyn/blob/main/docs/AUTHENTICATION.md#local-registration-policy).
 
 ## OIDC single sign-on
 
@@ -178,12 +178,12 @@ documented default (999 for PostgreSQL/Valkey/backups, 1000 otherwise). Ownershi
 uses the Pod's `fsGroup` when set, otherwise the runtime GID. Shared local API and
 worker mounts require the same UID and volume group; the chart rejects mismatches.
 
-| Strategy | Startup behavior | Pod Security |
-| --- | --- | --- |
-| `auto` (default) | Probe as the actual service UID; attempt root repair if needed; verify again as the service UID. Healthy mounts skip ownership walks. | Root repair init requires a narrowly scoped policy exception. |
-| `fsGroup` | Only non-root preparation and a real write/rename/fsync probe. Use when kubelet/CSI handles ownership, or the server pre-provisions it. | Compatible with Restricted when the other workload settings also comply. |
-| `initContainer` | Explicit repair followed by real non-root verification. | Same root init exception as auto. |
-| `none` | No helper containers or preparation; operator supplies correct mounts. | No added exception; startup still checks attachment storage. |
+| Strategy         | Startup behavior                                                                                                                        | Pod Security                                                             |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `auto` (default) | Probe as the actual service UID; attempt root repair if needed; verify again as the service UID. Healthy mounts skip ownership walks.   | Root repair init requires a narrowly scoped policy exception.            |
+| `fsGroup`        | Only non-root preparation and a real write/rename/fsync probe. Use when kubelet/CSI handles ownership, or the server pre-provisions it. | Compatible with Restricted when the other workload settings also comply. |
+| `initContainer`  | Explicit repair followed by real non-root verification.                                                                                 | Same root init exception as auto.                                        |
+| `none`           | No helper containers or preparation; operator supplies correct mounts.                                                                  | No added exception; startup still checks attachment storage.             |
 
 Auto always **renders** its root repair init container; policy admission evaluates
 the whole Pod even when its repair phase will skip. Choose `fsGroup` for Restricted
@@ -243,7 +243,7 @@ Your controller must preserve HTTP upgrade headers and allow long WebSocket conn
 
 ## Backups, upgrade and recovery
 
-The development chart adds optional scheduled **PostgreSQL-only** snapshots under `backup` (not included in published chart 0.2.0). Enable `backup.enabled`, set `schedule`, `timeZone` and `retentionCount`, and choose its retained PVC through `backup.persistence`. The [database backup example](examples/database-backup.yaml) defaults to 02:17 UTC and seven completed snapshots. The CronJob and manual Jobs share an exclusive filesystem lock; only a verified new custom-format archive permits retention of older snapshots. Jobs run as UID/GID 999 by default, receive only database credentials and use a pinned PostgreSQL 17 client. For an external server select a compatible `backup.image` and optionally a CA Secret under `backup.ca`. A digest takes precedence over the tag.
+Since 0.3.0, the chart includes optional scheduled **PostgreSQL-only** snapshots under `backup` (not included in 0.2.0). Enable `backup.enabled`, set `schedule`, `timeZone` and `retentionCount`, and choose its retained PVC through `backup.persistence`. The [database backup example](examples/database-backup.yaml) defaults to 02:17 UTC and seven completed snapshots. The CronJob and manual Jobs share an exclusive filesystem lock; only a verified new custom-format archive permits retention of older snapshots. Jobs run as UID/GID 999 by default, receive only database credentials and use a pinned PostgreSQL 17 client. For an external server select a compatible `backup.image` and optionally a CA Secret under `backup.ca`. A digest takes precedence over the tag.
 
 A regular backup-volume initialization Job binds delayed `WaitForFirstConsumer` claims during installation, including with `backup.suspend=true`, and verifies writable non-root storage, locking, directory rename and syncing. It receives no database or application credentials and creates no snapshot. Its name changes with relevant configuration to permit immutable Job-template upgrades. This avoids waiting for a nightly CronJob to consume the backup PVC while Helm waits for the volume to bind.
 

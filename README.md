@@ -86,7 +86,7 @@ Follow the [Helm deployment guide](infrastructure/helm/orvyn/README.md) to prepa
 
 ```sh
 helm upgrade --install orvyn oci://ghcr.io/lucas-gruber/charts/orvyn \
-  --version 0.2.0 \
+  --version 0.3.0 \
   --namespace orvyn --create-namespace \
   --values orvyn-values.yaml \
   --wait --wait-for-jobs --atomic --timeout 10m
