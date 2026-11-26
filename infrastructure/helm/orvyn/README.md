@@ -6,7 +6,7 @@
 
 This chart runs Web, API, email/attachment Worker, and Collaboration. PostgreSQL, authenticated Valkey, and private SeaweedFS can run inside the release or be replaced independently. Native filesystem attachments are also supported. Only Web is exposed through ingress; its Nuxt routes proxy `/api` and `/collaboration` to ClusterIP services. Worker has no Service. This is a single-instance internal infrastructure topology, **not a verified HA configuration**.
 
-Chart `version`, `appVersion`, and all owned Node package versions are synchronized by `pnpm release:version`. An empty application image tag resolves to the exact `appVersion`; a digest takes precedence. SemVer build metadata (`+build`) maps to `_build` in Docker tags while the chart/package version retains the original SemVer. Published charts never resolve application images to `latest`. This source is **0.3.2**. Matching images and the OCI chart are published together by the `v0.3.2` tag workflow after all checks pass; verify the [completed release](https://github.com/Lucas-Gruber/orvyn/releases/tag/v0.3.2) before installing. See [changes and upgrade notes](../../../CHANGELOG.md). Source charts require images built from the same version.
+Chart `version`, `appVersion`, and all owned Node package versions are synchronized by `pnpm release:version`. An empty application image tag resolves to the exact `appVersion`; a digest takes precedence. SemVer build metadata (`+build`) maps to `_build` in Docker tags while the chart/package version retains the original SemVer. Published charts never resolve application images to `latest`. This source is **0.3.3**. Matching images and the OCI chart are published together by the `v0.3.3` tag workflow after all checks pass; verify the [completed release](https://github.com/Lucas-Gruber/orvyn/releases/tag/v0.3.3) before installing. See [changes and upgrade notes](../../../CHANGELOG.md). Source charts require images built from the same version.
 
 ## Requirements and first installation
 
@@ -28,7 +28,7 @@ The bare defaults intentionally fail with a useful error until SMTP is supplied.
 
 ```sh
 helm upgrade --install orvyn oci://ghcr.io/lucas-gruber/charts/orvyn \
-  --version 0.3.2 --namespace orvyn --create-namespace \
+  --version 0.3.3 --namespace orvyn --create-namespace \
   --wait --wait-for-jobs --atomic --timeout 10m -f your-values.yaml
 ```
 

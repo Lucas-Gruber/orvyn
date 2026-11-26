@@ -1,6 +1,15 @@
 # Changelog
 
-## 0.3.2
+## 0.3.3
+
+- Release the resizable sidebar and Mermaid conversion from 0.3.2 with corrected
+  integration-test isolation. Test files receive independent throttle budgets;
+  real per-account and 500-attempt peer limits remain enforced within each file.
+- Version 0.3.2 failed its release checks after exhausting the shared test
+  registration budget. Its tag is retained; no public 0.3.2 images/chart were
+  published. Use the matching **0.3.3** application images and chart after release.
+
+## 0.3.2 (not published)
 
 - Resize the sidebar by dragging its right edge or using the keyboard. Widths
   persist per account/device, reset with Enter or double-click, and respect

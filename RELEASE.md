@@ -1,6 +1,6 @@
 # Releases
 
-Server CI and release automation are configured. The current release source is **0.3.2**; see [the changelog](CHANGELOG.md) for sidebar resizing and one-click rendering of existing Mermaid code blocks. The `v0.3.2` tag publishes matching server images and the Helm chart only after its release workflow succeeds. A source version or pushed tag alone does not establish artifact availability; check the [completed release](https://github.com/Lucas-Gruber/orvyn/releases/tag/v0.3.2) before deployment. Version numbers are not a production-readiness claim. Do not create tags or publish releases without explicit authorization. The version command never commits, tags, pushes or publishes anything.
+Server CI and release automation are configured. The current release source is **0.3.3**; see [the changelog](CHANGELOG.md) for sidebar resizing and one-click rendering of existing Mermaid code blocks. The `v0.3.3` tag publishes matching server images and the Helm chart only after its release workflow succeeds. A source version or pushed tag alone does not establish artifact availability; check the [completed release](https://github.com/Lucas-Gruber/orvyn/releases/tag/v0.3.3) before deployment. Version numbers are not a production-readiness claim. Do not create tags or publish releases without explicit authorization. The version command never commits, tags, pushes or publishes anything.
 
 ## Checks on pushes and pull requests
 
@@ -94,3 +94,5 @@ Checks package the chart with normalized tar/gzip metadata. Repackaging an uncha
 After all four immutable versioned image tags have been verified, the publisher pushes `oci://ghcr.io/lucas-gruber/charts/orvyn:<version>` (forks use their own owner), verifies its Helm config/layer media types and package digest, and signs/verifies its exact OCI manifest using the existing GitHub workflow identity. Chart versions are immutable; an existing version is reused only if the checked package matches. There is no `latest` chart alias. The GitHub release remains a draft until images, chart and signatures are complete. The attached chart package is included in signed `SHA256SUMS`, and the server manifest records its repository/version/package hash. No cluster deployment is performed by publication.
 
 Chart usage, Rancher, GitOps, HTTPS, Secret rotation and database/storage migration limits are documented in [the chart README](infrastructure/helm/orvyn/README.md).
+
+The `v0.3.2` release stopped in integration checks after the suite exhausted a shared loopback registration budget. No public versioned images/chart were published. Its source tag is retained; `v0.3.3` isolates test throttle state per file and verifies that the real limits still apply within each file.

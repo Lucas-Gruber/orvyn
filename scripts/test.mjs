@@ -98,6 +98,7 @@ try {
   const common = {
     ...process.env,
     DATABASE_URL: url.toString(),
+    ORVYN_TEST_DATABASE: name,
     S3_BUCKET: storageBucket,
     ORVYN_STORAGE_DRIVER: localStorage ? "local" : "s3",
     ...(localStorage ? { ORVYN_STORAGE_LOCAL_PATH: localStorage } : {}),
@@ -165,6 +166,7 @@ try {
           "tests/database-browser.test.mjs",
           "tests/kanban.test.mjs",
           "tests/rate-limit.test.mjs",
+          "tests/test-file-setup.test.mjs",
           "tests/embedded-database.test.mjs",
           "tests/database-transfer.test.mjs",
           "tests/database-person.test.mjs",
@@ -237,6 +239,7 @@ try {
     [
       "--test",
       "--test-concurrency=1",
+      "--import=./scripts/test-file-setup.mjs",
       ...(process.env.GITHUB_ACTIONS === "true"
         ? [
             "--test-reporter=spec",

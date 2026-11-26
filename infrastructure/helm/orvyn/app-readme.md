@@ -1,6 +1,6 @@
 # Orvyn — Your knowledge. Organized.
 
-Version **0.3.2** adds a resizable sidebar with saved widths and one-click
+Version **0.3.3** adds a resizable sidebar with saved widths and one-click
 rendering of existing Mermaid code blocks. It includes the larger Markdown,
 connection-recovery and concurrent local attachment fixes from 0.3.1.
 Upgrade the chart and all four application images together; explicit older image
