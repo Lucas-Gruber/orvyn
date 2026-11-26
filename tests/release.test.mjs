@@ -13,12 +13,59 @@ import { join } from "node:path";
 import { createServer } from "node:http";
 import { once } from "node:events";
 import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
+import YAML from "yaml";
 import {
   readChartArtifact,
   validateChartManifest,
   preflightChart,
 } from "../scripts/release-chart.mjs";
 import { manifestDigest } from "../scripts/release-platforms.mjs";
+
+test("CI retains Kubernetes/integration logs and propagates failed validators through tee", async () => {
+  const workflow = YAML.parse(
+    await readFile(
+      new URL("../.github/workflows/ci.yml", import.meta.url),
+      "utf8",
+    ),
+  );
+  const directory = await mkdtemp(join(tmpdir(), "orvyn-ci-status-"));
+  try {
+    for (const [name, file] of [
+      [
+        "Install and upgrade on Kubernetes with internal and local storage",
+        "kubernetes-results.txt",
+      ],
+      ["Run complete integration suite", "test-results.txt"],
+    ]) {
+      const step = workflow.jobs.checks.steps.find(
+        (step) => step.name === name,
+      );
+      assert.ok(step?.run);
+      for (const code of [23, 0]) {
+        // Execute the actual step script using the runner's weakest default
+        // (-e without pipefail), substituting only the expensive test program.
+        const script =
+          "node() { printf '%s\\n' 'validator output'; return " +
+          code +
+          "; }\n" +
+          step.run;
+        const result = spawnSync(
+          "bash",
+          ["--noprofile", "--norc", "-e", "-c", script],
+          { cwd: directory, encoding: "utf8" },
+        );
+        assert.equal(result.status, code, result.stderr);
+        assert.equal(
+          await readFile(join(directory, file), "utf8"),
+          "validator output\n",
+        );
+      }
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
 import {
   semver,
   compareVersions,
