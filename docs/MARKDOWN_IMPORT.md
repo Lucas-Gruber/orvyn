@@ -1,5 +1,15 @@
 # Markdown import
 
+## Paste into an existing page
+
+Paste plain-text Markdown directly into the document editor to create native editable headings, lists, tasks, tables, quotes, code and inline formatting. The first H1 stays in the document. Pasted headings get fresh identifiers on every paste; links to headings within the pasted Markdown point to those new identifiers. The whole paste supports undo/redo, normal saving and collaboration.
+
+Use **Ctrl/Cmd+Shift+V** to keep the source literal. Code blocks always preserve literal text, and rich HTML clipboard content keeps its existing formatting. Conversion uses the same safe, bounded parser as file import; unsupported or oversized conversion falls back to plain text without discarding the clipboard content. Images remain text links and HTML remains visible text/code, as described below.
+
+## Import a new page
+
+Every sidebar **+** opens a choice of page, whiteboard, database or folder, plus Markdown import. The **+** beside an existing page keeps that destination for creation/import; the section-header and **New** menus create at the space root. Menus support arrow keys, Home/End, Escape and outside-click dismissal without creating anything.
+
 Use **Create in this space → Import Markdown** for a top-level page, or **Page actions → Import Markdown as subpage** for the current page/folder. Choose a UTF-8 `.md`/`.markdown` file or paste Markdown, select the destination, optionally override the title, and preview the complete document before creating it. The first H1 can become the page title instead of being duplicated in the document.
 
 The importer converts paragraphs, bold/italic/strikethrough/code, links, H1–H4, quotes, numbered/bullet/task lists, nested lists, fenced/indented code, horizontal rules and GFM tables to ordinary editable blocks. Headings retain stable identifiers. Markdown heading fragments resolve in the review and become permanent links to the new page’s headings after creation. Review navigation stays inside its own content, even when the underlying editor contains identical heading identifiers. Task markers become native checklist state.

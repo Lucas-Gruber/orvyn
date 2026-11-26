@@ -44,7 +44,12 @@ test("workspace UX: immediate pages, autosave, persistent deep links, search, fa
       page.getByRole("heading", { name: "Make this space yours", exact: true }),
     ).toBeVisible();
     const create = async (name) => {
-      await page.getByRole("button", { name: "New page", exact: true }).click();
+      await page
+        .getByRole("button", { name: "Create new item", exact: true })
+        .click();
+      await page
+        .getByRole("menuitem", { name: "New page", exact: true })
+        .click();
       await page.getByLabel("Page title", { exact: true }).fill(name);
       await page.getByLabel("Page title", { exact: true }).press("Tab");
       await expect(
@@ -122,6 +127,7 @@ test("workspace UX: immediate pages, autosave, persistent deep links, search, fa
         exact: true,
       })
       .click();
+    await page.getByRole("menuitem", { name: "New page", exact: true }).click();
     await page.getByLabel("Page title", { exact: true }).fill("Research");
     await page.getByLabel("Page title", { exact: true }).press("Tab");
     await expect(page.getByText("Title saved", { exact: true })).toBeVisible();

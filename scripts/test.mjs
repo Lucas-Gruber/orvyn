@@ -185,6 +185,7 @@ try {
           "tests/preview.test.mjs",
           "tests/local-preview.test.mjs",
           "tests/ui-workflow.test.mjs",
+          "tests/page-creation.test.mjs",
           "tests/search.test.mjs",
           "tests/fulltext-search.test.mjs",
           "tests/property-search.test.mjs",

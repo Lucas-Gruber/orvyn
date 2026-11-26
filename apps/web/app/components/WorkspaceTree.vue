@@ -10,7 +10,11 @@ const props = defineProps<{
   emit = defineEmits<{
     open: [id: string];
     context: [event: MouseEvent | KeyboardEvent, page: any];
-    create: [parentId: string];
+    create: [
+      parentId: string,
+      kind: "page" | "whiteboard" | "database" | "folder",
+    ];
+    import: [parentId: string];
     toggle: [id: string];
     move: [
       move: {
@@ -259,14 +263,14 @@ function keys(event: KeyboardEvent, page: any) {
           name="lock"
           :size="12"
         /></button
-      ><button
+      ><PageCreateMenu
         v-if="canCreate && page.access_rank >= 30 && page.kind !== 'database'"
-        class="tree-add"
-        :aria-label="'Add subpage to ' + page.title"
-        @click="emit('create', page.id)"
-      >
-        <AppIcon name="plus" :size="15" />
-      </button>
+        trigger-class="tree-add"
+        :label="'Add subpage to ' + page.title"
+        :parent-title="page.title"
+        @create="emit('create', page.id, $event)"
+        @import="emit('import', page.id)"
+      />
     </div>
     <p v-if="!pages.length" class="tree-empty">Your pages will appear here.</p>
     <div

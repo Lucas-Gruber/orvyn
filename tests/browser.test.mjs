@@ -38,7 +38,10 @@ test("Chromium: account, persisted page, verification, session settings and OIDC
     await page
       .getByRole("button", { name: "Create space", exact: true })
       .click();
-    await page.getByRole("button", { name: "New page", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Create new item", exact: true })
+      .click();
+    await page.getByRole("menuitem", { name: "New page", exact: true }).click();
     await page
       .getByLabel("Page title", { exact: true })
       .fill("A real persisted page");

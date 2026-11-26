@@ -60,7 +60,7 @@ const peekId = ref(""),
   recordTemplateDialog = ref<{ open: () => void }>();
 let peekReturnFocus: HTMLElement | undefined;
 const shortcutHelp = ref<{ open: () => void }>();
-const databaseTemplates = ref<{ open: () => void }>();
+const databaseTemplates = ref<{ open: (parentId?: string | null) => void }>();
 const markdownImport = ref<{ open: (parentId?: string) => void }>();
 const markdownExport = ref<{ open: () => void }>();
 const markdownBundle = ref<{ open: () => void }>();
@@ -111,6 +111,7 @@ const sidebarOpen = ref(true),
   mobile = ref(false),
   showSpaceCreate = ref(false),
   showDatabaseCreate = ref(false),
+  databaseParentId = ref<string | null>(null),
   databaseName = ref(""),
   includeDatabaseDefaults = ref(true),
   showPermissions = ref(false),
@@ -843,6 +844,7 @@ async function createDatabase() {
     await beforeNavigate();
     const result = await api(`spaces/${space.value.id}/databases`, "POST", {
       name: databaseName.value,
+      parentId: databaseParentId.value,
       includeDefaults: includeDatabaseDefaults.value,
     });
     databaseName.value = "";
@@ -851,6 +853,17 @@ async function createDatabase() {
     edit(result.page);
     await updateLocation();
   });
+}
+function createItem(
+  kind: "page" | "whiteboard" | "database" | "folder",
+  parentId: string | null = null,
+) {
+  if (kind === "database") {
+    databaseParentId.value = parentId;
+    showDatabaseCreate.value = true;
+  } else {
+    void navigate(() => createPage(parentId, kind));
+  }
 }
 async function home() {
   await beforeNavigate();
@@ -1006,7 +1019,7 @@ function globalKeys(event: KeyboardEvent) {
   }
   if (mod && event.altKey && key === "d" && canCreate.value) {
     event.preventDefault();
-    showDatabaseCreate.value = true;
+    createItem("database");
     return;
   }
   if (mod && event.altKey && key === "r" && databaseHandle.value) {
@@ -1303,8 +1316,7 @@ onBeforeUnmount(() => {
             >
               <AppIcon name="users" :size="18" />
               <div>
-                <strong>{{ me.displayName }}</strong
-                ><span>{{ me.email }}</span>
+                <strong>{{ me.displayName }}</strong><span>{{ me.email }}</span>
               </div>
               <button
                 type="button"
@@ -1578,27 +1590,13 @@ onBeforeUnmount(() => {
           <div class="sidebar-section-title">
             <span>{{
               space.kind === "team" ? "Team pages" : "Private pages"
-            }}</span><UiMenu v-if="canCreate" label="Create in this space"
-              ><button role="menuitem" @click="navigate(() => createPage())">
-                <AppIcon name="file" :size="16" />New page</button
-              ><button role="menuitem" @click="showDatabaseCreate = true">
-                <AppIcon name="database" :size="16" />New database</button
-              ><button
-                role="menuitem"
-                @click="navigate(() => createPage(null, 'whiteboard'))"
-              >
-                <AppIcon name="whiteboard" :size="16" />New whiteboard</button
-              ><button
-                role="menuitem"
-                @click="navigate(() => createPage(null, 'folder'))"
-              >
-                <AppIcon name="folder" :size="16" />New folder
-              </button>
-              <hr />
-              <button role="menuitem" @click="markdownImport?.open()">
-                <AppIcon name="upload" :size="16" />Import Markdown
-              </button></UiMenu
-            >
+            }}</span>
+            <PageCreateMenu
+              v-if="canCreate"
+              label="Create in this space"
+              @create="createItem($event)"
+              @import="markdownImport?.open()"
+            />
           </div>
           <div v-if="pageLoading && !pages.length">
             <div v-for="i in 4" :key="i" class="skeleton skeleton-row" />
@@ -1612,7 +1610,8 @@ onBeforeUnmount(() => {
             :moving="movingPage || navigating"
             @toggle="toggleExpanded"
             @open="navigate(() => openPage($event))"
-            @create="navigate(() => createPage($event))"
+            @create="(parentId, kind) => createItem(kind, parentId)"
+            @import="markdownImport?.open($event)"
             @move="moveHierarchy"
             @context="sidebarContext"
           /><button
@@ -1621,13 +1620,16 @@ onBeforeUnmount(() => {
             @click="run(() => loadPages(nextCursor))"
           >
             Load more pages</button
-          ><button
+          ><PageCreateMenu
             v-if="canCreate"
-            class="sidebar-link"
-            @click="navigate(() => createPage())"
-          >
-            <AppIcon name="plus" :size="16" />New page
-          </button>
+            label="Create new item"
+            trigger-class="sidebar-link"
+            trigger-text="New"
+            align="left"
+            class="sidebar-create"
+            @create="createItem($event)"
+            @import="markdownImport?.open()"
+          />
         </section>
         <section v-else class="sidebar-section">
           <div class="sidebar-section-title">Your spaces</div>
@@ -2274,7 +2276,7 @@ onBeforeUnmount(() => {
             <div v-if="canCreate" class="empty-actions">
               <button class="primary" @click="navigate(() => createPage())">
                 <AppIcon name="plus" :size="16" />Create your first page</button
-              ><button @click="showDatabaseCreate = true">
+              ><button @click="createItem('database')">
                 <AppIcon name="database" :size="16" />New database
               </button>
             </div>
@@ -2349,7 +2351,7 @@ onBeforeUnmount(() => {
       class="ghost"
       @click="
         showDatabaseCreate = false;
-        databaseTemplates?.open();
+        databaseTemplates?.open(databaseParentId);
       "
     >
       <AppIcon name="copy" :size="16" />Start with a saved template

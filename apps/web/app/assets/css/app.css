@@ -509,6 +509,9 @@ hr {
   color: var(--text);
   background: var(--surface-hover);
 }
+.sidebar-create {
+  width: 100%;
+}
 .sidebar-link span {
   overflow: hidden;
   text-overflow: ellipsis;

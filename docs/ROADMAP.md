@@ -17,6 +17,8 @@ Work through these areas in order, preserving working features and committing/pu
    - [x] Folders, hierarchy dragging and keyboard reorder/nest/outdent.
    - [x] Empty-heading caret/level hints, icon/description slash menu, consistent modal spacing and discoverable keyboard shortcuts.
    - [x] Headings H1–H4 across Markdown, slash commands, formatting, shortcuts, outlines and permanent links.
+   - [x] Markdown clipboard conversion with native blocks, fresh heading targets, undo/collaboration and literal/rich-text paste preservation.
+   - [x] Consistent sidebar creation menus for pages, whiteboards, databases, folders and Markdown import, retaining parent context.
    - [x] Clear editor tables with cell/row/column menus, resizing and unobtrusive empty cells.
    - [x] Pointer cursors for text links in both editable and read-only documents.
 2. Collaboration

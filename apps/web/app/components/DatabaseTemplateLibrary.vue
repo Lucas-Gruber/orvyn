@@ -19,6 +19,7 @@ const props = defineProps<{
   name = ref(""),
   title = ref(""),
   privateCopy = ref(false),
+  parentId = ref<string | null>(null),
   confirmDelete = ref(false);
 const domId = useId();
 let generation = 0,
@@ -60,7 +61,8 @@ async function load(append = false) {
     if (token === generation) loading.value = false;
   }
 }
-function show() {
+function show(destination: string | null = null) {
+  parentId.value = destination;
   open.value = true;
   selected.value = undefined;
   editing.value = false;
@@ -108,6 +110,7 @@ async function use() {
         version: selected.value.version,
         title: title.value,
         visibility: privateCopy.value ? "restricted" : "space",
+        parentId: parentId.value,
       },
       fingerprint = JSON.stringify([selected.value.id, body]);
     if (fingerprint !== requestBody) {
