@@ -63,6 +63,8 @@ Work through these areas in order, preserving working features and committing/pu
    - [ ] Instance/organization/space appearance, complete administration.
    - [x] Real OIDC provider validation with a pinned Keycloak instance, including deployment-managed setup and administrator subject checks.
    - [x] Editable display names across people, comments, mentions, database fields and authenticated presence, including OIDC name/username claims.
+   - [x] Exact OIDC issuers, identity-preserving legacy repair and friendly browser login errors.
+   - [x] SSO invitations with encrypted browser-bound continuation, account switching and explicit verified-email acceptance.
    - [ ] Identity linking, OIDC group mapping, additional provider validation and ownership transfer.
 8. Import/export
    - [x] Single-page Markdown import with a complete preview, native editable blocks, permanent heading links, current destination checks and retry recovery.
@@ -75,6 +77,7 @@ Work through these areas in order, preserving working features and committing/pu
    - [x] Server CI, four production images with HTTPS integration checks, synchronized Node manifest versioning and a tag-triggered signed release pipeline.
    - [ ] Tauri clients, releases, update distribution and signing.
    - [x] Kubernetes/Helm with Rancher configuration, deployment-managed OIDC and internal/external services.
+   - [x] Uniform volume permission strategies, resumable preparation, independent configuration recovery and safe startup diagnostics; see the [hardening report](DEPLOYMENT-HARDENING.md) for backend validation limits.
    - [x] Scheduled PostgreSQL snapshots on retained PVCs, integrity checks, bounded retention and isolated new-database restore tooling (development chart).
    - [ ] Coordinated scheduled attachment/key backups, encrypted offsite copies, observability and production disaster recovery.
    - [ ] Load testing, object-store deployment policies, accessibility and broader browser validation.

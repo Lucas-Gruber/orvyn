@@ -9,3 +9,7 @@ Use matching chart/application versions and immutable release images. The develo
 Before upgrading, preserve the existing encryption key, Secrets, PVCs and database/attachment backups. Configuration reconciliation uses database locks and retries; it does not recreate claims or reset data. Configuration-value rollback is tested separately from application/schema downgrade. Older binaries may reject a newer database schema; verify compatibility or use the documented coordinated recovery procedure.
 
 See [BACKUP.md](docs/BACKUP.md) for database archive and restore coverage and the remaining attachment/key/offsite backup requirements. Single-instance internal database, Valkey and storage modes are supported; HA, performance targets, disaster-recovery exercises and storage-vendor compatibility need their own validation. Test results and unavailable backends must be reported explicitly.
+
+The [deployment hardening report](docs/DEPLOYMENT-HARDENING.md) records the storage,
+OIDC, configuration-recovery, invitation and WebSocket fixes, security implications,
+upgrade requirements and validation limits.
