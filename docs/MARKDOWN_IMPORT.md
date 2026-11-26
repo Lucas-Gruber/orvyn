@@ -1,6 +1,6 @@
 # Markdown import
 
-The larger document budgets and connection-recovery fixes described here are development changes after released version 0.3.0. Upgrade Web, API and Collaboration together when deploying them; the published 0.3.0 images retain the previous limits.
+The larger document budgets and connection-recovery fixes described here are included in version 0.3.1. Deploy the matching chart and all four application images after the tag-triggered release completes; the published 0.3.0 images retain the previous limits.
 
 ## Paste into an existing page
 

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.1
 
 - Fix local attachment reads racing with atomic replacement/deletion. Already-open
   complete generations remain readable while extra hard links and symlinks stay
@@ -12,6 +12,15 @@
 - Keep the saved document readable during initial connection problems, show a
   reconnect action, and preserve real pending edits across reconnect. Initial
   synchronization alone no longer produces a false unsaved-changes warning.
+
+### Upgrade from 0.3.0
+
+- Upgrade the chart and all four application images together to **0.3.1** after
+  the tag-triggered release has completed. Remove explicit old image tags/digests
+  if they would override the chart's application version.
+- No new database migration is introduced. Keep existing Secrets, encryption keys
+  and PVCs. Documents using the larger budgets can exceed 0.3.0's validation
+  limits, so older binaries may refuse to open them after an application rollback.
 
 ## 0.3.0
 

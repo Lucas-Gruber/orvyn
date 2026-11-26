@@ -1,5 +1,10 @@
 # Orvyn — Your knowledge. Organized.
 
+Version **0.3.1** includes larger Markdown imports, editor connection recovery
+and the fix for concurrent reads of atomically replaced local attachments.
+Upgrade the chart and all four application images together; explicit older image
+tag/digest overrides prevent those fixes from taking effect.
+
 ![Orvyn](https://raw.githubusercontent.com/Lucas-Gruber/orvyn/main/infrastructure/helm/orvyn/icon.png)
 
 Collaborative documents, structured databases, whiteboards and private attachments, deployed as Web, API, Worker and Collaboration. Only the web endpoint is public.

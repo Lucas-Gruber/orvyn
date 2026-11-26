@@ -2,8 +2,8 @@ apiVersion: v2
 name: orvyn
 description: Collaborative knowledge platform with private storage, OIDC and deployment reconciliation
 type: application
-version: "0.3.0"
-appVersion: "0.3.0"
+version: "0.3.1"
+appVersion: "0.3.1"
 home: https://github.com/Lucas-Gruber/orvyn
 sources:
   - https://github.com/Lucas-Gruber/orvyn
