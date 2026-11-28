@@ -2,6 +2,8 @@
 
 This is an actively developed application, not completion of Phase 1 or the master specification.
 
+Scoped read-only integration credentials and exact-page document reads are implemented; see [AGENT_ACCESS.md](AGENT_ACCESS.md). Credentials expire within 30 days, are individually revocable, and intersect their page allowlist with the issuer's current permissions. This does not implement MCP, Git sync or collaborative agent writes; the follow-up write contract preserves the existing CRDT replacement guard.
+
 See the [complete open-items audit](OPEN_ITEMS.md) for the current missing features, partial implementations, unresolved installation/CI issues, outstanding production validation and explicitly deferred extensions. It cross-checks the specification and subsequent requests against the implementation; older feature documents may still contain stale TODOs.
 
 Server release **0.3.1** completed successfully, including multi-architecture images and the public OCI chart. Version **0.3.3** prepares sidebar resizing and rendering actions for existing Mermaid code blocks, with per-file test throttle isolation. The 0.3.2 release stopped before publication because the integration suite exhausted a shared registration budget; its tag is preserved. Matching 0.3.3 artifacts become available after its tag-triggered release completes. An earlier main CI had an intermittent database modal test failure whose cause remains unconfirmed; the 0.3.1 release CI passed the complete suite. Rancher catalog visibility remains a separate installation issue. MCP and Tauri desktop applications are not implemented.

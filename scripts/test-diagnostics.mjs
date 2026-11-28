@@ -21,6 +21,7 @@ export function redactTestDiagnostics(input, env = process.env) {
   let text = String(input);
   for (const value of [...secrets].sort((a, b) => b.length - a.length))
     text = text.replaceAll(value, "[redacted]");
-  // Sessions and invitation receipts are generated during the test, not supplied by env.
-  return text.replace(/\b[a-f0-9]{64}\b/gi, "[redacted]");
+  // Sessions, integration credentials and invitation receipts can be generated
+  // during the test rather than supplied by env.
+  return text.replace(/\b(?:orvyn_agent_)?[a-f0-9]{64}\b/gi, "[redacted]");
 }

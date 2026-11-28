@@ -35,6 +35,7 @@ import { MarkdownImportsModule } from "./imports/markdown.module.js";
 import { MarkdownExportsModule } from "./imports/markdown-export.module.js";
 import { MarkdownBundlesModule } from "./imports/markdown-bundle.module.js";
 import { WhiteboardsModule } from "./whiteboards.module.js";
+import { IntegrationsModule } from "./integrations.module.js";
 @Module({
   imports: [
     DatabaseTransferModule,
@@ -56,6 +57,7 @@ import { WhiteboardsModule } from "./whiteboards.module.js";
     MarkdownImportsModule,
     MarkdownExportsModule,
     MarkdownBundlesModule,
+    IntegrationsModule,
   ],
 })
 class App {}
