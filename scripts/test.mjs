@@ -153,6 +153,7 @@ try {
           "tests/oidc-keycloak.test.mjs",
           "tests/workspace.test.mjs",
           "tests/permissions.test.mjs",
+          "tests/integrations.test.mjs",
           "tests/collaboration.test.mjs",
           "tests/editor.test.mjs",
           "tests/files.test.mjs",

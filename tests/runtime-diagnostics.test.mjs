@@ -15,6 +15,7 @@ test("CI image diagnostics retain failure categories while removing encoded cred
   const password = "test-p@ssword/:" + randomUUID(),
     secret = "s3-" + randomUUID(),
     session = "ab".repeat(32),
+    integrationToken = "orvyn_agent_" + "cd".repeat(32),
     token = "ghs_" + randomUUID();
   const env = {
     DATABASE_URL:
@@ -32,7 +33,9 @@ test("CI image diagnostics retain failure categories while removing encoded cred
     " " +
     session +
     " " +
-    token;
+    token +
+    " " +
+    integrationToken;
   const safe = redactTestDiagnostics(raw, env);
   assert.match(safe, /ECONNREFUSED/);
   for (const value of [
@@ -41,6 +44,7 @@ test("CI image diagnostics retain failure categories while removing encoded cred
     secret,
     session,
     token,
+    integrationToken,
   ])
     assert.ok(!safe.includes(value));
 });

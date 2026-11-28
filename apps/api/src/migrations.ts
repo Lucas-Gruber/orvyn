@@ -11,6 +11,7 @@ import { whiteboardMigration } from "./whiteboard-migration.js";
 import { publicationMigration } from "./publications/migration.js";
 import { pageImportMigration } from "./imports/migration.js";
 import { generatedProfileName } from "@orvyn/shared";
+import { integrationAccessMigration } from "./integrations/migration.js";
 export const migrations = [
   {
     version: 1,
@@ -708,6 +709,7 @@ CREATE TABLE oidc_issuer_repairs (
 CREATE INDEX oidc_invitation_continuations_expiry ON oidc_invitation_continuations(expires_at);
 ALTER TABLE oidc_flows ADD COLUMN invitation_continuation text REFERENCES oidc_invitation_continuations(browser_hash) ON DELETE SET NULL;`,
   },
+  { version: 49, sql: integrationAccessMigration },
 ] as const;
 
 export async function migrate(pool: Pool, target = migrations.at(-1)!.version) {
